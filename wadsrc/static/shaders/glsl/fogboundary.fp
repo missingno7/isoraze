@@ -13,6 +13,7 @@ layout(location=2) out vec4 FragNormal;
 
 void main()
 {
+	if (IsoEyeVisibility(pixelpos.xyz) <= 0.0) discard;
 	float fogdist;
 	float fogfactor;
 
@@ -21,11 +22,11 @@ void main()
 	//
 	if (uFogEnabled == -1) 
 	{
-		fogdist = pixelpos.w;
+		fogdist = uLightingPos.w > 0.0 ? distance(pixelpos.xyz, uLightingPos.xyz) : pixelpos.w;
 	}
 	else 
 	{
-		fogdist = max(16.0, distance(pixelpos.xyz, uCameraPos.xyz));
+		fogdist = max(16.0, distance(pixelpos.xyz, uLightingPos.w > 0.0 ? uLightingPos.xyz : uCameraPos.xyz));
 	}
 	fogfactor = exp2 (uFogDensity * fogdist);
 	FragColor = vec4(uFogColor.rgb, 1.0 - fogfactor);

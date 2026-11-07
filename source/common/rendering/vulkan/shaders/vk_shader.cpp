@@ -155,6 +155,8 @@ VkShaderProgram *VkShaderManager::Get(unsigned int eff, bool alphateston, EPassT
 
 static const char *shaderBindings = R"(
 
+	layout(set = 0, binding = 3) uniform sampler2D IsoVisibility;
+	layout(set = 0, binding = 4) uniform sampler2D IsoCutawayCoverage;
 	layout(set = 0, binding = 0) uniform sampler2D ShadowMap;
 	layout(set = 0, binding = 1) uniform sampler2DArray LightMap;
 	#ifdef SUPPORTS_RAYTRACING
@@ -168,6 +170,13 @@ static const char *shaderBindings = R"(
 		mat4 NormalViewMatrix;
 
 		vec4 uCameraPos;
+		vec4 uLightingPos;
+		vec4 uCutawayTop;
+		vec4 uCutawayBottom;
+		vec4 uCutawayParams;
+		vec4 uVisibilityOrigin;
+		vec4 uVisibilityParams;
+		vec4 uVisibilityTarget;
 		vec4 uClipLine;
 
 		float uGlobVis;			// uGlobVis = R_GetGlobVis(r_visibility) / 32.0
@@ -377,6 +386,7 @@ std::unique_ptr<VulkanShader> VkShaderManager::LoadFragShader(FString shadername
 	if (gbufferpass) code << "#define GBUFFER_PASS\n";
 
 	code << "\n#line 1\n";
+	code << LoadPrivateShaderLump("shaders/glsl/iso_visibility.fp").GetChars() << "\n";
 	code << LoadPrivateShaderLump(frag_lump).GetChars() << "\n";
 
 	if (material_lump)

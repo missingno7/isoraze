@@ -47,6 +47,45 @@ const int TEXF_Detailmap = 0x20000;
 const int TEXF_Glowmap = 0x40000;
 const int TEXF_ClampY = 0x80000;
 
+// An external camera must not move the game's distance-lighting origin.
+// Leave perspective views on their original view-depth/radial equations.
+vec3 RazeLightingOrigin()
+{
+	return uLightingPos.w > 0.0 ? uLightingPos.xyz : uCameraPos.xyz;
+}
+
+float RazeLightingDepth()
+{
+	return uLightingPos.w > 0.0 ? distance(pixelpos.xyz, uLightingPos.xyz) : pixelpos.w;
+}
+
+// Orthographic view-space distances give a screen-space capsule that scales
+// with zoom, without depending on framebuffer origin or backend Y conventions.
+
+float RazeCutawayOpacity()
+{
+	vec3 p = (ViewMatrix * vec4(pixelpos.xyz, 1.0)).xyz;
+	vec3 a = uCutawayTop.xyz;
+	vec3 b = uCutawayBottom.xyz;
+	vec2 axis = b.xy - a.xy;
+	float planeT = dot(p.xy - a.xy, axis) / max(dot(axis, axis), 0.0001);
+	float t = clamp(planeT, 0.0, 1.0);
+	vec3 body = mix(a, b, t);
+	float radius = length(p.xy - body.xy) / uCutawayTop.w;
+	float opening = 1.0 - smoothstep(uCutawayBottom.w, 1.0, radius);
+	// The opening is a camera-to-body volume, not an infinite upright plane.
+	// Keep the upright wall-side test, but cap its depth at the actual body:
+	// extrapolating below the feet otherwise cuts surfaces behind the player.
+	float bodyDepth = max(mix(a.z, b.z, planeT), body.z);
+	float foreground = smoothstep(1.0, 5.0, p.z - bodyDepth);
+	// Empty pixels preserve the original surface. The coverage pass already
+	// applied artwork alpha and the unchanged player-eye visibility mask.
+	vec4 clip = ProjectionMatrix * vec4(p, 1.0);
+	vec2 uv = clip.xy / clip.w * 0.5 + 0.5;
+	float covered = uCutawayParams.w > 0.5 ? step(0.5, texture(IsoCutawayCoverage, uv).r) : 0.0;
+	return 1.0 - opening * foreground * uCutawayParams.y * covered;
+}
+
 //===========================================================================
 //
 // Color to grayscale
@@ -313,11 +352,11 @@ float R_DoomLightingEquation(float light)
 	float z;
 	if (((uPalLightLevels >> 8)  & 0xff) == 2)
 	{
-		z = distance(pixelpos.xyz, uCameraPos.xyz);
+		z = distance(pixelpos.xyz, RazeLightingOrigin());
 	}
 	else 
 	{
-		z = pixelpos.w;
+		z = RazeLightingDepth();
 	}
 
 	if ((uPalLightLevels >> 16) == 5) // gl_lightmode 5: Build software lighting emulation.
@@ -769,11 +808,11 @@ vec3 AmbientOcclusionColor()
 	//
 	if (uFogEnabled == -1) 
 	{
-		fogdist = max(16.0, pixelpos.w);
+		fogdist = max(16.0, RazeLightingDepth());
 	}
 	else 
 	{
-		fogdist = max(16.0, distance(pixelpos.xyz, uCameraPos.xyz));
+		fogdist = max(16.0, distance(pixelpos.xyz, RazeLightingOrigin()));
 	}
 	fogfactor = exp2 (uFogDensity * fogdist);
 
@@ -788,6 +827,25 @@ vec3 AmbientOcclusionColor()
 
 void main()
 {
+	float eyeVisibility = IsoEyeVisibility(pixelpos.xyz);
+	if (eyeVisibility <= 0.0) discard;
+
+	if (uCutawayParams.w < -0.5 && uCutawayParams.x > 0.5) discard;
+	float cutawayOpacity = 1.0;
+	if (uCutawayParams.x > 0.5)
+	{
+		cutawayOpacity = RazeCutawayOpacity();
+		if (uCutawayParams.z > 0.5)
+		{
+			if (uCutawayParams.x > 1.5) discard;
+			if (cutawayOpacity < 0.9999) { FragColor = vec4(1.0, 0.0, 1.0, 1.0); return; }
+		}
+		if (uCutawayParams.x < 1.5)
+		{
+			if (cutawayOpacity < 0.9999) discard;
+		}
+		else if (cutawayOpacity <= 0.0001 || (uCutawayParams.x < 2.5 && cutawayOpacity >= 0.9999)) discard;
+	}
 #ifdef NO_CLIPDISTANCE_SUPPORT
 	if (ClipDistanceA.x < 0 || ClipDistanceA.y < 0 || ClipDistanceA.z < 0 || ClipDistanceA.w < 0 || ClipDistanceB.x < 0) discard;
 #endif
@@ -814,6 +872,12 @@ void main()
 #ifndef NO_ALPHATEST
 	if (frag.a <= uAlphaThreshold) discard;
 #endif
+	if (uCutawayParams.w < -0.5)
+	{
+		if (frag.a * vColor.a <= 0.0001) discard;
+		FragColor = vec4(1.0);
+		return;
+	}
 
 	if (uFogEnabled != -3)	// check for special 2D 'fog' mode.
 	{
@@ -827,11 +891,11 @@ void main()
 		{
 			if (uFogEnabled == 1 || uFogEnabled == -1) 
 			{
-				fogdist = max(16.0, pixelpos.w);
+				fogdist = max(16.0, RazeLightingDepth());
 			}
 			else 
 			{
-				fogdist = max(16.0, distance(pixelpos.xyz, uCameraPos.xyz));
+				fogdist = max(16.0, distance(pixelpos.xyz, RazeLightingOrigin()));
 			}
 			fogfactor = exp2 (uFogDensity * fogdist);
 		}
@@ -864,6 +928,9 @@ void main()
 			frag = frag * ProcessLight(material, vColor);
 		frag.rgb = frag.rgb + uFogColor.rgb;
 	}
+	frag.rgb *= eyeVisibility;
+	if (uVisibilityOrigin.w > 0.5 && uVisibilityParams.z > 0.5 && uVisibilityTarget.z < 3.5) frag.rgb = vec3(eyeVisibility);
+	if (uCutawayParams.x > 1.5) frag.a *= cutawayOpacity;
 	FragColor = vec4(frag.rgb * uDynLightColor.a, frag.a);	// apply a global fade factor.
 #ifdef GBUFFER_PASS
 	FragFog = vec4(AmbientOcclusionColor(), 1.0);

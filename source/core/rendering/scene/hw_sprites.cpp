@@ -35,6 +35,7 @@
 //#include "hw_models.h"
 #include "hw_drawstructs.h"
 #include "hw_drawinfo.h"
+#include "hw_isovisibility.h"
 #include "hw_portal.h"
 #include "flatvertices.h"
 #include "hw_cvars.h"
@@ -56,6 +57,9 @@
 
 void HWSprite::DrawSprite(HWDrawInfo* di, FRenderState& state, bool translucent)
 {
+	// The local player is a presentation aid; every other sprite is masked.
+	bool player = Sprite && Sprite->ownerActor == di->Viewpoint.CameraActor;
+	BindIsometricGeometry(*di, state, Sprite ? Sprite->sectp : nullptr, nullptr, player ? 4 : 2);
 	bool additivefog = false;
 	bool foglayer = false;
 

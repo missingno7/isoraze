@@ -224,6 +224,13 @@ bool FGLRenderState::ApplyShader()
 		activeShader->cur->muViewMatrix.Set(&mHwUniforms->mViewMatrix);
 		activeShader->cur->muNormalViewMatrix.Set(&mHwUniforms->mNormalViewMatrix);
 		activeShader->cur->muCameraPos.Set(&mHwUniforms->mCameraPos.X);
+		activeShader->cur->muLightingPos.Set(&mHwUniforms->mLightingPos.X);
+		activeShader->cur->muCutawayTop.Set(&mHwUniforms->mCutawayTop.X);
+		activeShader->cur->muCutawayBottom.Set(&mHwUniforms->mCutawayBottom.X);
+		activeShader->cur->muCutawayParams.Set(&mHwUniforms->mCutawayParams.X);
+		activeShader->cur->muVisibilityTarget.Set(&mHwUniforms->mVisibilityTarget.X);
+		activeShader->cur->muVisibilityParams.Set(&mHwUniforms->mVisibilityParams.X);
+		activeShader->cur->muVisibilityOrigin.Set(&mHwUniforms->mVisibilityOrigin.X);
 		activeShader->cur->muClipLine.Set(&mHwUniforms->mClipLine.X);
 		activeShader->cur->muGlobVis.Set(mHwUniforms->mGlobVis);
 		activeShader->cur->muPalLightLevels.Set(mHwUniforms->mPalLightLevels & 0xFF); // JUST pass the pal levels, clear the top bits
@@ -424,6 +431,19 @@ void FGLRenderState::ApplyBuffers()
 
 void FGLRenderState::Apply()
 {
+	if (mVisibilityTexture)
+	{
+		static_cast<FHardwareTexture*>(mVisibilityTexture)->Bind(13, false);
+		GLRenderer->mSamplerManager->Bind(13, CLAMP_NOFILTER_XY, 255);
+	}
+
+	if (mCutawayCoverageTexture)
+	{
+		static_cast<FHardwareTexture*>(mCutawayCoverageTexture)->Bind(14, false);
+		GLRenderer->mSamplerManager->Bind(14, CLAMP_NOFILTER_XY, 255);
+	}
+	else FHardwareTexture::Unbind(14);
+
 	ApplyState();
 	ApplyBuffers();
 	ApplyShader();

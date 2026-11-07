@@ -23,9 +23,19 @@ See the GNU General Public License for more details.
 #include "buildtiles.h"
 #include "global.h"
 #include "funct.h"
+#include "hw_isovisibility.h"
 BEGIN_DUKE_NS
 
 void resetswitch(int tag);
+
+DEFINE_ACTION_FUNCTION(DDukeActor, IsometricShotTrail)
+{
+	PARAM_PROLOGUE;
+	PARAM_FLOAT(sx); PARAM_FLOAT(sy); PARAM_FLOAT(sz);
+	PARAM_FLOAT(ex); PARAM_FLOAT(ey); PARAM_FLOAT(ez);
+	AddIsometricShotTrail({ sx, sy, sz }, { ex, ey, ez });
+	return 0;
+}
 
 //---------------------------------------------------------------------------
 //

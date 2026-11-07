@@ -20,7 +20,7 @@ vec4 ProcessTexel()
 	vec2 newCoord;
 
 	// z is the depth in view space, positive going into the screen
-	float z = abs(pixelpos.w);
+	float z = abs(RazeLightingDepth());
 
 #ifdef NPOT_EMULATION
 	// Coordinate adjustment for NPOT textures. It is somehow fitting that Build games exploited this texture wrapping quirk of the software rendering engine...

@@ -24,6 +24,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "menu.h"
 #include "gameinput.h"
 #include "g_input.h"
+#include "isometricinput.h"
 
 //---------------------------------------------------------------------------
 //
@@ -98,6 +99,45 @@ void GameInterface::doPlayerMovement()
 	gameInput.processMovement();
 }
 
+void GameInput::setMovementMode(bool isometric)
+{
+	if (isometricMovement != isometric)
+	{
+		// Discard only accumulated axes when their coordinate system changes.
+		// Fire, interaction, inventory and weapon-selection bits keep their meaning.
+		inputBuffer.vel = {};
+		inputBuffer.ang = {};
+		inputBuffer.actions &= ~SB_ISOMETRIC_MOVE;
+		isometricMovement = isometric;
+	}
+}
+
+void GameInput::processIsometricMovement()
+{
+	setMovementMode(true);
+	keymove = (inputBuffer.actions & SB_RUN) ? 2 : 1;
+	MoveIsometricCursor(mouseInput.X, mouseInput.Y);
+	double forward = buttonMap.ButtonDown(gamefunc_Move_Forward) -
+		buttonMap.ButtonDown(gamefunc_Move_Backward) + joyAxes[JOYAXIS_Forward];
+	double side = buttonMap.ButtonDown(gamefunc_Strafe_Right) -
+		buttonMap.ButtonDown(gamefunc_Strafe_Left) - joyAxes[JOYAXIS_Side];
+	inputBuffer.vel.SetXY(IsometricMovement({ side, -forward }) * keymove);
+	inputBuffer.vel.Z = buttonMap.ButtonDown(gamefunc_Move_Up) -
+		buttonMap.ButtonDown(gamefunc_Move_Down) + joyAxes[JOYAXIS_Up];
+	inputBuffer.actions &= ~(SB_AIM_UP | SB_AIM_DOWN | SB_LOOK_LEFT | SB_LOOK_RIGHT | SB_TURNAROUND | SB_CENTERVIEW);
+	inputBuffer.actions |= SB_ISOMETRIC_MOVE;
+	turnheldtime = 0;
+
+	auto player = PlayerArray[myconnectindex];
+	auto base = SyncInput() ? player->GetActor()->spr.Angles : player->CameraAngles;
+	DRotator turn{};
+	DAngle aim;
+	if (GetIsometricAim(aim)) turn.Yaw = deltaangle(base.Yaw, aim);
+	turn.Pitch = -base.Pitch;
+	inputBuffer.ang += turn;
+	if (!SyncInput()) player->CameraAngles += turn;
+}
+
 
 //---------------------------------------------------------------------------
 //
@@ -119,6 +159,7 @@ void GameInput::resetCrouchToggle()
 
 void GameInput::processMovement(const double turnscale, const bool allowstrafe, const int drink_amt)
 {
+	setMovementMode(false);
 	// set up variables.
 	InputPacket thisInput{};
 	keymove = 1 << int(!!(inputBuffer.actions & SB_RUN));
@@ -203,6 +244,7 @@ void GameInput::processMovement(const double turnscale, const bool allowstrafe, 
 
 void GameInput::processVehicle(const double baseVel, const double velScale, const unsigned flags)
 {
+	setMovementMode(false);
 	// open up input packet for this session.
 	InputPacket thisInput{};
 
@@ -366,11 +408,14 @@ void GameInput::processInputBits()
 void GameInput::getInput(InputPacket* packet)
 {
 	I_GetEvent();
+	UpdateIsometricInputState();
 	SendAction(PlayerArray[myconnectindex]->cmd.ucmd.actions & SB_CENTERVIEW);
 
 	if (M_Active() || gamestate != GS_LEVEL)
 	{
 		inputBuffer = {};
+		if (isometricMovement) mouseInput.Zero();
+		if (gamestate != GS_LEVEL) ResetIsometricInput();
 		return;
 	}
 

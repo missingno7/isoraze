@@ -293,7 +293,7 @@ void displayrooms(int snum, double interpfrac, bool sceneonly)
 			interpfrac = 1.;
 			camview = true;
 		}
-		else if (p->over_shoulder_on == 0)
+		else if (p->over_shoulder_on == 0 || render_isometric_debug_enabled())
 		{
 			if (cl_viewbob) cpos.Z += interpolatedvalue(p->opyoff, p->pyoff, interpfrac);
 		}
@@ -334,8 +334,9 @@ void displayrooms(int snum, double interpfrac, bool sceneonly)
 
 	auto cstat = viewer->spr.cstat;
 	if (camview) viewer->spr.cstat = CSTAT_SPRITE_INVISIBLE;
-	if (!sceneonly) drawweapon(interpfrac);
-	render_drawrooms(viewer, cpos, sect, cangles, interpfrac, fov);
+	bool isometric = render_isometric_debug_enabled() && !camview && !sceneonly;
+	if (!sceneonly && !isometric) drawweapon(interpfrac);
+	render_drawrooms(viewer, cpos, sect, cangles, interpfrac, fov, isometric);
 	viewer->spr.cstat = cstat;
 
 	//GLInterface.SetMapFog(false);

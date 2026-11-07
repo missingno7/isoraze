@@ -95,6 +95,8 @@ OpenGLFrameBuffer::OpenGLFrameBuffer(void *hMonitor, bool fullscreen) :
 
 OpenGLFrameBuffer::~OpenGLFrameBuffer()
 {
+	mIsometricVisibilityTexture.reset();
+	mIsometricCutawayCoverage.reset();
 	PPResource::ResetAll();
 
 	if (mVertexData != nullptr) delete mVertexData;

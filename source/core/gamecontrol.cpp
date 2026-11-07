@@ -215,7 +215,9 @@ bool System_WantGuiCapture()
 
 bool System_DispatchEvent(event_t* ev)
 {
-	if (ev->type == EV_Mouse && !System_WantGuiCapture())
+	// Isometric cursor/orbit motion must remain ordered with mouse buttons.
+	// Keep the original immediate accumulation path for ordinary game input.
+	if (ev->type == EV_Mouse && !System_WantGuiCapture() && !IsometricControlsActive())
 	{
 		gameInput.MouseAddToPos(ev->x, ev->y);
 		return true;

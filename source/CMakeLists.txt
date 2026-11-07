@@ -960,6 +960,7 @@ set (PCH_SOURCES
 	core/gamehud.cpp
 	core/gamefuncs.cpp
 	core/gameinput.cpp
+	core/isometricinput.cpp
 	core/g_mapinfo.cpp
 	core/interpolate.cpp
 	core/inputstate.cpp
@@ -1003,6 +1004,8 @@ set (PCH_SOURCES
 	core/rendering/scene/hw_drawlistadd.cpp
 	core/rendering/scene/hw_drawlist.cpp
 	core/rendering/scene/hw_drawinfo.cpp
+	core/rendering/scene/hw_isometric.cpp
+	core/rendering/scene/hw_isovisibility.cpp
 	core/rendering/scene/hw_bunchdrawer.cpp
 	core/rendering/scene/hw_portal.cpp
 	core/rendering/scene/hw_skyportal.cpp

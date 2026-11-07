@@ -39,6 +39,7 @@ enum ESyncBits_ : uint32_t
     SB_JUMP = 1 << 27,
     SB_FIRE = 1 << 28,
     SB_ALTFIRE = 1 << 29,
+    SB_ISOMETRIC_MOVE = 1u << 30, // Duke input XY is in world space; packet layout is unchanged
 
     SB_WEAPONMASK_BITS = (15u * SB_FIRST_WEAPON_BIT), // Weapons take up 4 bits
     SB_ITEMUSE_BITS = (127u * SB_ITEM_BIT_1),

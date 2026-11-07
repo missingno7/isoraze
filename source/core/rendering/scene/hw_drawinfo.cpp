@@ -42,12 +42,15 @@
 #include "gamestruct.h"
 #include "automap.h"
 #include "hw_voxels.h"
+#include "hw_isometric.h"
+#include "hw_isovisibility.h"
 #include "coreactor.h"
 #include "tiletexture.h"
 
 #include "buildtiles.h"
 
 EXTERN_CVAR(Float, r_visibility)
+EXTERN_CVAR(Bool, iso_debug_eye_lighting)
 CVAR(Bool, gl_no_skyclear, false, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
 
 CVAR(Bool, gl_texture, true, 0)
@@ -123,6 +126,11 @@ HWDrawInfo *HWDrawInfo::StartDrawInfo(HWDrawInfo *parent, FRenderViewpoint &pare
 static Clipper staticClipper;		// Since all scenes are processed sequentially we only need one clipper.
 static HWDrawInfo * gl_drawinfo;	// This is a linked list of all active DrawInfos and needed to free the memory arena after the last one goes out of scope.
 
+bool render_isometricview()
+{
+	return gl_drawinfo && gl_drawinfo->Viewpoint.Isometric;
+}
+
 void HWDrawInfo::StartScene(FRenderViewpoint& parentvp, HWViewpointUniforms* uniforms)
 {
 	mClipper = &staticClipper;
@@ -154,6 +162,9 @@ void HWDrawInfo::StartScene(FRenderViewpoint& parentvp, HWViewpointUniforms* uni
 
 	for (int i = 0; i < GLDL_TYPES; i++) drawlists[i].Reset();
 	vpIndex = 0;
+	cutawayVP[0] = cutawayVP[1] = cutawayVP[2] = -1;
+	cutawayWalls = 0;
+	cutawayFlats = 0;
 
 	// Fullbright information needs to be propagated from the main view.
 	if (outer != nullptr) FullbrightFlags = outer->FullbrightFlags;
@@ -190,6 +201,10 @@ HWDrawInfo *HWDrawInfo::EndDrawInfo()
 
 void HWDrawInfo::ClearBuffers()
 {
+	deferIsometricGeometry = false;
+	deferredIsometricWalls.Clear();
+	deferredIsometricFlats.Clear();
+	cutawaySpriteSpans.Clear();
 	spriteindex = 0;
 	mClipPortal = nullptr;
 	mCurrentPortal = nullptr;
@@ -249,9 +264,31 @@ void HWDrawInfo::SetupView(FRenderState &state, float vx, float vy, float vz, bo
 	//vp.SetViewAngle(r_viewwindow); // todo: need to pass in.
 	SetViewMatrix(vp.HWAngles, vx, vy, vz, mirror, planemirror);
 	SetCameraPos(vp.Pos);
+	state.mVisibilityTexture = nullptr;
+	state.mCutawayCoverageTexture = nullptr;
+	VPUniforms.mVisibilityOrigin = {};
+	VPUniforms.mVisibilityParams = {};
+	VPUniforms.mVisibilityTarget = {};
+	VPUniforms.mLightingPos = {};
+	if (vp.Isometric && iso_debug_eye_lighting)
+	{
+		const auto& eye = vp.VisibilityPos;
+		VPUniforms.mLightingPos = { (float)eye.X, (float)eye.Z, (float)eye.Y, 1.f };
+	}
 	VPUniforms.CalcDependencies();
 	VPUniforms.mLightBlendMode = 0;
+	SetupIsometricCutaway(*this);
 	vpIndex = screen->mViewpoints->SetViewpoint(state, &VPUniforms);
+	if (VPUniforms.mCutawayParams.Y > 0.f)
+	{
+		auto wallUniforms = VPUniforms;
+		for (int i = 0; i < 3; ++i)
+		{
+			wallUniforms.mCutawayParams.X = float(i + 1);
+			cutawayVP[i] = screen->mViewpoints->SetViewpoint(state, &wallUniforms);
+		}
+		screen->mViewpoints->Bind(state, vpIndex);
+	}
 }
 
 //-----------------------------------------------------------------------------
@@ -284,7 +321,7 @@ void HWDrawInfo::DispatchSprites()
 
 		if (actor == nullptr || tspr->scale.X == 0 || tspr->scale.Y == 0 || !texid.isValid()) continue;
 
-		actor->spr.cstat2 |= CSTAT2_SPRITE_MAPPED;
+		if (!Viewpoint.Isometric) actor->spr.cstat2 |= CSTAT2_SPRITE_MAPPED;
 
 		if (!(tspr->cstat2 & CSTAT2_SPRITE_NOANIMATE))
 		{
@@ -361,6 +398,11 @@ void HWDrawInfo::DispatchSprites()
 
 void HWDrawInfo::CreateScene(bool portal)
 {
+	if (Viewpoint.Isometric)
+	{
+		CreateIsometricDebugScene(*this);
+		return;
+	}
 	const auto& vp = Viewpoint;
 
 	angle_t a1 = FrustumAngle();
@@ -723,6 +765,7 @@ void HWDrawInfo::DrawScene(int drawmode, bool portal)
 
 	CreateScene(portal);
 	auto& RenderState = *screen->RenderState();
+	if (Viewpoint.Isometric) RenderIsometricCutawayCoverage(*this, RenderState);
 
 	RenderState.SetDepthMask(true);
 
@@ -742,6 +785,7 @@ void HWDrawInfo::DrawScene(int drawmode, bool portal)
 	portalState.EndFrame(this, RenderState);
 	recursion--;
 	RenderTranslucent(RenderState);
+	if (Viewpoint.Isometric) DrawIsometricShotTrails(*this, RenderState);
 }
 
 

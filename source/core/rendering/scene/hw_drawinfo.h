@@ -46,6 +46,10 @@ struct FRenderViewpoint
 	double TicFrac;
 	double TanCos, TanSin;	// needed for calculating a sprite's screen depth.
 	DVector2 ViewVector;		// direction the camera is facing. 
+	bool Isometric = false;
+	DVector3 VisibilityPos{};	// observer in render coordinates, independent of camera
+	int VisibilitySector = -1;
+	float OrthographicHeight = 0.f;
 };
 //==========================================================================
 //
@@ -99,6 +103,15 @@ struct HWDrawInfo
 
 	HWDrawList drawlists[GLDL_TYPES];
 	int vpIndex;
+	int cutawayVP[3] = { -1, -1, -1 };
+	unsigned cutawayWalls = 0;
+	unsigned cutawayFlats = 0;
+	// Delay surface selection until the animated local-player sprite is known.
+	bool deferIsometricGeometry = false;
+	TArray<HWWall*> deferredIsometricWalls;
+	TArray<HWFlat*> deferredIsometricFlats;
+	FVector3 cutawaySpriteOrigin{}, cutawaySpriteRight{}, cutawaySpriteDown{};
+	TArray<FVector4> cutawaySpriteSpans; // opaque artwork runs in sprite-quad coordinates
 	//ELightMode lightmode;
 
 	HWDrawInfo * outer = nullptr;

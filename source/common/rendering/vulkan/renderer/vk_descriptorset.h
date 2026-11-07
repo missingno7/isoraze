@@ -7,6 +7,7 @@
 
 class VulkanRenderDevice;
 class VkMaterial;
+class IHardwareTexture;
 class PPTextureInput;
 class VkPPRenderPassSetup;
 
@@ -19,7 +20,7 @@ public:
 	void Init();
 	void Deinit();
 	void BeginFrame();
-	void UpdateFixedSet();
+	void UpdateFixedSet(IHardwareTexture* visibility = nullptr, IHardwareTexture* coverage = nullptr);
 	void UpdateHWBufferSet();
 	void ResetHWTextureSets();
 
@@ -28,7 +29,11 @@ public:
 	VulkanDescriptorSetLayout* GetTextureSetLayout(int numLayers);
 
 	VulkanDescriptorSet* GetHWBufferDescriptorSet() { return HWBufferSet.get(); }
-	VulkanDescriptorSet* GetFixedDescriptorSet() { return FixedSet.get(); }
+	VulkanDescriptorSet* GetFixedDescriptorSet(IHardwareTexture* visibility = nullptr, IHardwareTexture* coverage = nullptr)
+	{
+		if (visibility != boundVisibility || coverage != boundCoverage) UpdateFixedSet(visibility, coverage);
+		return FixedSet.get();
+	}
 	VulkanDescriptorSet* GetNullTextureDescriptorSet();
 
 	std::unique_ptr<VulkanDescriptorSet> AllocateTextureDescriptorSet(int numLayers);
@@ -47,6 +52,8 @@ private:
 	std::unique_ptr<VulkanDescriptorSet> AllocatePPDescriptorSet(VulkanDescriptorSetLayout* layout);
 
 	VulkanRenderDevice* fb = nullptr;
+	IHardwareTexture* boundVisibility = nullptr;
+	IHardwareTexture* boundCoverage = nullptr;
 
 	std::unique_ptr<VulkanDescriptorSetLayout> HWBufferSetLayout;
 	std::unique_ptr<VulkanDescriptorSetLayout> FixedSetLayout;

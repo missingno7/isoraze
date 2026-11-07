@@ -10,6 +10,7 @@
 struct FColormap;
 class IVertexBuffer;
 class IIndexBuffer;
+class IHardwareTexture;
 
 enum EClearTarget
 {
@@ -206,6 +207,10 @@ struct StreamData
 
 class FRenderState
 {
+public:
+	IHardwareTexture* mVisibilityTexture = nullptr;
+	IHardwareTexture* mCutawayCoverageTexture = nullptr;
+
 protected:
 	uint8_t mFogEnabled;
 	uint8_t mTextureEnabled:1;
@@ -256,6 +261,8 @@ public:
 
 	void Reset()
 	{
+		mVisibilityTexture = nullptr;
+		mCutawayCoverageTexture = nullptr;
 		mTextureEnabled = true;
 		mBrightmapEnabled = mGradientEnabled = mFogEnabled = mGlowEnabled = false;
 		mFogColor = 0xffffffff;

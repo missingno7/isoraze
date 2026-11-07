@@ -31,10 +31,12 @@
 #include "hw_clock.h"
 #include "hw_material.h"
 #include "hw_drawinfo.h"
+#include "hw_isovisibility.h"
 #include "flatvertices.h"
 #include "hw_lightbuffer.h"
 #include "hw_drawstructs.h"
 #include "hw_renderstate.h"
+#include "hw_viewpointbuffer.h"
 #include "sectorgeometry.h"
 #include "hw_sections.h"
 #include "texturemanager.h"
@@ -218,6 +220,7 @@ void HWFlat::MakeVertices(HWDrawInfo* di)
 //==========================================================================
 void HWFlat::DrawFlat(HWDrawInfo *di, FRenderState &state, bool translucent)
 {
+	BindIsometricGeometry(*di, state, sec, nullptr, Sprite ? 2 : 0, cutawayPass);
 	rendered_flats++;
 	if (screen->BuffersArePersistent() && !Sprite)
 	{
@@ -265,6 +268,7 @@ void HWFlat::DrawFlat(HWDrawInfo *di, FRenderState &state, bool translucent)
 
 	state.SetObjectColor(0xffffffff);
 	state.EnableTexture(true);
+	if (di->Viewpoint.Isometric) screen->mViewpoints->Bind(state, di->vpIndex);
 	//state.SetAddColor(0);
 	//state.ApplyTextureManipulation(nullptr);
 }
@@ -281,6 +285,7 @@ void HWFlat::PutFlat(HWDrawInfo *di, int whichplane)
 {
 	vertcount = 0;
 	plane = whichplane;
+	if (!Sprite) z = -(plane == 0 ? sec->floorz : sec->ceilingz);
 	if (!screen->BuffersArePersistent() || Sprite || di->ingeo)	// should be made static buffer content later (when the logic is working)
 	{
 #if 0
@@ -319,7 +324,7 @@ void HWFlat::ProcessSector(HWDrawInfo *di, sectortype * frontsector, int section
 	PlanesAtPoint(frontsector, vp.Pos.X, -vp.Pos.Y, &ceilz, &florz);
 
 	visibility = sectorVisibility(frontsector);
-	frontsector->exflags |= SECTOREX_SEEN;
+	if (!vp.Isometric) frontsector->exflags |= SECTOREX_SEEN;
 	sec = frontsector;
 	section = section_;
 	Sprite = nullptr;

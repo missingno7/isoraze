@@ -32,6 +32,39 @@ vec4 ProcessLight(Material mat, vec4 color);
 vec3 ProcessMaterialLight(Material material, vec3 color);
 vec2 GetTexCoord();
 
+vec3 RazeLightingOrigin()
+{
+	return uLightingPos.w > 0.0 ? uLightingPos.xyz : uCameraPos.xyz;
+}
+
+float RazeLightingDepth()
+{
+	return uLightingPos.w > 0.0 ? distance(pixelpos.xyz, uLightingPos.xyz) : pixelpos.w;
+}
+
+
+float RazeCutawayOpacity()
+{
+	vec3 p = (ViewMatrix * vec4(pixelpos.xyz, 1.0)).xyz;
+	vec3 a = uCutawayTop.xyz;
+	vec3 b = uCutawayBottom.xyz;
+	vec2 axis = b.xy - a.xy;
+	float planeT = dot(p.xy - a.xy, axis) / max(dot(axis, axis), 0.0001);
+	float t = clamp(planeT, 0.0, 1.0);
+	vec3 body = mix(a, b, t);
+	float radius = length(p.xy - body.xy) / uCutawayTop.w;
+	float opening = 1.0 - smoothstep(uCutawayBottom.w, 1.0, radius);
+	// Bound the upright wall-side test to the actual body capsule's depth.
+	float bodyDepth = max(mix(a.z, b.z, planeT), body.z);
+	float foreground = smoothstep(1.0, 5.0, p.z - bodyDepth);
+	// Empty pixels preserve the original surface. The coverage pass already
+	// applied artwork alpha and the unchanged player-eye visibility mask.
+	vec4 clip = ProjectionMatrix * vec4(p, 1.0);
+	vec2 uv = clip.xy / clip.w * 0.5 + 0.5;
+	float covered = uCutawayParams.w > 0.5 ? step(0.5, texture2D(IsoCutawayCoverage, uv).r) : 0.0;
+	return 1.0 - opening * foreground * uCutawayParams.y * covered;
+}
+
 // These get Or'ed into uTextureMode because it only uses its 3 lowermost bits.
 //const int TEXF_Brightmap = 0x10000;
 //const int TEXF_Detailmap = 0x20000;
@@ -234,7 +267,7 @@ vec4 getTexel(vec2 st)
 float R_DoomLightingEquation_OLD(float light)
 {
 	// z is the depth in view space, positive going into the screen
-	float z = pixelpos.w;
+	float z = RazeLightingDepth();
 
 
 		/* L in the range 0 to 63 */
@@ -280,9 +313,9 @@ float R_DoomLightingEquation(float light)
 	float z;
 
 #if (DEF_FOG_RADIAL == 1)
-	z = distance(pixelpos.xyz, uCameraPos.xyz);
+	z = distance(pixelpos.xyz, RazeLightingOrigin());
 #else
-	z = pixelpos.w;
+	z = RazeLightingDepth();
 #endif
 
 #if (DEF_BUILD_LIGHTING == 1) // gl_lightmode 5: Build software lighting emulation.
@@ -474,6 +507,25 @@ vec4 applyFog(vec4 frag, float fogfactor)
 
 void main()
 {
+	float eyeVisibility = IsoEyeVisibility(pixelpos.xyz);
+	if (eyeVisibility <= 0.0) discard;
+
+	if (uCutawayParams.w < -0.5 && uCutawayParams.x > 0.5) discard;
+	float cutawayOpacity = 1.0;
+	if (uCutawayParams.x > 0.5)
+	{
+		cutawayOpacity = RazeCutawayOpacity();
+		if (uCutawayParams.z > 0.5)
+		{
+			if (uCutawayParams.x > 1.5) discard;
+			if (cutawayOpacity < 0.9999) { gl_FragColor = vec4(1.0, 0.0, 1.0, 1.0); return; }
+		}
+		if (uCutawayParams.x < 1.5)
+		{
+			if (cutawayOpacity < 0.9999) discard;
+		}
+		else if (cutawayOpacity <= 0.0001 || (uCutawayParams.x < 2.5 && cutawayOpacity >= 0.9999)) discard;
+	}
 
 	//if (ClipDistanceA.x < 0.0 || ClipDistanceA.y < 0.0 || ClipDistanceA.z < 0.0 || ClipDistanceA.w < 0.0 || ClipDistanceB.x < 0.0) discard;
 
@@ -496,6 +548,12 @@ void main()
 #ifndef NO_ALPHATEST
 	if (frag.a <= uAlphaThreshold) discard;
 #endif
+	if (uCutawayParams.w < -0.5)
+	{
+		if (frag.a * vColor.a <= 0.0001) discard;
+		gl_FragColor = vec4(1.0);
+		return;
+	}
 
 	#if (DEF_FOG_2D == 0)	// check for special 2D 'fog' mode.
 	{
@@ -508,9 +566,9 @@ void main()
 		#if (DEF_FOG_ENABLED == 1)
 		{
 			#if (DEF_FOG_RADIAL == 0)
-				fogdist = max(16.0, pixelpos.w);
+				fogdist = max(16.0, RazeLightingDepth());
 			#else
-				fogdist = max(16.0, distance(pixelpos.xyz, uCameraPos.xyz));
+				fogdist = max(16.0, distance(pixelpos.xyz, RazeLightingOrigin()));
 			#endif
 
 			fogfactor = exp2 (uFogDensity * fogdist);
@@ -563,6 +621,9 @@ void main()
 	}
 #endif
 
+	frag.rgb *= eyeVisibility;
+	if (uVisibilityOrigin.w > 0.5 && uVisibilityParams.z > 0.5 && uVisibilityTarget.z < 3.5) frag.rgb = vec3(eyeVisibility);
+	if (uCutawayParams.x > 1.5) frag.a *= cutawayOpacity;
 	gl_FragColor = vec4(frag.rgb * uDynLightColor.a, frag.a);	// apply a global fade factor.
 
 }

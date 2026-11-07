@@ -54,6 +54,7 @@ class DukeGrowSpark : DukeActor
 
 		shooter.cstat &= ~CSTAT_SPRITE_BLOCK_ALL;
 		Raze.hitscan(pos, sect, (ang.ToVector() * vel, zvel * 64), hit, CLIPMASK1);
+		if (hit.hitSector) IsometricShotTrail(pos, hit.hitpos);
 
 		shooter.cstat |= CSTAT_SPRITE_BLOCK_ALL;
 

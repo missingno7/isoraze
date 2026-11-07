@@ -3,6 +3,7 @@
 #include "serializer.h"
 #include "coreplayer.h"
 #include "d_net.h"
+#include "isometricinput.h"
 
 enum : unsigned
 {
@@ -46,6 +47,7 @@ class GameInput
 	int WeaponToSend;
 	int dpad_lock;
 	int keymove;
+	bool isometricMovement;
 
 	// Turn speed doubling after x amount of tics.
 	void updateTurnHeldAmt()
@@ -59,6 +61,7 @@ class GameInput
 
 	// Prototypes for private member functions.
 	void processInputBits();
+	void setMovementMode(bool isometric);
 
 public:
 	// Bit sender updates.
@@ -75,6 +78,7 @@ public:
 	void Clear()
 	{
 		memset(this, 0, sizeof(*this));
+		ResetIsometricInput();
 	}
 
 	// Receives mouse input from OS for processing.
@@ -110,6 +114,7 @@ public:
 
 	// Prototypes for large member functions.
 	void processMovement(const double turnscale = 1, const bool allowstrafe = true, const int drink_amt = 0);
+	void processIsometricMovement();
 	void processVehicle(const double baseVel, const double velScale, const unsigned flags);
 	void getInput(InputPacket* packet = nullptr);
 	void resetCrouchToggle();

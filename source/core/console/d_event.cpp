@@ -44,6 +44,7 @@
 #include "uiinput.h"
 #include "automap.h"
 #include "screenjob.h"
+#include "isometricinput.h"
 
 //==========================================================================
 //
@@ -65,6 +66,7 @@ bool G_Responder (event_t *ev)
 		return true;
 
 	if (gamestate == GS_LEVEL && automapMode != am_off && AM_Responder(ev, false)) return true;
+	if (IsometricInputResponder(ev)) return true;
 
 	switch (ev->type)
 	{

@@ -141,6 +141,8 @@ VulkanRenderDevice::~VulkanRenderDevice()
 	delete mViewpoints;
 	delete mLights;
 	delete mBones;
+	mIsometricVisibilityTexture.reset();
+	mIsometricCutawayCoverage.reset();
 	mShadowMap.Reset();
 
 	if (mDescriptorSetManager)

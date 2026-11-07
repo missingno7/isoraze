@@ -38,6 +38,7 @@ source as it is released.
 #include "gamecontrol.h"
 #include "v_video.h"
 #include "dukeactor.h"
+#include "isometricinput.h"
 
 BEGIN_DUKE_NS
 
@@ -495,6 +496,13 @@ void hud_input(DDukePlayer* const p)
 void GameInterface::doPlayerMovement()
 {
 	const auto p = getPlayer(myconnectindex);
+
+	if (screenpeek == myconnectindex && p->newOwner == nullptr && ud.cameraactor == nullptr &&
+		IsometricControlsActive(p->GetActor()))
+	{
+		gameInput.processIsometricMovement();
+		return;
+	}
 
 	if (isRRRA() && (p->OnMotorcycle || p->OnBoat))
 	{

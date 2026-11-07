@@ -64,12 +64,15 @@ void BunchDrawer::Init(HWDrawInfo *_di, Clipper* c, const DVector2& view, angle_
 	clipper = c;
 	viewx = view.X;
 	viewy = view.Y;
-	viewz = (float)di->Viewpoint.Pos.Z;
+	collectOnly = di == nullptr;
+	collectHorizontal = false;
+	viewz = di ? (float)di->Viewpoint.Pos.Z : 0.f;
+	viewangle = di ? di->Viewpoint.RotAngle : 0;
 
 	StartScene();
 
-	gcosang = g_cosbam(di->Viewpoint.RotAngle);
-	gsinang = g_sinbam(di->Viewpoint.RotAngle);
+	gcosang = g_cosbam(viewangle);
+	gsinang = g_sinbam(viewangle);
 
 	for (auto& w : wall)
 	{
@@ -105,6 +108,11 @@ void BunchDrawer::StartScene()
 	gotwall.Zero();
 	sectionstartang.Resize(numsections);
 	sectionendang.Resize(numsections);
+	if (collectOnly)
+	{
+		collectedSections.Resize(numsections);
+		if (numsections) collectedSections.Zero();
+	}
 	//blockwall.Zero();
 }
 
@@ -295,7 +303,7 @@ int BunchDrawer::ClipLine(int aline, bool portal)
 			if (portal) clipper->RemoveClipRange(startAngle, endAngle);
 			else
 			{
-				if ((topclip < FLT_MAX || bottomclip > -FLT_MAX) && !dontclip)
+				if ((topclip < FLT_MAX || bottomclip > -FLT_MAX) && !dontclip && !(collectOnly && collectHorizontal))
 				{
 					clipper->AddWindowRange(startAngle, endAngle, topclip, bottomclip, viewz);
 					//Printf("\nWall %d from %2.3f - %2.3f, (%2.3f, %2.3f) (passing)\n", line, DAngle::fromBam(startAngle).Degrees(), DAngle::fromBam(endAngle).Degrees(), topclip, bottomclip);
@@ -339,7 +347,7 @@ void BunchDrawer::ProcessBunch(int bnch)
 		bunch = &Bunches[bnch];	// re-get the pointer in case of reallocation.
 		int clipped = ClipLine(i, bunch->portal);
 
-		if (clipped & CL_Draw)
+		if ((clipped & CL_Draw) && !collectOnly)
 		{
 			int ww = sectionLines[i].wall;
 			if (ww != -1)
@@ -666,12 +674,14 @@ void BunchDrawer::ProcessSection(int sectionnum, bool portal)
 {
 	if (gotsection2[sectionnum]) return;
 	gotsection2.Set(sectionnum);
+	if (collectOnly) collectedSections.Set(sectionnum);
 
 	bool inbunch;
 
 
 	int sectnum = sections[sectionnum].sector;
-	if (!gotsector[sectnum])
+	if (collectOnly) gotsector.Set(sectnum);
+	else if (!gotsector[sectnum])
 	{
 		Bsp.Unclock();
 		SetupSprite.Clock();
@@ -703,15 +713,16 @@ void BunchDrawer::ProcessSection(int sectionnum, bool portal)
 		Bsp.Clock();
 	}
 
-	if (automapping)
-		show2dsector.Set(sectnum);
-
-	Bsp.Unclock();
-	SetupFlat.Clock();
-	HWFlat flat;
-	flat.ProcessSector(di, &sector[sectnum], sectionnum);
-	SetupFlat.Unclock();
-	Bsp.Clock();
+	if (!collectOnly)
+	{
+		if (automapping) show2dsector.Set(sectnum);
+		Bsp.Unclock();
+		SetupFlat.Clock();
+		HWFlat flat;
+		flat.ProcessSector(di, &sector[sectnum], sectionnum);
+		SetupFlat.Unclock();
+		Bsp.Clock();
+	}
 
 	//Todo: process subsectors
 	inbunch = false;
@@ -795,7 +806,7 @@ void BunchDrawer::RenderScene(const int* viewsectors, unsigned sectcount, bool p
 	{
 		// with a 360° field of view we need to split the scene into two halves. 
 		// The BunchInFront check can fail with angles that may wrap around.
-		auto rotang = di->Viewpoint.RotAngle;
+		auto rotang = viewangle;
 		ang1 = rotang - ANGLE_90;
 		ang2 = rotang + ANGLE_90 - 1;
 		angrange = ang2 - ang1;
@@ -807,4 +818,14 @@ void BunchDrawer::RenderScene(const int* viewsectors, unsigned sectcount, bool p
 		process();
 	}
 	Bsp.Unclock();
+}
+
+void BunchDrawer::CollectScene(Clipper* c, const DVector3& origin, int sectorIndex, bool horizontal)
+{
+	c->SetVisibleRange(0, 0xffffffff);
+	Init(nullptr, c, origin.XY(), 0, 0);
+	collectHorizontal = horizontal;
+	viewz = (float)origin.Z;
+	if (sectorIndex >= 0 && (unsigned)sectorIndex < sector.Size())
+		RenderScene(&sectorIndex, 1, false);
 }

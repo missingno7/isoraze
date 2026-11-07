@@ -275,6 +275,13 @@ bool FShader::Load(const char * name, const char * vert_prog_lump_, const char *
 		uniform	mat4 NormalViewMatrix;
 
 		uniform	vec4 uCameraPos;
+		uniform vec4 uLightingPos;
+		uniform vec4 uCutawayTop;
+		uniform vec4 uCutawayBottom;
+		uniform vec4 uCutawayParams;
+		uniform vec4 uVisibilityOrigin;
+		uniform vec4 uVisibilityParams;
+		uniform vec4 uVisibilityTarget;
 		uniform	vec4 uClipLine;
 
 		uniform	float uGlobVis;			// uGlobVis = R_GetGlobVis(r_visibility) / 32.0
@@ -340,6 +347,8 @@ bool FShader::Load(const char * name, const char * vert_prog_lump_, const char *
 
 		// textures
 		uniform sampler2D tex;
+		uniform sampler2D IsoVisibility;
+		uniform sampler2D IsoCutawayCoverage;
 		uniform sampler2D ShadowMap;
 		uniform sampler2D texture2;
 		uniform sampler2D texture3;
@@ -404,6 +413,7 @@ bool FShader::Load(const char * name, const char * vert_prog_lump_, const char *
 	FString fp_comb = vp_comb;
 	vp_comb << defines << i_data.GetChars();
 	fp_comb << "$placeholder$\n" << defines << i_data.GetChars();
+	fp_comb << GetStringFromLump(fileSystem.CheckNumForFullName("shaders/glsl/iso_visibility.fp", 0)).GetChars() << "\n";
 
 	vp_comb << "#line 1\n";
 	fp_comb << "#line 1\n";
@@ -573,6 +583,13 @@ bool FShader::Load(const char * name, const char * vert_prog_lump_, const char *
 	shaderData->muNormalViewMatrix.Init(shaderData->hShader, "NormalViewMatrix");
 
 	shaderData->muCameraPos.Init(shaderData->hShader, "uCameraPos");
+	shaderData->muLightingPos.Init(shaderData->hShader, "uLightingPos");
+	shaderData->muCutawayTop.Init(shaderData->hShader, "uCutawayTop");
+	shaderData->muCutawayBottom.Init(shaderData->hShader, "uCutawayBottom");
+	shaderData->muCutawayParams.Init(shaderData->hShader, "uCutawayParams");
+	shaderData->muVisibilityTarget.Init(shaderData->hShader, "uVisibilityTarget");
+	shaderData->muVisibilityParams.Init(shaderData->hShader, "uVisibilityParams");
+	shaderData->muVisibilityOrigin.Init(shaderData->hShader, "uVisibilityOrigin");
 	shaderData->muClipLine.Init(shaderData->hShader, "uClipLine");
 
 	shaderData->muGlobVis.Init(shaderData->hShader, "uGlobVis");
@@ -636,6 +653,10 @@ bool FShader::Load(const char * name, const char * vert_prog_lump_, const char *
 		if (tempindex >= 0) glUniform1i(tempindex, i - 1);
 	}
 
+	int visibilityindex = glGetUniformLocation(shaderData->hShader, "IsoVisibility");
+	if (visibilityindex >= 0) glUniform1i(visibilityindex, 13);
+	int coverageindex = glGetUniformLocation(shaderData->hShader, "IsoCutawayCoverage");
+	if (coverageindex >= 0) glUniform1i(coverageindex, 14);
 	int shadowmapindex = glGetUniformLocation(shaderData->hShader, "ShadowMap");
 	if (shadowmapindex >= 0) glUniform1i(shadowmapindex, 16);
 

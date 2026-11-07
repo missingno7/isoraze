@@ -43,6 +43,7 @@
 #include "v_2ddrawer.h"
 #include "intrect.h"
 #include "hw_shadowmap.h"
+#include "hw_ihwtexture.h"
 #include "hw_levelmesh.h"
 #include "buffers.h"
 #include "files.h"
@@ -146,6 +147,8 @@ public:
 	FLightBuffer *mLights = nullptr;			// Dynamic lights
 	BoneBuffer* mBones = nullptr;				// Model bones
 	IShadowMap mShadowMap;
+	std::unique_ptr<IHardwareTexture> mIsometricVisibilityTexture;
+	std::unique_ptr<FCanvasTexture> mIsometricCutawayCoverage;
 
 	int mGameScreenWidth = 0;
 	int mGameScreenHeight = 0;

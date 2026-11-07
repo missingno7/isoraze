@@ -311,6 +311,13 @@ public: class ShaderVariantData
 		FBufferedUniformMat4fv muNormalViewMatrix;
 
 		FUniform4f muCameraPos;
+		FUniform4f muLightingPos;
+		FUniform4f muCutawayTop;
+		FUniform4f muCutawayBottom;
+		FUniform4f muCutawayParams;
+		FUniform4f muVisibilityTarget;
+		FUniform4f muVisibilityParams;
+		FUniform4f muVisibilityOrigin;
 		FUniform4f muClipLine;
 
 		FBufferedUniform1f muGlobVis;

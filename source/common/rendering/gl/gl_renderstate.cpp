@@ -32,6 +32,7 @@
 #include "flatvertices.h"
 #include "gl_shader.h"
 #include "gl_renderer.h"
+#include "gl_samplers.h"
 #include "hw_lightbuffer.h"
 #include "hw_bonebuffer.h"
 #include "gl_renderbuffers.h"
@@ -300,6 +301,19 @@ void FGLRenderState::ApplyBuffers()
 
 void FGLRenderState::Apply()
 {
+	if (mVisibilityTexture)
+	{
+		static_cast<FHardwareTexture*>(mVisibilityTexture)->Bind(13, false);
+		GLRenderer->mSamplerManager->Bind(13, CLAMP_NOFILTER_XY, 255);
+	}
+
+	if (mCutawayCoverageTexture)
+	{
+		static_cast<FHardwareTexture*>(mCutawayCoverageTexture)->Bind(14, false);
+		GLRenderer->mSamplerManager->Bind(14, CLAMP_NOFILTER_XY, 255);
+	}
+	else FHardwareTexture::Unbind(14);
+
 	ApplyState();
 	ApplyBuffers();
 	ApplyShader();

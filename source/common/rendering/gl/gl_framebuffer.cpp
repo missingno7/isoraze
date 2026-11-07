@@ -105,6 +105,8 @@ OpenGLFrameBuffer::~OpenGLFrameBuffer()
 	if (mViewpoints != nullptr) delete mViewpoints;
 	if (mLights != nullptr) delete mLights;
 	if (mBones != nullptr) delete mBones;
+	mIsometricVisibilityTexture.reset();
+	mIsometricCutawayCoverage.reset();
 	mShadowMap.Reset();
 
 	if (GLRenderer)

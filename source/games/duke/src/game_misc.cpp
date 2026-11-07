@@ -45,6 +45,8 @@ Modifications for JonoF's port by Jonathon Fowler (jf@jonof.id.au)
 #include "interpolate.h"
 #include "razefont.h"
 #include "startscreen.h"
+#include "render.h"
+#include "isometricinput.h"
 
 BEGIN_DUKE_NS
 
@@ -270,9 +272,10 @@ void drawoverlays(double interpfrac)
 	}
 
 	DrawStatusBar();
+	DrawIsometricCursor();
 	const auto spp = getPlayer(myconnectindex);
 
-	if (spp->newOwner == nullptr && ud.cameraactor == nullptr)
+	if (spp->newOwner == nullptr && ud.cameraactor == nullptr && !render_isometric_debug_enabled())
 	{
 		auto offsets = pp->getCrosshairOffsets(interpfrac);
 		DrawCrosshair(pp->last_extra, offsets.first.X, offsets.first.Y + (pp->over_shoulder_on ? 2.5 : 0), isRR() ? 0.5 : 1, offsets.second);

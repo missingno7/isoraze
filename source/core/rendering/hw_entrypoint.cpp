@@ -47,6 +47,8 @@
 #include "hw_drawstructs.h"
 #include "hw_drawlist.h"
 #include "hw_drawinfo.h"
+#include "hw_isometric.h"
+#include "isometricinput.h"
 #include "gamecvars.h"
 #include "render.h"
 #include "gamestruct.h"
@@ -125,7 +127,7 @@ void RenderViewpoint(FRenderViewpoint& mainvp, IntRect* bounds, float fov, float
 
 	// Render (potentially) multiple views for stereo 3d
 	// Fixme. The view offsetting should be done with a static table and not require setup of the entire render state for the mode.
-	auto vrmode = VRMode::GetVRMode(mainview && toscreen);
+	auto vrmode = VRMode::GetVRMode(mainview && toscreen && !mainvp.Isometric);
 	const int eyeCount = vrmode->mEyeCount;
 	screen->FirstEye();
 	hw_int_useindexedcolortextures = eyeCount > 1? false : *hw_useindexedcolortextures;
@@ -137,7 +139,7 @@ void RenderViewpoint(FRenderViewpoint& mainvp, IntRect* bounds, float fov, float
 
 		if (mainview) // Bind the scene frame buffer and turn on draw buffers used by ssao
 		{
-			bool useSSAO = (gl_ssao != 0);
+			bool useSSAO = (gl_ssao != 0) && !mainvp.Isometric;
 			screen->SetSceneRenderTarget(useSSAO);
 			RenderState.SetPassType(useSSAO ? GBUFFER_PASS : NORMAL_PASS);
 			RenderState.EnableDrawBuffers(RenderState.GetPassDrawBufferCount(), true);
@@ -153,7 +155,13 @@ void RenderViewpoint(FRenderViewpoint& mainvp, IntRect* bounds, float fov, float
 		di->Viewpoint.FieldOfView = FAngle::fromDeg(fov);	// Set the real FOV for the current scene (it's not necessarily the same as the global setting in r_viewpoint)
 
 		// Stereo mode specific perspective projection
-		di->VPUniforms.mProjectionMatrix = eye.GetProjection(fov, ratio, fovratio, false);
+		if (vp.Isometric)
+		{
+			float halfheight = vp.OrthographicHeight * 0.5f;
+			di->VPUniforms.mProjectionMatrix.ortho(-halfheight * ratio, halfheight * ratio,
+				-halfheight, halfheight, screen->GetZNear(), screen->GetZFar());
+		}
+		else di->VPUniforms.mProjectionMatrix = eye.GetProjection(fov, ratio, fovratio, false);
 
 		// Stereo mode specific viewpoint adjustment
 		if (eye.mShiftFactor != 0)
@@ -165,6 +173,9 @@ void RenderViewpoint(FRenderViewpoint& mainvp, IntRect* bounds, float fov, float
 		}
 
 		di->SetupView(RenderState, vp.Pos.X, vp.Pos.Y, vp.Pos.Z, false, false);
+		if (mainview && toscreen)
+			UpdateIsometricInputView(vp, di->VPUniforms.mViewMatrix, di->VPUniforms.mProjectionMatrix,
+				screen->mSceneViewport, screen->mScreenViewport);
 		di->ProcessScene(toscreen);
 
 		if (mainview)
@@ -311,7 +322,7 @@ static void CheckTimer(FRenderState &state, uint64_t ShaderStartTime)
 void animatecamsprite(double s);
 
 
-void render_drawrooms(DCoreActor* playersprite, const DVector3& position, sectortype* sect, const DRotator& angles, double interpfrac, float fov)
+void render_drawrooms(DCoreActor* playersprite, const DVector3& position, sectortype* sect, const DRotator& angles, double interpfrac, float fov, bool isometric)
 {
 	updatesector(position.XY(), &sect);
 	if (sect == nullptr) return;
@@ -325,6 +336,7 @@ void render_drawrooms(DCoreActor* playersprite, const DVector3& position, sector
 	// Get this before everything else
 	FRenderViewpoint r_viewpoint = SetupViewpoint(playersprite, position, sectindex(sect), angles, fov);
 	r_viewpoint.TicFrac = !cl_capfps ? interpfrac : 1.;
+	if (isometric && !writingsavepic) SetupIsometricDebugView(r_viewpoint);
 
 	screen->mLights->Clear();
 	screen->mViewpoints->Clear();

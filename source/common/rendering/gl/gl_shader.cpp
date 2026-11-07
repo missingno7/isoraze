@@ -227,6 +227,13 @@ bool FShader::Load(const char * name, const char * vert_prog_lump, const char * 
 			mat4 NormalViewMatrix;
 
 			vec4 uCameraPos;
+			vec4 uLightingPos;
+			vec4 uCutawayTop;
+			vec4 uCutawayBottom;
+			vec4 uCutawayParams;
+		vec4 uVisibilityOrigin;
+		vec4 uVisibilityParams;
+		vec4 uVisibilityTarget;
 			vec4 uClipLine;
 
 			float uGlobVis;			// uGlobVis = R_GetGlobVis(r_visibility) / 32.0
@@ -318,6 +325,8 @@ bool FShader::Load(const char * name, const char * vert_prog_lump, const char * 
 
 		// textures
 		uniform sampler2D tex;
+		uniform sampler2D IsoVisibility;
+		uniform sampler2D IsoCutawayCoverage;
 		uniform sampler2D ShadowMap;
 		uniform sampler2DArray LightMap;
 		uniform sampler2D texture2;
@@ -404,6 +413,7 @@ bool FShader::Load(const char * name, const char * vert_prog_lump, const char * 
 	FString fp_comb = vp_comb;
 	vp_comb << defines << i_data.GetChars();
 	fp_comb << "$placeholder$\n" << defines << i_data.GetChars();
+	fp_comb << GetStringFromLump(fileSystem.CheckNumForFullName("shaders/glsl/iso_visibility.fp", 0)).GetChars() << "\n";
 
 	vp_comb << "#line 1\n";
 	fp_comb << "#line 1\n";
@@ -636,6 +646,10 @@ bool FShader::Load(const char * name, const char * vert_prog_lump, const char * 
 		if (tempindex != -1) glUniform1i(tempindex, i - 1);
 	}
 
+	int visibilityindex = glGetUniformLocation(hShader, "IsoVisibility");
+	if (visibilityindex != -1) glUniform1i(visibilityindex, 13);
+	int coverageindex = glGetUniformLocation(hShader, "IsoCutawayCoverage");
+	if (coverageindex >= 0) glUniform1i(coverageindex, 14);
 	int shadowmapindex = glGetUniformLocation(hShader, "ShadowMap");
 	if (shadowmapindex != -1) glUniform1i(shadowmapindex, 16);
 

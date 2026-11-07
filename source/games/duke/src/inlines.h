@@ -221,7 +221,9 @@ inline int monsterCheatCheck(DDukeActor* self)
 
 inline void rotateInputVel(DDukePlayer* const p)
 {
-	p->cmd.ucmd.vel.SetXY(p->cmd.ucmd.vel.XY().Rotated(p->GetActor()->spr.Angles.Yaw) + p->fric);
+	auto move = p->cmd.ucmd.vel.XY();
+	if (!(p->cmd.ucmd.actions & SB_ISOMETRIC_MOVE)) move = move.Rotated(p->GetActor()->spr.Angles.Yaw);
+	p->cmd.ucmd.vel.SetXY(move + p->fric);
 }
 
 inline const ActorInfo* DDukeActor::conInfo() const

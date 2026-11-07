@@ -130,6 +130,8 @@ public:
 		HWF_SKYHACK=4,
 		HWF_NOSPLIT=64,
 		HWF_TRANSLUCENT = 128,
+		HWF_CUTAWAY = 256,
+		HWF_CUTAWAYEDGE = 512,
 	};
 
 	enum
@@ -283,7 +285,8 @@ public:
 	int iboindex;
 	bool stack;
 	uint8_t plane;
-	short slopecount;
+	uint8_t cutawayPass = 0; // 0=off, 1=solid, 2=soft edge, 3=translucent
+	int slopecount;
 	FVector2 geoofs;
 	FVector3 normal;
 	//int vboheight;

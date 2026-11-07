@@ -27,8 +27,10 @@
 #include "hw_clock.h"
 //#include "hw_lighting.h"
 #include "hw_drawinfo.h"
+#include "hw_isovisibility.h"
 #include "hw_portal.h"
 #include "hw_lightbuffer.h"
+#include "hw_viewpointbuffer.h"
 #include "hw_renderstate.h"
 #include "hw_skydome.h"
 #include "hw_drawstructs.h"
@@ -266,6 +268,17 @@ void HWWall::RenderTranslucentWall(HWDrawInfo *di, FRenderState &state)
 //==========================================================================
 void HWWall::DrawWall(HWDrawInfo *di, FRenderState &state, bool translucent)
 {
+	bool cutaway = (flags & HWF_CUTAWAY) && di->cutawayVP[0] >= 0;
+	if (cutaway)
+	{
+		int pass = (flags & HWF_CUTAWAYEDGE) ? 1 : translucent ? 2 : 0;
+		screen->mViewpoints->Bind(state, di->cutawayVP[pass]);
+	}
+	if (di->Viewpoint.Isometric)
+	{
+		int pass = cutaway ? ((flags & HWF_CUTAWAYEDGE) ? 2 : translucent ? 3 : 1) : 0;
+		BindIsometricGeometry(*di, state, frontsector, backsector, Sprite ? 2 : 1, pass);
+	}
 	rendered_lines++;
 	if (screen->BuffersArePersistent())
 	{
@@ -300,6 +313,7 @@ void HWWall::DrawWall(HWDrawInfo *di, FRenderState &state, bool translucent)
 			break;
 		}
 	}
+	if (cutaway || di->Viewpoint.Isometric) screen->mViewpoints->Bind(state, di->vpIndex);
 }
 
 //==========================================================================
@@ -450,7 +464,7 @@ void HWWall::PutWall(HWDrawInfo *di, bool translucent)
 	// make sure that following parts of the same linedef do not get this one's vertex and lighting info.
 	vertcount = 0;	
 	dynlightindex = -1;
-	flags &= ~(HWF_TRANSLUCENT|HWF_CLAMPX|HWF_CLAMPY);
+	flags &= ~(HWF_TRANSLUCENT|HWF_CLAMPX|HWF_CLAMPY|HWF_CUTAWAY|HWF_CUTAWAYEDGE);
 }
 
 //==========================================================================
@@ -461,6 +475,9 @@ void HWWall::PutWall(HWDrawInfo *di, bool translucent)
 
 void HWWall::PutPortal(HWDrawInfo *di, int ptype, int plane)
 {
+	// This diagnostic scene has no transformed visibility instances yet.
+	// Do not recurse through an FPS portal from the external camera.
+	if (di->Viewpoint.Isometric) return;
 	HWPortal * portal = nullptr;
 
 	MakeVertices(di, false);

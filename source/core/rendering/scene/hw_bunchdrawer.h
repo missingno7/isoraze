@@ -32,6 +32,10 @@ class BunchDrawer
 	BitArray blockwall;
 	angle_t ang1, ang2, angrange;
 	float viewz;
+	angle_t viewangle;
+	bool collectOnly;
+	bool collectHorizontal = false;
+	BitArray collectedSections;
 
 	TArray<int> sectionstartang, sectionendang;
 
@@ -61,5 +65,8 @@ private:
 public:
 	void Init(HWDrawInfo* _di, Clipper* c, const DVector2& view, angle_t a1, angle_t a2);
 	void RenderScene(const int* viewsectors, unsigned sectcount, bool portal);
+	// Coarse 360-degree candidates only; no draw items or seen/mapped writes.
+	void CollectScene(Clipper* clipper, const DVector3& origin, int sector, bool horizontal = false);
+	const BitArray& GotSections() const { return collectedSections; }
 	const BitArray& GotSector() const { return gotsector; }
 };

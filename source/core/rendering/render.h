@@ -6,8 +6,11 @@ class FSerializer;
 struct IntRect;
 class FGameTexture;
 
-void render_drawrooms(DCoreActor* playersprite, const DVector3& position, sectortype* sectnum, const DRotator& angles, double interpfrac, float fov = -1);
+void render_drawrooms(DCoreActor* playersprite, const DVector3& position, sectortype* sectnum, const DRotator& angles, double interpfrac, float fov = -1, bool isometric = false);
 void render_camtex(DCoreActor* playersprite, const DVector3& position, sectortype* sect, const DRotator& angles, FGameTexture* camtex, IntRect& rect, double interpfrac);
+
+bool render_isometric_debug_enabled();
+bool render_isometricview();
 
 struct PortalDesc
 {

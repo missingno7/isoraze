@@ -38,6 +38,7 @@ source as it is released.
 #include "prediction.h"
 #include "dukeactor.h"
 #include "gamefuncs.h"
+#include "render.h"
 #include "models/modeldata.h"
 
 EXTERN_CVAR(Bool, wt_commentary)
@@ -198,7 +199,7 @@ void animatesprites_d(tspriteArray& tsprites, const DVector2& viewVec, DAngle vi
 				else h->spr.yoffset = 0;
 			}
 
-			if (ud.cameraactor == nullptr && p->newOwner == nullptr)
+			if (ud.cameraactor == nullptr && p->newOwner == nullptr && !render_isometricview())
 				if (h->GetOwner() && display_mirror == 0 && p->over_shoulder_on == 0)
 					if (ud.multimode < 2 || (ud.multimode > 1 && p == spp))
 					{

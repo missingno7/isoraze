@@ -1,6 +1,7 @@
 
 extend class DukeActor
 {
+	native static void IsometricShotTrail(Vector3 start, Vector3 end);
 	static void tracers(Vector3 start, Vector3 dest, int n)
 	{
 		sectortype sect = nullptr;
@@ -87,6 +88,7 @@ extend class DukeActor
 
 		actor.cstat &= ~CSTAT_SPRITE_BLOCK_ALL;
 		Raze.hitscan(pos, sectp, (ang.ToVector() * vel, zvel * 64), hit, CLIPMASK1);
+		if (hit.hitSector) IsometricShotTrail(pos, hit.hitpos);
 
 		if ((ud.mapflags & MFLAG_ALLSECTORTYPES) && hit.hitSector != nullptr && 
 			((hit.hitSector.lotag == ST_160_FLOOR_TELEPORT && zvel > 0) || (hit.hitSector.lotag == ST_161_CEILING_TELEPORT && zvel < 0))
@@ -109,6 +111,7 @@ extend class DukeActor
 						npos.Z = owner.sector.ceilingz;
 					}
 					Raze.hitscan(npos, owner.sector, (ang.ToVector() * 1024, zvel * 0.25), hit, CLIPMASK1);
+					if (hit.hitSector) IsometricShotTrail(npos, hit.hitpos);
 					break;
 				}
 			}
