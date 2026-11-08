@@ -973,6 +973,7 @@ set (PCH_SOURCES
 	core/mashup_player.cpp
 	games/superset/game.cpp
 	games/superset/player.cpp
+	games/superset/damage.cpp
 	core/postprocessor.cpp
 	core/searchpaths.cpp
 	core/serializer_raze.cpp

@@ -12,6 +12,7 @@
 #include "texturemanager.h"
 #include "raze_sound.h"
 #include "games/superset/superset.h"
+#include "games/superset/damage.h"
 
 CVAR(Bool, mashup_combat, false, 0)
 
@@ -273,10 +274,13 @@ bool FireBloodVector(DCoreActor* source, double offset, double zoffset, DVector3
 	auto hitter = Duke3d::CreateActor(hit.hitSector, hit.hitpos, Duke3d::DukeMeleeAttackClass,
 		-15, DVector2(0, 0), source->spr.Angles.Yaw, 0, 0, body, STAT_PROJECTILE);
 	if (!hitter) return true;
-	// Blood tines do half base damage to non-player targets (Q4 health). Duke's
-	// hit interface uses integer health, so round down to its representable unit.
-	hitter->spr.extra = vector.dmg / 2;
-	if (auto target = dyn_cast<Duke3d::DDukeActor>(hit.hitActor))
+	auto target = dyn_cast<Duke3d::DDukeActor>(hit.hitActor);
+	if (!Superset::PrepareDukeHit(hitter, Superset::BloodTineDamage(target && target->isPlayer())))
+	{
+		hitter->Destroy();
+		return true;
+	}
+	if (target)
 	{
 		if (!isaccessswitch(target->spr.spritetexture()))
 		{

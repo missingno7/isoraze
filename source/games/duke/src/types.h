@@ -76,6 +76,11 @@ public:
 	uint8_t spriteextra;	// moved here for easier maintenance. This was originally a hacked in field in the sprite structure called 'filler'.
 	uint16_t movflag;
 	short hitextra;
+	// Shared Q4 attacks retain their payload until native acceptance. The
+	// receiver carries fractions across its legacy integer-health facade.
+	int64_t supersetHitDamage = -1;
+	uint8_t supersetDamageRemainder = 0;
+	bool supersetPendingDamage = false;
 	short tempval, basepicnum;
 	unsigned short timetosleep;
 	bool mapSpawned;

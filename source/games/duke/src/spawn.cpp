@@ -179,6 +179,9 @@ DDukeActor* SpawnActor(sectortype* whatsectp, const DVector3& pos, PClassActor* 
 
 bool initspriteforspawn(DDukeActor* act)
 {
+	act->supersetHitDamage = -1;
+	act->supersetDamageRemainder = 0;
+	act->supersetPendingDamage = false;
 	SetupGameVarsForActor(act);
 	act->attackertype = static_cast<PClassActor*>(act->GetClass());
 	act->hitextra = -1;

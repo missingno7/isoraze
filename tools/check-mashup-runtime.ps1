@@ -64,6 +64,10 @@ cl_nostartscreens=true
     $resourceCheck = if ($MashupBloodDirectory -and $case.Name.StartsWith('duke-')) { 'mashup_resource_check' } else { 'echo Ordinary game resource check' }
     $combatActive = ($MashupCombat -or ($Superset -and $SupersetPlayer -eq 'caleb')) -and $case.Name.StartsWith('duke-')
     $combatCheck = if ($combatActive) { 'mashup_combat_check' } else { 'echo Ordinary game combat check' }
+    $damageCheck = if ($combatActive) { 'superset_damage_check' } else { 'echo Native damage retained' }
+    $damageSeed = if ($combatActive) { 'superset_damage_check seed' } else { 'echo Native save retained' }
+    $damageClear = if ($combatActive) { 'superset_damage_check clear' } else { 'echo Native state retained' }
+    $damageSaved = if ($combatActive) { 'superset_damage_check saved' } else { 'echo Native load retained' }
     $movementCheck = if ($Superset -and $SupersetPlayer -eq 'caleb' -and $case.Name.StartsWith('duke-')) {
         'superset_movement_check start; +Jump; wait 2; -Jump; +Move_Forward; wait 4; -Move_Forward; wait 30; +Crouch; wait 6; -Crouch; wait 12; superset_movement_check'
     } else { 'echo Native movement retained' }
@@ -81,9 +85,12 @@ cl_nostartscreens=true
         $movementCheck,
         $inputCheck,
         $combatCheck,
+        $damageCheck, $damageSeed,
         'save foundation "Mashup foundation regression"', 'wait 30',
         $alterPrototype,
+        $damageClear,
         'load foundation', 'wait 90', 'gc full', 'mashup_runtime_check',
+        $damageSaved, $damageCheck,
         $frontendCheck,
         $resourceCheck,
         $movementCheck,
@@ -176,6 +183,10 @@ cl_nostartscreens=true
         if ($movementChecks.Count -ne $expectedCount) { throw "$($case.Name) failed Caleb movement checks; inspect $logPath" }
     }
     if ($combatActive) {
+        $damageChecks = @(Select-String -LiteralPath $logPath -SimpleMatch -Pattern 'Superset damage check: categories=PASS, fractions=PASS, native ownership=PASS, rejection=PASS, modifiers=PASS, lethal=PASS, native route=PASS, CON death=PASS.')
+        if ($damageChecks.Count -ne 2 -or !(Select-String -LiteralPath $logPath -SimpleMatch -Pattern 'Superset damage save check: PASS.')) {
+            throw "$($case.Name) failed shared damage checks; inspect $logPath"
+        }
         $combatChecks = @(Select-String -LiteralPath $logPath -SimpleMatch -Pattern 'Mashup combat check: player routing=PASS, native QAV damage=PASS, Duke ownership=PASS, self protection=PASS, sound bank=PASS.')
         if ($combatChecks.Count -ne $expectedCount) { throw "$($case.Name) failed combat checks; inspect $logPath" }
         $inputChecks = @(Select-String -LiteralPath $logPath -SimpleMatch -Pattern 'Mashup combat input check: Blood fire=PASS, Duke ammunition=PASS.')

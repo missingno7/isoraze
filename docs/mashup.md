@@ -84,8 +84,9 @@ exercises the existing pitchfork prototype.
 The next milestones are hardening Caleb's navigation in the Duke world,
 shared targeting/damage in both directions, burning a Duke enemy and
 freezing a Blood enemy, then the reverse map adapter and expanded mixed content.
-The common health/time definitions are present; cross-game combat is not yet
-migrated to them. Original-game regression checks remain required.
+The common health/time definitions are present, and the pitchfork now submits
+shared Q4 physical hits. Other attacks and receivers still need migration.
+Original-game regression checks remain required.
 
 ## Native Caleb controller milestone
 
@@ -108,7 +109,8 @@ This is an incremental native adapter, not the final shared actor/AI model.
 
 No scale compensation is applied: initial idle eye height is 56.6875 world units
 and horizontal radius is 12. Native Blood SEQ state and the selected controller
-are serialized with the session; save schema/rules revision is now 2. Earlier
+are serialized with the session. Save schema is 2; rules revision is now 3
+after introducing shared physical hits. Earlier
 Superset bootstrap saves are intentionally incompatible with this experimental
 schema. The legacy native game save signatures remain separate.
 
@@ -145,9 +147,9 @@ playthroughs. Artifacts under `build-mashup/checks/`:
 
 These remain explicit design questions, not implicit crossover rules:
 
-- Map native damage kinds into shared categories after auditing the attack
-  paths, armor and enemy responses. Physical damage may need several traits;
-  health units alone do not determine balance or armor penetration.
+- Complete native attack/receiver mappings beyond the initial Blood category
+  mapping and pitchfork physical receiver. Physical damage may need several
+  traits; health units alone do not determine balance or armor penetration.
 - Decide armor/pickup mappings and mixed inventory limits. The current Duke
   pickup facade does not settle how Duke armor relates to Blood armor types.
 - Define effect interactions: fire versus frozen targets, ignition thresholds,
@@ -269,8 +271,8 @@ Pitchfork vectors use Blood's spread/range and Duke's hit callbacks. A short-liv
 Duke melee hit object supplies the physical player as damage owner, allowing
 Duke enemies, scenery and switches to react through their existing implementation.
 Access switches retain their key requirement. Damage is converted from Blood's
-fixed-point health to Duke's integer health, rounding down per tine. Material
-effects and damage balance still need broader compatibility testing.
+fixed-point health through the shared physical-hit receiver described below.
+Material effects and damage balance still need broader compatibility testing.
 
 Blood raw SFX definitions now register under `mashup/blood/` names with private
 sample IDs. Their bytes are read from the secondary bank by the existing native
@@ -301,6 +303,67 @@ It also verifies isolated sound bytes and, with audio enabled, native sample
 decoding/playback. `mashup_combat_input_check start` followed by holding Fire and
 `mashup_combat_input_check` verifies the real button path and no Duke ammunition
 consumption. Pickups may still increase Duke ammo during the test.
+
+## Shared damage ingress
+
+The first shared damage packet carries a Q4 health amount and a damage category.
+Blood's existing seven damage categories supply the initial response vocabulary:
+
+| Blood implementation | Shared health damage category |
+| --- | --- |
+| Fall | Impact |
+| Burn | Heat |
+| Bullet (also used by the pitchfork) | Physical |
+| Explode | Blast |
+| Drown | Asphyxiation |
+| Spirit | Spirit |
+| Tesla | Electric |
+
+These categories come from `actDamageDude`, the per-enemy `damageVal` table,
+player immunity and armor dispatch. They are not weapon/enemy pair rules.
+Heat damage does not itself request ignition; knockback, burning, freezing and
+shrinking remain separate work. Duke freezer/shrinker and nonphysical receiver
+mappings have not been settled by this increment. The first Duke receiver
+explicitly accepts Physical and rejects other shared categories.
+
+Native Blood tines deal `17 << 3` Q4 units to a non-player (8.5 points), and
+`17 << 4` to a player. The bridge previously truncated every non-player hit to
+8 points. It now retains fractional damage per target after native hit
+acceptance, yielding 17 points for two hits. The native `hitextra = -1` sentinel
+is treated as an empty queue for shared hits, rather than subtracting a point
+from the first hit. Native hits without a shared payload keep their original
+arithmetic. Native self-hit, size and friendly-fire gates, ownership, double-hit
+modifiers and `onHit`/CON reactions remain in the native adapter.
+
+The remainder, pending-hit marker and projectile payload serialize with their
+actors. Common zero health is translated to negative enemy health when the hit
+is consumed because Duke enemy CON tests `< 0`; Duke player CON accepts zero.
+Fractions are discarded on lethal consumption and actor initialization.
+
+This remains an adapter over Duke's integer CON health, not the finished shared
+health model: damage below an integer point is deferred until another accepted
+shared hit. Direct CON health replacement/capped healing and custom `onHit`
+handlers that bypass native damage accumulation need explicit synchronization.
+Blood enemy receivers, incoming Caleb armor/resistance handling, independent
+impulses and status effects remain to be integrated. No cross-game resistance
+or balancing rule has been silently assigned to those paths.
+
+`superset_damage_check` checks category round trips, two fractional hits against
+a native trooper, rejected hits, ownership, native modifiers, lethal health,
+ordinary-hit arithmetic and the trooper's actual CON death animation. The
+runtime harness seeds a half-point remainder before saving, destroys the test
+actor, then verifies its restored remainder and second hit after loading.
+
+Verified on 2026-11-08: Release build and damage/category/CON-death checks passed
+with Caleb on E1L1 (audio enabled, save/load and fresh E1L2 load) and E2L1
+(including the serialized remainder). The legacy Duke-movement pitchfork mode
+also passed the new checks. Ordinary Duke E1L1 and Blood E1M1 passed their
+runtime/save/load regressions. Artifacts under `build-mashup/checks/`:
+
+- `runtime-20261108T005121986`: Caleb E1L1 and E1L2, with audio.
+- `runtime-20261108T005246925`: ordinary Duke and Blood.
+- `runtime-20261108T005332809`: legacy pitchfork mode, including dead-hit cleanup.
+- `runtime-20261108T005520410`: Caleb E2L1, final damage/default-state checks.
 
 ## Build and regression checks
 

@@ -38,6 +38,7 @@ source as it is released.
 #include "sounds.h"
 #include "dukeactor.h"
 #include "interpolate.h"
+#include "games/superset/damage.h"
 
 // PRIMITIVE
 BEGIN_DUKE_NS
@@ -1403,7 +1404,11 @@ void checkhitdefault(DDukeActor* targ, DDukeActor* proj)
 			if (targ->spr.scale.X < targ->FloatVar(NAME_minhitscale))
 				return;
 
-			if (proj->flags4 & SFLAG4_DOUBLEHITDAMAGE) proj->spr.extra <<= 1;
+			if (proj->flags4 & SFLAG4_DOUBLEHITDAMAGE)
+			{
+				proj->spr.extra <<= 1;
+				if (proj->supersetHitDamage >= 0) proj->supersetHitDamage *= 2;
+			}
 
 			if (!(targ->flags3 & SFLAG3_NOHITJIBS) && !(proj->flags3 & SFLAG3_NOHITJIBS))
 			{
@@ -1468,7 +1473,7 @@ void checkhitdefault(DDukeActor* targ, DDukeActor* proj)
 			}
 
 			targ->attackertype = hitpic;
-			targ->hitextra += proj->spr.extra;
+			if (!Superset::AccumulateDukeHit(targ, proj)) targ->hitextra += proj->spr.extra;
 			if (!(targ->flags4 & SFLAG4_NODAMAGETURN))
 				targ->hitang = proj->spr.Angles.Yaw;
 			targ->SetHitOwner(Owner);

@@ -36,6 +36,7 @@ This file contains parts of DukeGDX by Alexander Makarov-[M210] (m210-2007@mail.
 
 #include "ns.h"
 #include "global.h"
+#include "games/superset/damage.h"
 #include "serializer.h"
 #include "dukeactor.h"
 #include "texturemanager.h"
@@ -213,6 +214,7 @@ int ifhitbyweapon_d(DDukeActor *actor)
 			}
 
 			actor->hitextra = -1;
+			Superset::FinishDukeHit(actor);
 			// makeshift damage type reporting. Needs improvement and generalization later.
 			int res = 0;
 			if (adef->flags2 & SFLAG2_FREEZEDAMAGE) res |= 1;
@@ -232,6 +234,8 @@ int ifhitbyweapon_d(DDukeActor *actor)
 		|| hitowner == nullptr)
 	{
 		actor->hitextra = -1;
+		actor->supersetPendingDamage = false;
+		if (actor->spr.extra <= 0) actor->supersetDamageRemainder = 0;
 		return -1;
 	}
 	else
