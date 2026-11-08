@@ -203,6 +203,8 @@ void sub_3888C(int, int);
 void TreeToGibCallback(int, int);
 
 bool IsUnderwaterSector(sectortype* pSector);
+struct PlayerWorldServices;
+void actProcessDudeMovement(DBloodActor* actor, PlayerWorldServices* world = nullptr);
 void actInit(TArray<DBloodActor*>& actors);
 void actWallBounceVector(DBloodActor* actor, walltype* pWall, double factor);
 DVector4 actFloorBounceVector(DBloodActor* actor, double oldz, sectortype* pSector, double factor);

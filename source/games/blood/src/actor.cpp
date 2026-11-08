@@ -31,6 +31,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 #include "blood.h"
 #include "texids.h"
+#include "mashup_player.h"
 
 BEGIN_BLD_NS
 
@@ -4689,7 +4690,7 @@ static Collision MoveThing(DBloodActor* actor)
 //
 //---------------------------------------------------------------------------
 
-void MoveDude(DBloodActor* actor)
+void MoveDude(DBloodActor* actor, PlayerWorldServices* world)
 {
 	DBloodPlayer* pPlayer = nullptr;
 	if (actor->IsPlayerActor()) pPlayer = getPlayer(actor->spr.type - kDudePlayer1);
@@ -4712,7 +4713,7 @@ void MoveDude(DBloodActor* actor)
 
 	if (actor->vel.X != 0 || actor->vel.Y != 0)
 	{
-		if (pPlayer && gNoClip)
+		if (pPlayer && (world ? world->NoClip() : gNoClip))
 		{
 			actor->spr.pos += actor->vel.XY();
 			updatesector(actor->spr.pos, &pSector);
@@ -4747,7 +4748,10 @@ void MoveDude(DBloodActor* actor)
 		{
 		case kHitSprite:
 		{
-			auto hitActor = coll.actor();
+			auto hitActor = dyn_cast<DBloodActor>(coll.hitActor);
+			// Engine collision still stops against foreign actors. Only Blood
+			// actors may enter Blood's missile and touch-trigger implementation.
+			if (!hitActor) break;
 			auto Owner = hitActor->GetOwner();
 
 			if (hitActor->spr.statnum == kStatProjectile && !(hitActor->spr.flags & 32) && actor != Owner)
@@ -4821,7 +4825,7 @@ void MoveDude(DBloodActor* actor)
 
 		pSector = actor->sector();
 	}
-	int bUnderwater = 0;
+	int bUnderwater = world ? world->IsUnderwater(pSector) : 0;
 	int bDepth = 0;
 	if (pXSector)
 	{
@@ -4883,7 +4887,7 @@ void MoveDude(DBloodActor* actor)
 		}
 	}
 	DVector3 const oldpos = actor->spr.pos;
-	int nLink = CheckLink(actor);
+	int nLink = world ? world->CheckRoomLink(actor) : CheckLink(actor);
 	if (nLink)
 	{
 		GetZRange(actor, &ceilZ, &ceilColl, &floorZ, &floorColl, wdf, CLIPMASK0, PARALLAXCLIP_CEILING | PARALLAXCLIP_FLOOR);
@@ -5066,7 +5070,7 @@ void MoveDude(DBloodActor* actor)
 				pPlayer->fallScream = 0;
 
 				if (nDamage > (15 << 4) && (actor->spr.flags & 4))
-					playerLandingSound(pPlayer);
+					playerLandingSound(pPlayer, world);
 				if (nDamage > (30 << 4))
 					sfxPlay3DSound(actor, 701, 0, 0);
 			}
@@ -5082,7 +5086,7 @@ void MoveDude(DBloodActor* actor)
 			else
 				actor->spr.flags |= 4;
 
-			switch (tileGetSurfType(floorColl))
+			switch (world ? world->SurfaceType(floorColl) : tileGetSurfType(floorColl))
 			{
 			case kSurfWater:
 				gFX.fxSpawnActor(FX_9, actor->sector(), DVector3(actor->spr.pos.XY(), floorZ));
@@ -5136,14 +5140,14 @@ void MoveDude(DBloodActor* actor)
 	{
 		if (floorColl.type == kHitSprite)
 		{
-			auto hitAct = floorColl.actor();
+			auto hitAct = floorColl.hitActor;
 			if ((hitAct->spr.cstat & CSTAT_SPRITE_ALIGNMENT_MASK) == CSTAT_SPRITE_ALIGNMENT_FACING)
 			{
 				actor->vel += (actor->spr.pos - hitAct->spr.pos).XY() * (1. / SLOPEVAL_FACTOR);
 				return;
 			}
 		}
-		if (IsUnderwaterSector(actor->sector()))
+		if (world ? world->IsUnderwater(actor->sector()) : IsUnderwaterSector(actor->sector()))
 			return;
 		if (actor->xspr.height >= 0x100)
 			return;
@@ -5912,6 +5916,43 @@ static void actCheckTraps()
 //
 //---------------------------------------------------------------------------
 
+void actProcessDudeMovement(DBloodActor* actor, PlayerWorldServices* world)
+{
+	if (actor->spr.flags & 32 || !actor->hasX()) return;
+	auto pSector = actor->sector();
+	if (!actor->IsPlayerActor()) viewBackupSpriteLoc(actor);
+	XSECTOR* pXSector = pSector->hasX() ? &pSector->xs() : nullptr;
+	if (pXSector)
+	{
+		double top, bottom;
+		GetActorExtents(actor, &top, &bottom);
+		if (getflorzofslopeptr(pSector, actor->spr.pos) <= bottom)
+		{
+			DAngle angle = pXSector->panAngle;
+			double speed = 0;
+			if (pXSector->panAlways || pXSector->state || pXSector->busy)
+			{
+				speed = pXSector->panVel / 128.;
+				if (!pXSector->panAlways && pXSector->busy) speed *= FixedToFloat(pXSector->busy);
+			}
+			if (pSector->floorstat & CSTAT_SECTOR_ALIGN) angle += pSector->walls[0].normalAngle();
+			actor->vel += angle.ToVector() * speed;
+		}
+	}
+	bool underwater = world ? world->IsUnderwater(pSector) : pXSector && pXSector->Underwater;
+	actAirDrag(actor, underwater ? 5376 : 128);
+	if (actor->IsPlayerActor())
+	{
+		auto player = getPlayer(actor->spr.type - kDudePlayer1);
+		double drag = FixedToFloat(gDudeDrag);
+		if (actor->xspr.height > 0) drag -= Scale(drag, double(actor->xspr.height), 256.);
+		player->doRollInput(false);
+		player->RollVel -= player->RollVel * drag;
+	}
+	if ((actor->spr.flags & 4) || !actor->vel.isZero() || pSector->velFloor || pSector->velCeil)
+		MoveDude(actor, world);
+}
+
 static void actCheckDudes()
 {
 	BloodStatIterator it(kStatDude);
@@ -6019,47 +6060,7 @@ static void actCheckDudes()
 	it.Reset(kStatDude);
 	while (auto actor = it.Next())
 	{
-		if (actor->spr.flags & 32 || !actor->hasX()) continue;
-
-		auto pSector = actor->sector();
-		if (!actor->IsPlayerActor()) viewBackupSpriteLoc(actor);
-		XSECTOR* pXSector = pSector->hasX() ? &pSector->xs() : nullptr;
-
-		if (pXSector)
-		{
-			double top, bottom;
-			GetActorExtents(actor, &top, &bottom);
-			if (getflorzofslopeptr(pSector, actor->spr.pos) <= bottom)
-			{
-				DAngle angle = pXSector->panAngle;
-				double speed = 0;
-				if (pXSector->panAlways || pXSector->state || pXSector->busy)
-				{
-					speed = pXSector->panVel / 128.;
-					if (!pXSector->panAlways && pXSector->busy)
-						speed *= FixedToFloat(pXSector->busy);
-				}
-				if (pSector->floorstat & CSTAT_SECTOR_ALIGN)
-					angle += pSector->walls[0].normalAngle();
-				actor->vel += angle.ToVector() * speed;
-			}
-		}
-		if (pXSector && pXSector->Underwater) actAirDrag(actor, 5376);
-		else actAirDrag(actor, 128);
-
-		if (actor->IsPlayerActor())
-		{
-			DBloodPlayer* pPlayer = getPlayer(actor->spr.type - kDudePlayer1);
-			double nDrag = FixedToFloat(gDudeDrag);
-			if (actor->xspr.height > 0)
-				nDrag -= Scale(nDrag, (double)actor->xspr.height, 256.);
-
-			pPlayer->doRollInput(false);
-			pPlayer->RollVel -= pPlayer->RollVel * nDrag;
-		}
-
-		if ((actor->spr.flags & 4) || !actor->vel.isZero() || actor->sector()->velFloor || actor->sector()->velCeil)
-			MoveDude(actor);
+		actProcessDudeMovement(actor);
 	}
 }
 
@@ -6609,6 +6610,7 @@ bool actCanSplatWall(walltype* pWall)
 
 void actFireVector(DBloodActor* shooter, double offset, double zoffset, DVector3 dv, VECTOR_TYPE vectorType, double nRange)
 {
+	if (Mashup::FireBloodVector(shooter, offset, zoffset, dv, vectorType, nRange)) return;
 	// this function expects a vector with unit length in XY. Let's not depend on all callers doing it.
 	dv /= dv.XY().Length(); 
 	assert(vectorType >= 0 && vectorType < kVectorMax);

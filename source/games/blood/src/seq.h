@@ -23,6 +23,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #pragma once
 
 #include "misc.h"
+#include "mashup_resources.h"
 BEGIN_BLD_NS
 
 
@@ -93,7 +94,7 @@ inline int seqGetTile(SEQFRAME* pFrame)
 
 inline FTextureID seqGetTexture(SEQFRAME* pFrame)
 {
-	return tileGetTextureID(pFrame->tile + (pFrame->tile2 << 12));
+	return Mashup::BloodTile(pFrame->tile + (pFrame->tile2 << 12));
 }
 
 int seqRegisterClient(void(*pClient)(int, int));

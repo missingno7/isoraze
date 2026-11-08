@@ -1,6 +1,7 @@
 #pragma once
 
 #include "coreactor.h"
+#include "mashup_player.h"
 
 BEGIN_BLD_NS
 
@@ -293,12 +294,13 @@ public:
 
 inline DBloodPlayer* getPlayer(int index)
 {
+	if (isDuke()) return static_cast<DBloodPlayer*>(Mashup::GetBloodPlayer(index));
 	return static_cast<DBloodPlayer*>(PlayerArray[index]);
 }
 
 inline DBloodPlayer* getPlayer(DBloodActor* ac)
 {
-	return static_cast<DBloodPlayer*>(PlayerArray[ac->spr.type - kDudePlayer1]);
+	return getPlayer(ac->spr.type - kDudePlayer1);
 }
 
 struct PlayerSave

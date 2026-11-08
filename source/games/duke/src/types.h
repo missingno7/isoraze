@@ -236,6 +236,9 @@ public:
 	DDukePlayer(DDukePlayer&) = delete;
 	void Serialize(FSerializer& arc) override;
 	TArray<GameVarValue> uservars;
+	TObjPtr<DCorePlayer*> bloodCombat;
+	bool bloodMovement;
+	int bloodPublishedHealth;
 	DVector3 vel;
 	DVector2 bobpos;
 	DVector2 fric;

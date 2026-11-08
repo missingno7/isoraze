@@ -48,6 +48,7 @@
 #include "palutil.h"
 #include "startupinfo.h"
 #include "files.h"
+#include "games/superset/superset.h"
 
 using namespace FileSys;
 
@@ -383,10 +384,11 @@ void InitFileSystem(TArray<GrpEntry>& groups)
 
 		size_t len;
 		size_t lastpos = 0;
+		FString autoloadFilter = Superset::IsActive() ? FString("Superset") : LumpFilter;
 
-		while (lastpos < LumpFilter.Len() && (len = strcspn(LumpFilter.GetChars() + lastpos, ".")) > 0)
+		while (lastpos < autoloadFilter.Len() && (len = strcspn(autoloadFilter.GetChars() + lastpos, ".")) > 0)
 		{
-			auto file = LumpFilter.Left(len + lastpos) + ".Autoload";
+			auto file = autoloadFilter.Left(len + lastpos) + ".Autoload";
 			D_AddConfigFiles(Files, file.GetChars(), "*.grp", GameConfig);
 			lastpos += len + 1;
 		}
@@ -442,6 +444,7 @@ void InitFileSystem(TArray<GrpEntry>& groups)
 	if (isDukeEngine()) lfi.gameTypeFilter.push_back("DukeEngine");
 	if (isDukeLike()) lfi.gameTypeFilter.push_back("DukeLike");
 	lfi.gameTypeFilter.push_back(LumpFilter.GetChars());
+	if (Superset::IsActive()) lfi.gameTypeFilter.push_back("Superset");
 
 	lfi.postprocessFunc = [&]()
 	{

@@ -374,12 +374,11 @@ QAV* getQAV(int res_id)
 	auto p = qavcache.CheckKey(res_id);
 	if (p != nullptr) return *p;
 
-	int index = fileSystem.FindResource(res_id, "QAV");
-	if (index < 0)
+	auto fr = Mashup::OpenBloodResource(res_id, "QAV");
+	if (!fr.isOpen())
 	{
 		return nullptr;
 	}
-	auto fr = fileSystem.OpenFileReader(index);
 
 	// Start reading QAV for nFrames, skipping padded data.
 	for (int i = 0; i < 8; i++) fr.ReadUInt8();
@@ -411,7 +410,7 @@ QAV* getQAV(int res_id)
 		for (int j = 0; j < 8; j++)
 		{
 			int tile = fr.ReadInt32();
-			qavdata->frames[i].tiles[j].texid = tile <= 0 ? FNullTextureID() : tileGetTextureID(tile);
+			qavdata->frames[i].tiles[j].texid = tile <= 0 ? FNullTextureID() : Mashup::BloodTile(tile);
 			qavdata->frames[i].tiles[j].x = fr.ReadInt32();
 			qavdata->frames[i].tiles[j].y = fr.ReadInt32();
 			qavdata->frames[i].tiles[j].z = fr.ReadInt32();

@@ -574,12 +574,11 @@ Seq* getSequence(int res_id)
 	auto p = sequences.CheckKey(res_id);
 	if (p != nullptr) return *p;
 
-	int index = fileSystem.FindResource(res_id, "SEQ");
-	if (index < 0)
+	auto fr = Mashup::OpenBloodResource(res_id, "SEQ");
+	if (!fr.isOpen())
 	{
 		return nullptr;
 	}
-	auto fr = fileSystem.OpenFileReader(index);
 	auto seqdata = (Seq*)seqcache.Alloc(fr.GetLength());
 	fr.Read(seqdata, fr.GetLength());
 	sequences.Insert(res_id, seqdata);

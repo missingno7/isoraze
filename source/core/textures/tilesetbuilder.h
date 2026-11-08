@@ -41,5 +41,6 @@ struct TilesetBuildInfo
 };
 
 void ConstructTileset();
+picanm_t tileConvertAnimFormat(int32_t picanimraw);
 int32_t tileGetCRC32(FImageSource* image);
 

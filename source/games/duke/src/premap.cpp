@@ -38,6 +38,7 @@ Prepared for public release: 03/21/2003 - Charlie Wiederhold, 3D Realms
 #include "precache.h"
 #include "render.h"
 #include "screenjob_.h"
+#include "mashup_player.h"
 
 BEGIN_DUKE_NS  
 
@@ -1052,6 +1053,7 @@ void cacheit(void)
 
 static int LoadTheMap(MapRecord *mi, DDukePlayer*p, int gamemode)
 {
+	Mashup::ResetCombatPlayers();
 	int16_t lbang;
 	if (isShareware() && (mi->flags & MI_USERMAP))
 	{

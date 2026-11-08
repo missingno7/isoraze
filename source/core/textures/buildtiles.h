@@ -16,12 +16,15 @@
 
 inline const FTextureID spritetypebase::spritetexture() const
 {
-	return tileGetTextureID(picnum);
+	// Sprite art can belong to a secondary bank outside the legacy map tiles.
+	unsigned index = unsigned(firstarttile) + unsigned(picnum);
+	if (picnum < 0 || index >= unsigned(TexMan.NumTextures())) return FNullTextureID();
+	return FSetTextureID(index);
 }
 
 inline void spritetypebase::setspritetexture(FTextureID tex)
 {
-	picnum = legacyTileNum(tex);
+	picnum = tex.isValid() ? tex.GetIndex() - firstarttile : -1;
 }
 
 //[[deprecated]]

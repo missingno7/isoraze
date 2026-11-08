@@ -388,14 +388,30 @@ public:
 
 	TActor* Next()
 	{
-		auto n = next;
-		if (next) next = next->nextStat;
-		return static_cast<TActor*>(n);
+		while (next)
+		{
+			auto n = next;
+			next = next->nextStat;
+			if (auto actor = dyn_cast<TActor>(n))
+			{
+				// Cache the next actor of this family before the caller can
+				// destroy the current actor or any intervening foreign actors.
+				while (next && !dyn_cast<TActor>(next)) next = next->nextStat;
+				return actor;
+			}
+		}
+		return nullptr;
 	}
 
 	TActor* Peek()
 	{
-		return static_cast<TActor*>(next);
+		auto n = next;
+		while (n)
+		{
+			if (auto actor = dyn_cast<TActor>(n)) return actor;
+			n = n->nextStat;
+		}
+		return nullptr;
 	}
 };
 
@@ -428,14 +444,28 @@ public:
 
 	TActor* Next()
 	{
-		auto n = next;
-		if (next) next = next->nextSect;
-		return static_cast<TActor*>(n);
+		while (next)
+		{
+			auto n = next;
+			next = next->nextSect;
+			if (auto actor = dyn_cast<TActor>(n))
+			{
+				while (next && !dyn_cast<TActor>(next)) next = next->nextSect;
+				return actor;
+			}
+		}
+		return nullptr;
 	}
 
 	TActor* Peek()
 	{
-		return static_cast<TActor*>(next);
+		auto n = next;
+		while (n)
+		{
+			if (auto actor = dyn_cast<TActor>(n)) return actor;
+			n = n->nextSect;
+		}
+		return nullptr;
 	}
 };
 

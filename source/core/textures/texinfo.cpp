@@ -36,6 +36,7 @@
 #include "texinfo.h"
 #include "m_crc32.h"
 #include "buildtiles.h"
+#include "mashup_resources.h"
 
 
 //==========================================================================
@@ -50,9 +51,10 @@ static int tileAnimateOfs(FTextureID texid, int randomize)
 	int framecount = ext.picanm.num;
 	if (framecount > 0)
 	{
-		int frametime = !isBlood() ? I_GetBuildTime() : PlayClock;
+		bool bloodAnimation = isBlood() || Mashup::IsBloodTexture(texid);
+		int frametime = !bloodAnimation ? I_GetBuildTime() : PlayClock;
 
-		if (isBlood() && randomize)
+		if (bloodAnimation && randomize)
 		{
 			frametime += Bcrc32(&randomize, 2, 0);
 		}

@@ -146,7 +146,11 @@ bool ReadSavegame(const char* name)
 			return false;
 		}
 		auto file = savereader->GetEntryReader(lump);
-		if (G_ValidateSavegame(file, nullptr, false) <= 0)
+		auto previousLevel = currentLevel;
+		int validation = G_ValidateSavegame(file, nullptr, false);
+		auto destinationLevel = currentLevel;
+		currentLevel = previousLevel;
+		if (validation <= 0)
 		{
 			delete savereader;
 			return false;
@@ -169,6 +173,10 @@ bool ReadSavegame(const char* name)
 		}
 
 		// Load the savegame.
+		// Content validation and JSON parsing must succeed before the current
+		// world's actors and native adapter state can be released.
+		gi->FreeLevelData();
+		currentLevel = destinationLevel;
 		loadMapBackup(currentLevel->fileName.GetChars());
 		SerializeSession(arc);
 		g_nextskill = gi->GetCurrentSkill();
@@ -213,6 +221,7 @@ bool WriteSavegame(const char* filename, const char *name)
 		.AddString("Map File", lev->fileName.GetChars())
 		.AddString("Map Label", lev->labelName.GetChars())
 		.AddString("Map Time", timeStr.GetChars());
+	gi->WriteSavegameMetadata(savegameinfo);
 
 	const char *fn = lev->fileName.GetChars();
 	if (*fn == '/') fn++;
@@ -366,6 +375,8 @@ int G_ValidateSavegame(FileReader &fr, FString *savetitle, bool formenu)
 		return 0;
 	}
 	SaveVersion = savesig.currentsavever;
+	// Check secondary content before selecting a map or restoring any objects.
+	if (!gi->ValidateSavegameMetadata(arc, formenu)) return -2;
 
 	MapRecord *curLevel = FindMapByName(label.GetChars());
 
@@ -495,7 +506,8 @@ FSerializer &Serialize(FSerializer &arc, const char *key, sectortype &c, sectort
 			("portalnum", c.portalnum, def->portalnum)
 			("exflags", c.exflags, def->exflags);
 
-		// Save the extensions only when playing their respective games.
+		// Duke worlds can also carry Blood environment state. The two blocks
+		// are independent so neither side is lost during a mashup save/load.
 		if (isDukeEngine())
 		{
 			arc("keyinfo", c.lockinfo, def->lockinfo)
@@ -503,7 +515,7 @@ FSerializer &Serialize(FSerializer &arc, const char *key, sectortype &c, sectort
 				("hitagactor", c.hitagactor, def->hitagactor);
 
 		}
-		else if (isBlood())
+		if (isBlood() || isDukeEngine())
 		{
 			arc("upperlink", c.upperLink, def->upperLink)
 				("lowerlink", c.lowerLink, def->lowerLink)
@@ -750,7 +762,6 @@ CUSTOM_CVAR(Int, quicksavecount, 4, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
 
 void DoLoadGame(const char* name)
 {
-	gi->FreeLevelData();
 	if (ReadSavegame(name))
 	{
 		gameaction = ga_level;

@@ -82,7 +82,7 @@ extern const char* gAmmoText[];
 extern const char* gWeaponText[];
 extern int gSkyCount;
 
-void GetSpriteExtents(spritetypebase const* const pSprite, double* top, double* bottom)
+inline void GetSpriteExtents(spritetypebase const* const pSprite, double* top, double* bottom)
 {
 	*top = *bottom = pSprite->pos.Z;
 	if ((pSprite->cstat & CSTAT_SPRITE_ALIGNMENT_MASK) != CSTAT_SPRITE_ALIGNMENT_FLOOR)

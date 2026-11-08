@@ -45,6 +45,7 @@
 #include "gamecontrol.h"
 #include "build.h"
 #include "coreactor.h"
+#include "mashup_resources.h"
 #include "g_input.h"
 
 extern ReverbContainer* ForcedEnvironment;
@@ -91,6 +92,8 @@ void S_SetReverb(int strength)
 
 TArray<uint8_t> RazeSoundEngine::ReadSound(int lumpnum)
 {
+	TArray<uint8_t> secondary;
+	if (Mashup::ReadBloodSound(lumpnum, secondary)) return secondary;
 	auto wlump = fileSystem.OpenFileReader(lumpnum);
 	TArray<uint8_t> buffer(wlump.GetLength(), true);
 	auto len = wlump.Read(buffer.data(), buffer.size());

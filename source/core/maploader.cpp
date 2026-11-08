@@ -875,7 +875,7 @@ void MarkMap()
 		GC::Mark(sect.firstEntry);
 		GC::Mark(sect.lastEntry);
 		if (isDukeEngine()) GC::Mark(sect.hitagactor);
-		else if (isBlood())
+		if (isBlood() || isDukeEngine())
 		{
 			GC::Mark(sect.upperLink);
 			GC::Mark(sect.lowerLink);

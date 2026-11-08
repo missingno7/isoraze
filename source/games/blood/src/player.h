@@ -92,6 +92,19 @@ extern POSTURE gPostureDefaults[kModeMax][kPostureMax];
 
 class DBloodPlayer;
 
+// World interactions are supplied by the map's rules. Native Blood callers
+// omit this service and retain the original trigger, pickup and room logic.
+struct PlayerWorldServices
+{
+	virtual ~PlayerWorldServices() = default;
+	virtual bool NoClip() const = 0;
+	virtual bool IsUnderwater(sectortype* sector) const = 0;
+	virtual int SurfaceType(CollisionBase& hit) const = 0;
+	virtual int CheckRoomLink(DBloodActor* actor) = 0;
+	virtual void UseAction(DBloodPlayer* player) = 0;
+	virtual void CollectPickups(DBloodPlayer* player) = 0;
+};
+
 struct AMMOINFO
 {
 	int max;
@@ -141,8 +154,8 @@ void playerStart(int nPlayer, int bNewLevel = 0);
 void playerReset(DBloodPlayer* pPlayer);
 void playerInit(int nPlayer, unsigned int a2);
 void CheckPickUp(DBloodPlayer* pPlayer);
-void ProcessInput(DBloodPlayer* pPlayer);
-void playerProcess(DBloodPlayer* pPlayer);
+void ProcessInput(DBloodPlayer* pPlayer, PlayerWorldServices* world = nullptr);
+void playerProcess(DBloodPlayer* pPlayer, PlayerWorldServices* world = nullptr);
 DBloodActor* playerFireMissile(DBloodPlayer* pPlayer, double xyoff, const DVector3& vec, int nType);
 DBloodActor* playerFireThing(DBloodPlayer* pPlayer, double xyoff, double zvel, int thingType, double nSpeed);
 void playerFrag(DBloodPlayer* pKiller, DBloodPlayer* pVictim);
@@ -150,7 +163,7 @@ int playerDamageArmor(DBloodPlayer* pPlayer, DAMAGE_TYPE nType, int nDamage);
 int playerDamageSprite(DBloodActor* nSource, DBloodPlayer* pPlayer, DAMAGE_TYPE nDamageType, int nDamage);
 int UseAmmo(DBloodPlayer* pPlayer, int nAmmoType, int nDec);
 void voodooTarget(DBloodPlayer* pPlayer);
-void playerLandingSound(DBloodPlayer* pPlayer);
+void playerLandingSound(DBloodPlayer* pPlayer, PlayerWorldServices* world = nullptr);
 void PlayerSurvive(int, DBloodActor*);
 
 END_BLD_NS

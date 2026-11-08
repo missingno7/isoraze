@@ -158,7 +158,7 @@ FSoundID getSfx(FSoundID soundId, float& attenuation, int& relvol)
 void sfxPlay3DSound(const DVector3& pos, int soundId, sectortype* pSector)
 {
 	if (!SoundEnabled() || soundId < 0) return;
-	auto sid = soundEngine->FindSoundByResID(soundId);
+	auto sid = Mashup::BloodSound(soundId);
 	if (!sid.isvalid()) return;
 
 	auto svec = GetSoundPos(pos);
@@ -184,7 +184,9 @@ void sfxPlay3DSound(const DVector3& pos, int soundId, sectortype* pSector)
 void sfxPlay3DSoundVolume(DBloodActor* pActor, int soundId, int playchannel, int playflags, int pitch, int volume)
 {
 	if (!SoundEnabled() || soundId <= 0 || !pActor) return;
-	auto sid = soundEngine->FindSoundByResID(soundId);
+	auto source = Mashup::HasBloodResources() ? Mashup::WorldSoundActor(pActor) : pActor;
+	if (!source) return;
+	auto sid = Mashup::BloodSound(soundId);
 	if (!sid.isvalid()) return;
 
 	auto svec = GetSoundPos(pActor->spr.pos);
@@ -199,7 +201,8 @@ void sfxPlay3DSoundVolume(DBloodActor* pActor, int soundId, int playchannel, int
 		if (soundEngine->EnumerateChannels([=](FSoundChan* chan) -> int
 			{
 				if (chan->SourceType != SOURCE_Actor) return false; // other source types are not our business.
-				if (chan->EntChannel == playchannel && (chan->Source == pActor || (playflags & FX_GlobalChannel) != 0))
+				if (Mashup::HasBloodResources() && strncmp(soundEngine->GetSoundName(chan->OrgID), "mashup/blood/", 13)) return false;
+				if (chan->EntChannel == playchannel && (chan->Source == source || (playflags & FX_GlobalChannel) != 0))
 				{
 					if ((playflags & FX_ChannelMatch) != 0 && chan->EntChannel == playchannel)
 						return true;
@@ -221,7 +224,7 @@ void sfxPlay3DSoundVolume(DBloodActor* pActor, int soundId, int playchannel, int
 		flags &= ~CHANF_OVERLAP;
 	}
 
-	soundEngine->StartSound(SOURCE_Actor, pActor, &svec, playchannel, flags, sid, volume * (0.8f / 80.f), attenuation, nullptr, pitch / 65536.f);
+	soundEngine->StartSound(SOURCE_Actor, source, &svec, playchannel, flags, sid, volume * (0.8f / 80.f), attenuation, nullptr, pitch / 65536.f);
 }
 
 void sfxPlay3DSound(DBloodActor* pActor, int soundId, int a3, int a4)
@@ -240,12 +243,15 @@ void sfxKill3DSound(DBloodActor* pActor, int a2, int a3)
 {
 	if (!pActor)
 		return;
+	auto source = Mashup::HasBloodResources() ? Mashup::WorldSoundActor(pActor) : pActor;
+	if (!source) return;
 
 	if (a2 >= 0) a2++;
-	auto sid = soundEngine->FindSoundByResID(a3);
+	auto sid = Mashup::BloodSound(a3);
 	soundEngine->EnumerateChannels([=](FSoundChan* channel)
 		{
-			if (channel->SourceType == SOURCE_Actor && channel->Source == pActor && (a2 < 0 || a2 == channel->EntChannel) && (a3 < 0 || sid == channel->OrgID))
+			if (Mashup::HasBloodResources() && strncmp(soundEngine->GetSoundName(channel->OrgID), "mashup/blood/", 13)) return false;
+			if (channel->SourceType == SOURCE_Actor && channel->Source == source && (a2 < 0 || a2 == channel->EntChannel) && (a3 < 0 || sid == channel->OrgID))
 			{
 				soundEngine->StopChannel(channel);
 			}

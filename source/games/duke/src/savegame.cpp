@@ -104,6 +104,8 @@ FSerializer& Serialize(FSerializer& arc, const char* keyname, player_orig& w, pl
 void DDukePlayer::Serialize(FSerializer& arc)
 {
 	Super::Serialize(arc);
+	arc("bloodcombat", bloodCombat);
+	arc("bloodmovement", bloodMovement)("bloodpublishedhealth", bloodPublishedHealth);
 	arc.Array("gotweapon", gotweapon, MAX_WEAPONS)
 		("pals", pals)
 		("fric", fric)

@@ -46,6 +46,7 @@ Modifications for JonoF's port by Jonathon Fowler (jf@jonof.id.au)
 #include "razefont.h"
 #include "startscreen.h"
 #include "render.h"
+#include "mashup_player.h"
 #include "isometricinput.h"
 
 BEGIN_DUKE_NS
@@ -198,7 +199,7 @@ void V_AddBlend (float r, float g, float b, float a, float v_blend[4])
 		 cameratext(pp->newOwner);
 	 else
 	 {
-		 fi.displayweapon(pp, interpfrac);
+		 if (!Mashup::DrawCombat(pp, interpfrac)) fi.displayweapon(pp, interpfrac);
 		 if (pp->over_shoulder_on == 0)
 			 fi.displaymasks(pp, pp->GetActor()->spr.pal == 1 || !pp->insector() ? 1 : pp->cursector->floorpal, interpfrac);
 	 }

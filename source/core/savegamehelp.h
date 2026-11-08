@@ -18,6 +18,9 @@ void G_DoLoadGame();
 
 void M_Autosave();
 
+FSerializer& Serialize(FSerializer& arc, const char* key, sectortype& value, sectortype* def);
+FSerializer& Serialize(FSerializer& arc, const char* key, spritetype& value, spritetype* def);
+
 template<> inline FSerializer& Serialize(FSerializer& arc, const char* keyname, sectortype*& w, sectortype** def)
 {
 	assert(arc.isReading() || w == nullptr || (w >= &sector[0] && w <= &sector.Last()));

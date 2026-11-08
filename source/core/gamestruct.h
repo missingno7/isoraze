@@ -62,6 +62,9 @@ struct GameInterface
 	virtual ~GameInterface() {}
 	virtual bool GenerateSavePic() { return false; }
 	virtual void app_init() = 0;
+	// Additional content banks are initialized after the primary textures/sounds.
+	virtual void LoadSecondaryResources() {}
+	virtual void InitSecondarySounds() {}
 	virtual void FinalizeSetup() {}
 	virtual void LoadTextureInfo(TilesetBuildInfo& info) {}
 	virtual void SetupSpecialTextures(TilesetBuildInfo&) = 0;
@@ -74,6 +77,8 @@ struct GameInterface
 	virtual bool CanSave() { return true; }
 	virtual bool StartGame(FNewGameStartup& gs) { return true; }
 	virtual FSavegameInfo GetSaveSig() { return { "", 0, 0}; }
+	virtual void WriteSavegameMetadata(FSerializer& arc) {}
+	virtual bool ValidateSavegameMetadata(FSerializer& arc, bool formenu) { return true; }
 	virtual double SmallFontScale() { return 1; }
 	virtual void SerializeGameState(FSerializer& arc) = 0;
 	virtual void DrawPlayerSprite(const DVector2& origin, bool onteam) {}

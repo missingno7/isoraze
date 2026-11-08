@@ -37,6 +37,7 @@ source as it is released.
 #include "global.h"
 #include "gamevar.h"
 #include "dukeactor.h"
+#include "mashup_player.h"
 
 BEGIN_DUKE_NS 
 
@@ -1448,6 +1449,7 @@ static void operateweapon(DDukePlayer* const p, ESyncBits actions)
 
 static void processweapon(DDukePlayer* const p, ESyncBits actions)
 {
+	if (Mashup::IsCombatPlayer(p)) return;
 	auto pact = p->GetActor();
 	int shrunk = (pact->spr.scale.Y < 0.5);
 
@@ -1947,7 +1949,7 @@ HORIZONLY:
 		}
 	}
 
-	dokneeattack(p);
+	if (!Mashup::IsCombatPlayer(p)) dokneeattack(p);
 
 	if (fi.doincrements(p)) return;
 

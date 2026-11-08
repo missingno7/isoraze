@@ -606,6 +606,7 @@ file( GLOB HEADER_FILES
 	common/scripting/backend/*.h
 	common/scripting/frontend/*.h
 	games/duke/src/*.h
+	games/superset/*.h
 	games/blood/src/*.h
 	games/sw/src/*.h
 	games/exhumed/src/*.h
@@ -967,6 +968,11 @@ set (PCH_SOURCES
 	core/maphack.cpp
 	core/mapinfo.cpp
 	core/maploader.cpp
+	core/mashup_runtime.cpp
+	core/mashup_resources.cpp
+	core/mashup_player.cpp
+	games/superset/game.cpp
+	games/superset/player.cpp
 	core/postprocessor.cpp
 	core/searchpaths.cpp
 	core/serializer_raze.cpp
@@ -1520,6 +1526,7 @@ install(TARGETS ${PROJECT_NAME}
 
 source_group("Games" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/games/.+")
 source_group("Games\\Duke" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/games/duke/.+")
+source_group("Games\\Superset" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/games/superset/.+")
 source_group("Games\\Duke\\Source" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/games/duke/src/.+")
 source_group("Games\\Blood" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/games/blood/.+")
 source_group("Games\\Blood\\Source" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/games/blood/src.+")

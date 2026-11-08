@@ -163,13 +163,13 @@ int sndGetRate(int format)
 
 bool sndCheckPlaying(unsigned int nSound)
 {
-	auto snd = soundEngine->FindSoundByResID(nSound);
+	auto snd = Mashup::BloodSound(nSound);
 	return snd.isvalid() ? soundEngine->GetSoundPlayingInfo(SOURCE_Any, nullptr, snd) : false;
 }
 
 void sndStopSample(unsigned int nSound)
 {
-	auto snd = soundEngine->FindSoundByResID(nSound);
+	auto snd = Mashup::BloodSound(nSound);
 
 	if (snd.isvalid())
 	{
@@ -201,7 +201,7 @@ void sndStartSample(unsigned int nSound, int nVolume, int nChannel, bool bLoop, 
 	if (!SoundEnabled())
 		return;
 	if (nChannel >= 7) nChannel = -1;
-	auto snd = soundEngine->FindSoundByResID(nSound);
+	auto snd = Mashup::BloodSound(nSound);
 	if (snd.isvalid())
 	{
 		if (nVolume < 0)

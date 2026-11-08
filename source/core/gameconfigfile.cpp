@@ -216,6 +216,7 @@ void FGameConfigFile::DoAutoloadSetup (/*FIWadManager *iwad_man*/)
 	}
 
 	static constexpr const char* gamefilters[] = {
+		"Superset",
 		"Blood",
 		"Blood.Blood",
 		"Blood.Cryptic",

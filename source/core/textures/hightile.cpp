@@ -50,6 +50,7 @@
 #include "hw_renderstate.h"
 #include "skyboxtexture.h"
 #include "gamefuncs.h"
+#include "mashup_resources.h"
 
 enum ETexType
 {
@@ -320,6 +321,7 @@ int tileSetSkybox(int tilenum, int palnum, FString* facenames, bool indexed)
 bool PickTexture(FGameTexture* tex, int paletteid, TexturePick& pick, bool wantindexed)
 {
 	if (!tex->isValid() || tex->GetTexelWidth() <= 0 || tex->GetTexelHeight() <= 0) return false;
+	if (Mashup::PickBloodTexture(tex, paletteid, pick)) return true;
 
 	int usepalette = 0, useremap = 0;
 	if (!IsLuminosityTranslation(paletteid))

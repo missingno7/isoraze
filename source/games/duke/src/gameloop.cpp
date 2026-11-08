@@ -35,6 +35,9 @@ Modifications for JonoF's port by Jonathon Fowler (jf@jonof.id.au)
 #include "mapinfo.h"
 #include "texturemanager.h"
 #include "interpolate.h"
+#include "mashup_resources.h"
+#include "mashup_player.h"
+#include "games/superset/superset.h"
 
 BEGIN_DUKE_NS
 
@@ -77,12 +80,17 @@ void GameInterface::Ticker()
 			if (p->pals.a > 0)
 				p->pals.a--;
 
-			hud_input(p);
-			fi.processinput(p);
+			Mashup::PrepareCombat(p);
+			if (!Superset::TickBloodMovement(p))
+			{
+				hud_input(p);
+				fi.processinput(p);
+			}
 			fi.checksectors(p);
 		}
 
 		fi.think();
+		for (int i = connecthead; i >= 0; i = connectpoint2[i]) Mashup::TickCombat(getPlayer(i));
 
 		if (PlayClock & 4)
 		{
@@ -130,6 +138,7 @@ void GameInterface::Render()
 
 	displayrooms(screenpeek, interpfrac, false);
 	drawoverlays(interpfrac);
+	Mashup::DrawResourcePreview();
 	drawtime.Unclock();
 }
 

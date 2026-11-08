@@ -84,6 +84,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "hw_material.h"
 #include "tiletexture.h"
 #include "tilesetbuilder.h"
+#include "mashup_resources.h"
+#include "games/superset/superset.h"
 #include "gameinput.h"
 
 #include "buildtiles.h"
@@ -518,7 +520,11 @@ namespace Exhumed
 
 void CheckFrontend(int flags)
 {
-	if (flags & GAMEFLAG_BLOOD)
+	if (Superset::IsActive())
+	{
+		gi = Superset::CreateInterface();
+	}
+	else if (flags & GAMEFLAG_BLOOD)
 	{
 		gi = Blood::CreateInterface();
 	}
@@ -890,6 +896,13 @@ static TArray<GrpEntry> SetupGame()
 	SavegameFolder = LumpFilter;
 	currentGame = LumpFilter;
 	currentGame.Truncate(currentGame.IndexOf("."));
+	Superset::Configure(g_gameType);
+	if (Superset::IsActive())
+	{
+		currentGame = "Superset";
+		SavegameFolder = "Superset";
+		GameStartupInfo.Name = "Raze Superset (experimental)";
+	}
 	PClass::StaticInit();
 	CheckFrontend(g_gameType);
 	gameinfo.gametype = g_gameType;
@@ -1002,6 +1015,8 @@ static void InitTextures(TArray<GrpEntry>& usedgroups)
 	lookups.postLoadLookups();
 	SetupFontSubstitution();
 	V_LoadTranslations();   // loading the translations must be delayed until the palettes have been fully set up.
+	Mashup::InitBloodResources();
+	gi->LoadSecondaryResources();
 	UpdateUpscaleMask();
 }
 
@@ -1160,6 +1175,8 @@ int RunGame()
 	GC::AddMarkerFunc(MarkMap);
 	GC::AddMarkerFunc(MarkPlayers);
 	gi->app_init();
+	if (!Superset::IsActive()) Mashup::InitBloodSounds();
+	gi->InitSecondarySounds();
 	StartWindow->Progress();
 	G_ParseMapInfo();
 	ParseGLDefs();
@@ -1320,7 +1337,7 @@ FString G_GetDemoPath()
 {
 	FString path = M_GetDemoPath();
 
-	path << LumpFilter << '/';
+	path << (Superset::IsActive() ? "Superset" : LumpFilter.GetChars()) << '/';
 	CreatePath(path.GetChars());
 
 	return path;
@@ -1490,6 +1507,7 @@ static const gamefilter games[] = {
 
 bool validFilter(const char* str)
 {
+	if (Superset::IsActive() && !stricmp(str, "Superset")) return true;
 	for (auto& gf : games)
 	{
 		if (g_gameType & gf.gameflag)

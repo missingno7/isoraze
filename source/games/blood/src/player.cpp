@@ -1496,7 +1496,7 @@ int ActionScan(DBloodPlayer* pPlayer, HitInfo* out)
 //
 //---------------------------------------------------------------------------
 
-void ProcessInput(DBloodPlayer* pPlayer)
+void ProcessInput(DBloodPlayer* pPlayer, PlayerWorldServices* world)
 {
 	enum
 	{
@@ -1608,7 +1608,9 @@ void ProcessInput(DBloodPlayer* pPlayer)
 	{
 		HitInfo result;
 
-		int hit = ActionScan(pPlayer, &result);
+		int hit = -1;
+		if (world) world->UseAction(pPlayer);
+		else hit = ActionScan(pPlayer, &result);
 		switch (hit)
 		{
 		case 6:
@@ -1749,10 +1751,11 @@ void ProcessInput(DBloodPlayer* pPlayer)
 			viewSetMessage("Holstering weapon");
 		}
 	}
-	CheckPickUp(pPlayer);
+	if (world) world->CollectPickups(pPlayer);
+	else CheckPickUp(pPlayer);
 }
 
-void playerProcess(DBloodPlayer* pPlayer)
+void playerProcess(DBloodPlayer* pPlayer, PlayerWorldServices* world)
 {
 	DBloodActor* actor = pPlayer->GetActor();
 	POSTURE* pPosture = &pPlayer->pPosture[pPlayer->lifeMode][pPlayer->posture];
@@ -1762,7 +1765,7 @@ void playerProcess(DBloodPlayer* pPlayer)
 	double dzflor = (bottom - actor->spr.pos.Z) / 4;
 	double dzceil = (actor->spr.pos.Z - top) / 4;
 
-	if (!gNoClip)
+	if (!(world ? world->NoClip() : gNoClip))
 	{
 		auto pSector = actor->sector();
 		if (pushmove(actor->spr.pos, &pSector, actor->clipdist, dzceil, dzflor, CLIPMASK0) == -1)
@@ -1778,7 +1781,7 @@ void playerProcess(DBloodPlayer* pPlayer)
 				ChangeActorSect(actor, pSector);
 		}
 	}
-	ProcessInput(pPlayer);
+	ProcessInput(pPlayer, world);
 	pPlayer->zViewVel = interpolatedvalue(pPlayer->zViewVel, actor->vel.Z, FixedToFloat(0x7000));
 	double dz = pPlayer->GetActor()->spr.pos.Z - pPosture->eyeAboveZ - pPlayer->zView;
 	if (dz > 0)
@@ -2265,7 +2268,7 @@ void voodooTarget(DBloodPlayer* pPlayer)
 //
 //---------------------------------------------------------------------------
 
-void playerLandingSound(DBloodPlayer* pPlayer)
+void playerLandingSound(DBloodPlayer* pPlayer, PlayerWorldServices* world)
 {
 	static int surfaceSound[] = {
 		-1,
@@ -2287,9 +2290,10 @@ void playerLandingSound(DBloodPlayer* pPlayer)
 	SPRITEHIT* pHit = &pPlayer->GetActor()->hit;
 	if (pHit->florhit.type != kHitNone)
 	{
-		if (!gGameOptions.bFriendlyFire && pHit->florhit.type == kHitSprite && IsTargetTeammate(pPlayer, pHit->florhit.actor()))
+		auto floorActor = pHit->florhit.type == kHitSprite ? dyn_cast<DBloodActor>(pHit->florhit.hitActor) : nullptr;
+		if (!gGameOptions.bFriendlyFire && pHit->florhit.type == kHitSprite && floorActor && IsTargetTeammate(pPlayer, floorActor))
 			return;
-		int nSurf = tileGetSurfType(pHit->florhit);
+		int nSurf = world ? world->SurfaceType(pHit->florhit) : tileGetSurfType(pHit->florhit);
 		if (nSurf)
 			sfxPlay3DSound(pPlayer->GetActor(), surfaceSound[nSurf], -1, 0);
 	}

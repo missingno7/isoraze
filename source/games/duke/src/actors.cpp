@@ -46,6 +46,7 @@ This file is a combination of code from the following sources:
 #include "stats.h"
 #include "constants.h"
 #include "dukeactor.h"
+#include "games/superset/superset.h"
 
 BEGIN_DUKE_NS
 
@@ -522,6 +523,9 @@ void moveplayers(void)
 	{
 		int pn = act->PlayerIndex();
 		auto p = getPlayer(pn);
+		// Native Blood owns Caleb's simulation. The Duke pawn is the one world
+		// collider/identity used by Duke mechanisms, not a second controller.
+		if (Superset::HasBloodMovement(p)) continue;
 
 		if (act->GetOwner())
 		{

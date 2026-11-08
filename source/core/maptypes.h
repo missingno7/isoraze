@@ -380,15 +380,16 @@ struct sectortype
 
 	DAngle angle; // this is SW only. GCC is stupid and does not allow it inside an anonmyous struct.
 
-	// Game specific extensions. Due to how sectors are used they need to be defined in the global class. :(
+	// Duke world mechanisms must coexist with Blood's actor/environment state.
+	// Keep these outside the union: interpreting lockinfo as an XSECTOR pointer
+	// is unsafe even when Blood only asks whether a Duke sector has an extension.
+	uint8_t lockinfo;
+	uint8_t shadedsector;
+	TObjPtr<DCoreActor*> hitagactor;
+
+	// Extensions for the other world formats remain mutually exclusive.
 	union
 	{
-		struct // DukeRR
-		{
-			uint8_t lockinfo; // This was originally the repurposed filler byte.
-			uint8_t shadedsector;
-			TObjPtr<DCoreActor*> hitagactor;    // we need this because Duke stores an actor in the hitag field. Is really a DDukeActor, but cannot be declared here safely.
-		};
 		struct // Blood
 		{
 			BLD_NS::XSECTOR* _xs;
@@ -474,7 +475,9 @@ struct spritetypebase
 	DVector2 scale;
 
 	ESpriteFlags cstat;
-	int16_t picnum;
+	// Runtime tile banks can extend past the original signed 16-bit map range.
+	// Disk sprite formats are read separately and retain their original layout.
+	int32_t picnum;
 	int16_t statnum;
 	int16_t intangle;	// needs to be kept for SW's SP_TAG4
 	int16_t xint;		// formerly known as xvel and yvel
