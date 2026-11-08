@@ -91,6 +91,7 @@ void GameInterface::Ticker()
 
 		fi.think();
 		for (int i = connecthead; i >= 0; i = connectpoint2[i]) Mashup::TickCombat(getPlayer(i));
+		Superset::TickSharedObjects();
 
 		if (PlayClock & 4)
 		{

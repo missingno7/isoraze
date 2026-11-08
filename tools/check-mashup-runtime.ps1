@@ -58,6 +58,7 @@ vid_activeinbackground=true
 i_pauseinbackground=false
 vid_vsync=false
 cl_nostartscreens=true
+cl_resumesavegame=true
 '@ | Set-Content -LiteralPath $configPath
     # A wait only defers the remainder of its command string. Keep this on one
     # line: separate lines in an exec file would run independently.
@@ -68,6 +69,15 @@ cl_nostartscreens=true
     $damageSeed = if ($combatActive) { 'superset_damage_check seed' } else { 'echo Native save retained' }
     $damageClear = if ($combatActive) { 'superset_damage_check clear' } else { 'echo Native state retained' }
     $damageSaved = if ($combatActive) { 'superset_damage_check saved' } else { 'echo Native load retained' }
+    $calebActive = $Superset -and $SupersetPlayer -eq 'caleb' -and $case.Name.StartsWith('duke-')
+    $incomingCheck = if ($calebActive) { 'superset_incoming_check' } else { 'echo Native incoming damage retained' }
+    $incomingSeed = if ($calebActive) { 'superset_incoming_check seed' } else { 'echo Native armor retained' }
+    $incomingClear = if ($calebActive) { 'superset_incoming_check clear' } else { 'echo Native armor retained' }
+    $incomingSaved = if ($calebActive) { 'superset_incoming_check saved' } else { 'echo Native armor retained' }
+    $fxActive = $Superset -and $case.Name.StartsWith('duke-')
+    $fxSeed = if ($fxActive) { 'superset_fx_check seed' } else { 'echo Native effects retained' }
+    $fxClear = if ($fxActive) { 'superset_fx_check clear' } else { 'echo Native effects retained' }
+    $fxSaved = if ($fxActive) { 'superset_fx_check saved' } else { 'echo Native effects retained' }
     $movementCheck = if ($Superset -and $SupersetPlayer -eq 'caleb' -and $case.Name.StartsWith('duke-')) {
         'superset_movement_check start; +Jump; wait 2; -Jump; +Move_Forward; wait 4; -Move_Forward; wait 30; +Crouch; wait 6; -Crouch; wait 12; superset_movement_check'
     } else { 'echo Native movement retained' }
@@ -85,12 +95,12 @@ cl_nostartscreens=true
         $movementCheck,
         $inputCheck,
         $combatCheck,
-        $damageCheck, $damageSeed,
+        $damageCheck, $incomingCheck, $damageSeed, $incomingSeed, $fxSeed,
         'save foundation "Mashup foundation regression"', 'wait 30',
         $alterPrototype,
-        $damageClear,
+        $damageClear, $incomingClear, $fxClear,
         'load foundation', 'wait 90', 'gc full', 'mashup_runtime_check',
-        $damageSaved, $damageCheck,
+        $damageSaved, $incomingSaved, $fxSaved, $damageCheck, $incomingCheck,
         $frontendCheck,
         $resourceCheck,
         $movementCheck,
@@ -99,6 +109,13 @@ cl_nostartscreens=true
         'wait 15', 'screenshot', 'wait 10'
     )
     $expectedCount = 2
+    if ($fxActive) { $commands += @('wait 120', 'superset_fx_check expired') }
+    if ($calebActive) {
+        $commands += @('superset_incoming_check die', 'wait 180', 'superset_incoming_check dead',
+            '+Open', 'wait 2', '-Open', 'wait 90', 'superset_incoming_check restored',
+            'superset_incoming_check die_blast', 'wait 180', 'superset_incoming_check dead',
+            '+Open', 'wait 2', '-Open', 'wait 90', 'superset_incoming_check restored')
+    }
     if ($DukeTransitionMap -and $case.Name.StartsWith('duke-')) {
         $commands += @("map $DukeTransitionMap", 'wait 120', 'gc full', 'mashup_runtime_check', $frontendCheck, $resourceCheck, $movementCheck, $inputCheck, $combatCheck, 'wait 15', 'screenshot', 'wait 10')
         $expectedCount++
@@ -179,6 +196,15 @@ cl_nostartscreens=true
         }
     }
     if ($Superset -and $SupersetPlayer -eq 'caleb' -and $case.Name.StartsWith('duke-')) {
+        $incomingChecks = @(Select-String -LiteralPath $logPath -SimpleMatch -Pattern 'Superset incoming check: physical=PASS, armor=PASS, blast=PASS, immunity=PASS, god=PASS, resistance=PASS, fractions=PASS, impulse=PASS, laser=PASS, mapping=PASS.')
+        if ($incomingChecks.Count -ne 2) { throw "$($case.Name) failed incoming damage checks; inspect $logPath" }
+        $incomingCounts = @{ saved = 1; death = 1; blastdeath = 1; dead = 2; restored = 2 }
+        foreach ($check in $incomingCounts.Keys) {
+            $matches = @(Select-String -LiteralPath $logPath -SimpleMatch -Pattern "Superset incoming $check check: PASS.")
+            if ($matches.Count -ne $incomingCounts[$check]) {
+                throw "$($case.Name) failed incoming $check checks; inspect $logPath"
+            }
+        }
         $movementChecks = @(Select-String -LiteralPath $logPath -SimpleMatch -Pattern 'Superset movement check: native profile=PASS, move/jump/crouch=PASS, one collider=PASS, clock=PASS.')
         if ($movementChecks.Count -ne $expectedCount) { throw "$($case.Name) failed Caleb movement checks; inspect $logPath" }
     }
@@ -191,6 +217,13 @@ cl_nostartscreens=true
         if ($combatChecks.Count -ne $expectedCount) { throw "$($case.Name) failed combat checks; inspect $logPath" }
         $inputChecks = @(Select-String -LiteralPath $logPath -SimpleMatch -Pattern 'Mashup combat input check: Blood fire=PASS, Duke ammunition=PASS.')
         if ($inputChecks.Count -ne (2 * $expectedCount)) { throw "$($case.Name) failed real input checks; inspect $logPath" }
+    }
+    if ($fxActive) {
+        foreach ($check in @('saved', 'expired')) {
+            if (!(Select-String -LiteralPath $logPath -SimpleMatch -Pattern "Superset FX $check check: PASS.")) {
+                throw "$($case.Name) failed Blood FX $check check; inspect $logPath"
+            }
+        }
     }
     $shots = @(Get-ChildItem -LiteralPath $shotRoot -Filter '*.png')
     if ($checks.Count -ne $expectedCount -or !(Test-Path -LiteralPath $save) -or $shots.Count -eq 0) {

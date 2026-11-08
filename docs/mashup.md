@@ -109,16 +109,16 @@ This is an incremental native adapter, not the final shared actor/AI model.
 
 No scale compensation is applied: initial idle eye height is 56.6875 world units
 and horizontal radius is 12. Native Blood SEQ state and the selected controller
-are serialized with the session. Save schema is 2; rules revision is now 3
-after introducing shared physical hits. Earlier
+are serialized with the session. Save schema is 2; rules revision is now 4
+after integrating incoming Caleb damage and Blood object events. Earlier
 Superset bootstrap saves are intentionally incompatible with this experimental
 schema. The legacy native game save signatures remain separate.
 
-Health currently crosses the legacy Duke facade as integer deltas while Blood
-retains its fractional health internally. This is temporary plumbing, not a
-completed common damage/armor model. Duke pickup handlers, HUD, some hazards,
-death handling and special abilities still need explicit shared-gameplay
-integration. Full doors/lifts/water/transport/crusher navigation and body
+Known Duke attacks now enter Caleb's native Blood damage/armor receiver directly
+in shared Q4 units. Unmapped attacks and direct map health changes still cross
+the legacy integer facade. Duke pickup handlers, HUD, some hazards and special
+abilities still need explicit shared-gameplay integration. Full
+doors/lifts/water/transport/crusher navigation and body
 rendering need broader verification; short movement checks do not prove those.
 
 `superset_movement_check start`, followed by actual move/jump/crouch input and
@@ -344,9 +344,8 @@ This remains an adapter over Duke's integer CON health, not the finished shared
 health model: damage below an integer point is deferred until another accepted
 shared hit. Direct CON health replacement/capped healing and custom `onHit`
 handlers that bypass native damage accumulation need explicit synchronization.
-Blood enemy receivers, incoming Caleb armor/resistance handling, independent
-impulses and status effects remain to be integrated. No cross-game resistance
-or balancing rule has been silently assigned to those paths.
+Blood enemy receivers and shared status effects remain to be integrated.
+Incoming Caleb damage and impulses are handled by the next increment below.
 
 `superset_damage_check` checks category round trips, two fractional hits against
 a native trooper, rejected hits, ownership, native modifiers, lethal health,
@@ -364,6 +363,74 @@ runtime/save/load regressions. Artifacts under `build-mashup/checks/`:
 - `runtime-20261108T005246925`: ordinary Duke and Blood.
 - `runtime-20261108T005332809`: legacy pitchfork mode, including dead-hit cleanup.
 - `runtime-20261108T005520410`: Caleb E2L1, final damage/default-state checks.
+
+## Incoming Caleb damage and shared Blood effects
+
+The Caleb receiver reuses Blood's native enemy-response factor, player
+immunities, armor consumption, fractional health, pain sounds/state and death
+sequences. Incoming Duke points convert to shared Q4 units, without a balance
+multiplier. Accepted direct hits enter this receiver before the legacy Duke
+queue; radius damage enters when its native queued hit is consumed. Importing
+the world pose afterward does not apply the health loss twice.
+
+| Duke attack implementation | Caleb health response |
+| --- | --- |
+| ShotSpark bullet hits and melee hits | Physical / Blood bullet armor |
+| Trooper Firelaser | Physical, provisionally; no ignition |
+| Attacks explicitly flagged EXPLOSIVE | Blast / Blood fire armor |
+| Freezer, shrinker, grower | Await shared effect rules; legacy path remains |
+| Other unclassified/mod-specific attacks | Legacy health-delta path remains |
+
+The laser rule remains a gameplay choice, not a physical-units conversion.
+Physical is the provisional default because the native laser applies ordinary
+hit damage without ignition. Heat/fire armor is an available alternative; the
+classification is isolated in `DukeDamageKind`.
+
+Knockback is a separate impulse using Duke's original normal/double-thrust
+coefficients. Both horizontal movers consume world displacement per simulation
+step, so no extra velocity ratio is applied. Blood's drag then acts on Caleb's
+velocity. Native damage immunity can block health damage without erasing the
+impulse. The global god cheat blocks these mapped attacks.
+
+Blood's death/restart routines now accept the existing environment service.
+Native Blood keeps its original triggers, frag handling and respawn path.
+In a Duke world, Caleb retains native death sequences and the world pawn loses
+collision; Use after the sequence finishes requests Raze's normal checkpoint
+reload/restart. Duke attacker attribution stays on the world pawn, without
+casting the attacker to a Blood actor or reporting a fabricated suicide.
+
+Explosive death exposed unsafe Duke rendering casts on visible Blood gibs.
+Duke's animation passes now operate only on Duke actors. Foreign effects keep
+their engine sprite/SEQ representation. Full native Blood rotation, shadows,
+object-specific rendering and foreign FX sound/material routing remain separate
+integration work.
+
+Shared object ticks advance Blood sequences once per simulation clock, process
+native object callbacks, run native FX gravity/drag/movement and drain deferred
+removals. This runs independently of selecting Caleb or Duke. The secondary
+event queue is serialized and cleared with its world; Blood map mechanisms are
+not started by this hook. Blood thing/gib-body physics and general enemy AI are
+not yet part of this object tick.
+
+`superset_incoming_check` verifies actual native bullet/laser reception, physical
+and blast armor, immunity, god mode, the native electrical response factor,
+fractional health and separate impulses. The harness also checks ordinary and
+explosive death sequences, waits for completion, presses Use and verifies the
+checkpoint's restored health/armor. `superset_fx_check` seeds a moving foreign
+effect with a timed removal, deletes it before load, then verifies restored
+movement and expiration. The FX check also runs with Duke selected.
+
+Verified on 2026-11-08: Release build passed. Caleb E1L1 with audio and a fresh
+E1L2 load passed the incoming/armor, ordinary and explosive death/restart, FX
+movement/save/expiry and existing resource/combat/movement checks
+(`runtime-20261108T012411000`). The final E2L1 run passed the same damage,
+death/restart and independent FX checks (`runtime-20261108T013039070`). Superset
+with Duke selected passed FX movement/save/expiry, and ordinary Blood E1M1
+passed its runtime/save/load regression (`runtime-20261108T012733583`). These
+checks were followed by an ordinary Duke E1L1 run without the secondary bank
+(`runtime-20261108T013215115`), which also passed. These
+remain component checks on the local Plutonium Pak data, not full playthroughs
+or proof of arbitrary CON/mod compatibility.
 
 ## Build and regression checks
 

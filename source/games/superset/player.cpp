@@ -11,14 +11,31 @@
 #include "mashup_player.h"
 #include "mashup_resources.h"
 #include "units.h"
+#include "damage.h"
 #include "c_dispatch.h"
 
-namespace Blood { void SerializeSequences(FSerializer& arc); }
+namespace Blood { void SerializeSequences(FSerializer& arc); void SerializeEvents(FSerializer& arc); }
 
 namespace Superset
 {
 namespace
 {
+int sequenceClock = -1;
+
+void AdvanceBloodSequences()
+{
+	if (sequenceClock == PlayClock) return;
+	Blood::evProcess(PlayClock);
+	Blood::seqProcess(Units::ClocksPerStep);
+	sequenceClock = PlayClock;
+}
+
+Blood::DBloodActor* FindDiagnosticFx()
+{
+	Blood::BloodStatIterator it(Blood::kStatFX);
+	while (auto actor = it.Next()) if (actor->spr.hitag == 31018) return actor;
+	return nullptr;
+}
 struct MovementProbe
 {
 	bool active = false, moved = false, jumped = false, crouched = false;
@@ -56,6 +73,7 @@ void Publish(Duke3d::DDukePlayer* duke, Blood::DBloodPlayer* blood)
 	body->spr.setspritetexture(state->spr.spritetexture());
 	body->spr.scale = state->spr.scale;
 	body->spr.cstat &= ~CSTAT_SPRITE_YCENTER;
+	if (state->xspr.health == 0) body->spr.cstat &= ~CSTAT_SPRITE_BLOCK_ALL;
 	body->clipdist = state->clipdist;
 	body->viewzoffset = blood->zView - body->spr.pos.Z;
 	body->vel = state->vel;
@@ -131,7 +149,45 @@ public:
 		// Duke map pickups still execute their native touch handlers. Independent
 		// mixed pickup/inventory definitions are a subsequent gameplay milestone.
 	}
+	void PlayerDied(Blood::DBloodPlayer* player) override
+	{
+		// Duke maps have no Blood death trigger network. The shared controller
+		// retains Blood's death sequence; only its world pawn loses collision.
+		Duke3d::getPlayer(player->pnum)->GetActor()->spr.cstat &= ~CSTAT_SPRITE_BLOCK_ALL;
+	}
+	void RestartPlayer(Blood::DBloodPlayer*) override { gameaction = ga_autoloadgame; }
 };
+}
+
+bool ApplyCalebDamage(DCorePlayer* player, Damage damage, DCoreActor* source)
+{
+	if (!HasBloodMovement(player) || damage.amount < 0 || damage.amount > INT_MAX) return false;
+	int nativeKind;
+	if (!NativeBloodDamageKind(damage.kind, nativeKind)) return false;
+	auto duke = static_cast<Duke3d::DDukePlayer*>(player);
+	auto blood = NativePlayer(player);
+	ImportWorldChanges(duke, blood);
+	auto state = blood->GetActor();
+	if ((state->spr.flags & 32) || state->xspr.locked || state->xspr.health == 0) return true;
+	// actDamageDude normally applies this before playerDamageSprite. The state
+	// actor deliberately is not in Blood's map-owned dude list.
+	int factor = blood->pDudeInfo->damageVal[nativeKind];
+	if (!factor) return true;
+	int amount = MulScale(int(damage.amount), factor, 8);
+	DukePlayerWorld world;
+	Blood::playerDamageSprite(dyn_cast<Blood::DBloodActor>(source), blood, Blood::DAMAGE_TYPE(nativeKind), amount, &world);
+	if (state->xspr.health == 0)
+		duke->wackedbyactor = dyn_cast<Duke3d::DDukeActor>(source);
+	Publish(duke, blood);
+	return true;
+}
+
+void ApplyCalebImpulse(DCorePlayer* player, const DVector2& impulse)
+{
+	if (!HasBloodMovement(player)) return;
+	auto blood = NativePlayer(player);
+	blood->GetActor()->vel += impulse;
+	Publish(static_cast<Duke3d::DDukePlayer*>(player), blood);
 }
 
 bool HasBloodMovement(DCorePlayer* player)
@@ -204,7 +260,7 @@ bool TickBloodMovement(DCorePlayer* player)
 	auto flags = body->spr.cstat;
 	body->spr.cstat &= ~CSTAT_SPRITE_BLOCK_ALL;
 	Blood::playerProcess(blood, &world);
-	Blood::seqProcess(4);
+	AdvanceBloodSequences();
 	HideStateActor(state);
 	Blood::actProcessDudeMovement(state, &world);
 	body->spr.cstat = flags;
@@ -237,13 +293,28 @@ void FinishBloodMovement(DCorePlayer* player)
 	Publish(duke, blood);
 }
 
-void ClearBloodControllerState() { Blood::seqKillAll(); }
+void TickSharedObjects()
+{
+	if (!IsActive()) return;
+	AdvanceBloodSequences();
+	Blood::gFX.fxProcess();
+	Blood::actPostProcess();
+}
+
+void ClearBloodControllerState()
+{
+	Blood::seqKillAll();
+	Blood::evClear();
+	Blood::actClearPost();
+	sequenceClock = -1;
+}
 
 void SerializeBloodControllerState(FSerializer& arc)
 {
 	if (arc.BeginObject("superset.blood_controller"))
 	{
 		Blood::SerializeSequences(arc);
+		Blood::SerializeEvents(arc);
 		arc.EndObject();
 	}
 	if (arc.isReading())
@@ -282,6 +353,186 @@ CCMD(superset_movement_check)
 	Printf("Superset movement check: native profile=%s, move/jump/crouch=%s, one collider=%s, clock=%s.\n",
 		nativeProfile ? "PASS" : "FAIL", inputs ? "PASS" : "FAIL", probe.oneCollider ? "PASS" : "FAIL", probe.clock ? "PASS" : "FAIL");
 	probe.active = false;
+}
+
+CCMD(superset_fx_check)
+{
+	if (!IsActive() || gamestate != GS_LEVEL || argv.argc() < 2) return;
+	auto fx = FindDiagnosticFx();
+	if (!stricmp(argv[1], "seed"))
+	{
+		if (fx) Blood::gFX.destroy(fx);
+		auto body = PlayerArray[myconnectindex]->actor;
+		fx = Blood::gFX.fxSpawnActor(Blood::FX_43, body->sector(), body->getPosWithOffsetZ());
+		if (fx)
+		{
+			fx->spr.hitag = 31018;
+			fx->basePoint = fx->spr.pos;
+			fx->vel.X = .03125;
+			Blood::evPostActor(fx, 480, Blood::kCallbackRemove);
+		}
+		return;
+	}
+	if (!stricmp(argv[1], "clear")) { if (fx) Blood::gFX.destroy(fx); return; }
+	bool pass = !stricmp(argv[1], "expired") ? !fx : fx && (fx->spr.pos.XY() - fx->basePoint.XY()).Length() > .1;
+	Printf("Superset FX %s check: %s.\n", argv[1], pass ? "PASS" : "FAIL");
+}
+
+CCMD(superset_incoming_check)
+{
+	auto duke = dyn_cast<Duke3d::DDukePlayer>(PlayerArray[myconnectindex]);
+	if (gamestate != GS_LEVEL || !duke || !HasBloodMovement(duke)) return;
+	auto blood = NativePlayer(duke);
+	auto state = blood->GetActor();
+	auto body = duke->GetActor();
+	if (argv.argc() > 1)
+	{
+		if (!stricmp(argv[1], "seed"))
+		{
+			blood->armor[0] = 1600; blood->armor[1] = 800; blood->armor[2] = 400;
+			return;
+		}
+		if (!stricmp(argv[1], "clear"))
+		{
+			memset(blood->armor, 0, sizeof(blood->armor));
+			return;
+		}
+		if (!stricmp(argv[1], "saved") || !stricmp(argv[1], "restored"))
+		{
+			bool pass = blood->armor[0] == 1600 && blood->armor[1] == 800 && blood->armor[2] == 400 &&
+				state->xspr.health > 0 && body->spr.extra > 0 && !!(body->spr.cstat & CSTAT_SPRITE_BLOCK);
+			Printf("Superset incoming %s check: %s.\n", argv[1], pass ? "PASS" : "FAIL");
+			memset(blood->armor, 0, sizeof(blood->armor));
+			return;
+		}
+		if (!stricmp(argv[1], "dead"))
+		{
+			bool pass = state->xspr.health == 0 && body->spr.extra == 0 && blood->deathTime > 0 &&
+				!(body->spr.cstat & CSTAT_SPRITE_BLOCK_ALL) && state->spr.type == Blood::kDudePlayer1 + duke->pnum && Blood::seqGetStatus(state) < 0;
+			Printf("Superset incoming dead check: %s.\n", pass ? "PASS" : "FAIL");
+			return;
+		}
+	}
+	auto source = Duke3d::CreateActor(body->sector(), body->spr.pos, PClass::FindActor("DukeLizTrooper"),
+		0, DVector2(1, 1), nullAngle, 0, 0, nullptr, STAT_MISC);
+	auto shot = Duke3d::CreateActor(body->sector(), body->spr.pos, Duke3d::DukeShotSparkClass,
+		0, DVector2(1, 1), nullAngle, 0, 0, source, STAT_MISC);
+	if (!source || !shot)
+	{
+		if (source) source->Destroy();
+		if (shot) shot->Destroy();
+		Printf("Superset incoming check: FAIL (test actors).\n");
+		return;
+	}
+	ChangeActorStat(source, MAXSTATUS - 2);
+	ChangeActorStat(shot, MAXSTATUS - 2);
+	bool blastDeath = argv.argc() > 1 && !stricmp(argv[1], "die_blast");
+	if (argv.argc() > 1 && (!stricmp(argv[1], "die") || blastDeath))
+	{
+		state->xspr.health = 5 * 16;
+		memset(blood->armor, 0, sizeof(blood->armor));
+		memset(blood->damageControl, 0, sizeof(blood->damageControl));
+		blood->godMode = false;
+		Duke3d::ud.god = 0;
+		Publish(duke, blood);
+		if (blastDeath)
+		{
+			body->attackertype = Duke3d::DukeRadiusExplosionClass;
+			body->hitextra = 10;
+			body->SetHitOwner(source);
+			Duke3d::fi.ifhitbyweapon(body);
+		}
+		else
+		{
+			shot->spr.extra = 10;
+			Duke3d::checkhitsprite(body, shot);
+		}
+		bool pass = state->xspr.health == 0 && body->spr.extra == 0 && duke->wackedbyactor == source &&
+			Blood::playerSeqPlaying(blood, blastDeath ? 2 : 1) && !(body->spr.cstat & CSTAT_SPRITE_BLOCK_ALL);
+		Printf("Superset incoming %s check: %s.\n", blastDeath ? "blastdeath" : "death", pass ? "PASS" : "FAIL");
+		source->Destroy(); shot->Destroy();
+		return;
+	}
+	int oldArmor[3], oldControls[Blood::kDamageMax];
+	memcpy(oldArmor, blood->armor, sizeof(oldArmor));
+	memcpy(oldControls, blood->damageControl, sizeof(oldControls));
+	auto oldHealth = state->xspr.health;
+	auto oldVelocity = state->vel;
+	auto oldGod = blood->godMode;
+	auto oldDukeGod = Duke3d::ud.god;
+	auto oldPain = blood->painEffect;
+	auto oldType = body->attackertype;
+	auto oldOwner = body->GetHitOwner();
+	auto oldAngle = body->hitang;
+	auto oldPending = body->hitextra;
+	auto reset = [&]()
+	{
+		state->xspr.health = 1600;
+		state->vel.Zero();
+		memset(blood->armor, 0, sizeof(blood->armor));
+		memset(blood->damageControl, 0, sizeof(blood->damageControl));
+		blood->godMode = false;
+		Duke3d::ud.god = 0;
+		body->hitextra = -1;
+		shot->supersetHitDamage = -1;
+		shot->spr.extra = 10;
+		Publish(duke, blood);
+	};
+	reset();
+	Duke3d::checkhitsprite(body, shot);
+	bool physical = state->xspr.health == 1440 && body->spr.extra == 90 && body->hitextra == -1;
+	FinishBloodMovement(duke);
+	physical &= state->xspr.health == 1440;
+	reset(); blood->armor[0] = 3200;
+	Duke3d::checkhitsprite(body, shot);
+	bool armor = state->xspr.health == 1580 && blood->armor[0] == 3060 && body->spr.extra == 99;
+	bool impulse = fabs(state->vel.X - 1.25) < 1e-6;
+	reset(); blood->armor[1] = 3200;
+	body->attackertype = Duke3d::DukeRadiusExplosionClass;
+	body->hitextra = 10;
+	body->hitang = nullAngle;
+	body->SetHitOwner(source);
+	bool blast = Duke3d::fi.ifhitbyweapon(body) == 2 && state->xspr.health == 1580 && blood->armor[1] == 3060 && body->hitextra == -1;
+	impulse &= fabs(state->vel.X - 2.5) < 1e-6;
+	reset(); blood->damageControl[Blood::kDamageBullet] = 1; blood->armor[0] = 3200;
+	Duke3d::checkhitsprite(body, shot);
+	bool immunity = state->xspr.health == 1600 && blood->armor[0] == 3200 && fabs(state->vel.X - 1.25) < 1e-6;
+	reset(); Duke3d::ud.god = 1;
+	Duke3d::checkhitsprite(body, shot);
+	bool god = state->xspr.health == 1600 && state->vel.isZero();
+	reset();
+	ApplyCalebDamage(duke, {160, DamageKind::Electric}, source);
+	bool resistance = state->xspr.health == 1420;
+	reset();
+	PrepareDukeHit(shot, {136, DamageKind::Physical});
+	Duke3d::checkhitsprite(body, shot);
+	bool fractions = state->xspr.health == 1464 && body->spr.extra == 92;
+	DamageKind mapped;
+	bool mapping = DukeDamageKind(Duke3d::DukeShotSparkClass, mapped) && mapped == DamageKind::Physical &&
+		DukeDamageKind(Duke3d::DukeRadiusExplosionClass, mapped) && mapped == DamageKind::Blast &&
+		!DukeDamageKind(Duke3d::DukeFreezeBlastClass, mapped) && !DukeDamageKind(Duke3d::DukeShrinkSparkClass, mapped) &&
+		!DukeDamageKind(Duke3d::DukeGrowSparkClass, mapped) && !DukeDamageKind(static_cast<PClassActor*>(state->GetClass()), mapped);
+	reset(); blood->armor[0] = 3200;
+	auto laser = Duke3d::CreateActor(body->sector(), body->spr.pos, Duke3d::DukeFirelaserClass,
+		0, DVector2(1, 1), nullAngle, 0, 0, source, STAT_MISC);
+	bool laserArmor = false;
+	if (laser)
+	{
+		laser->spr.extra = 10;
+		Duke3d::checkhitsprite(body, laser);
+		laserArmor = state->xspr.health == 1580 && blood->armor[0] == 3060 && blood->armor[1] == 0;
+		laser->Destroy();
+	}
+	state->xspr.health = oldHealth; state->vel = oldVelocity;
+	blood->godMode = oldGod; Duke3d::ud.god = oldDukeGod; blood->painEffect = oldPain;
+	memcpy(blood->armor, oldArmor, sizeof(oldArmor));
+	memcpy(blood->damageControl, oldControls, sizeof(oldControls));
+	body->attackertype = oldType; body->SetHitOwner(oldOwner); body->hitang = oldAngle; body->hitextra = oldPending;
+	Publish(duke, blood);
+	Printf("Superset incoming check: physical=%s, armor=%s, blast=%s, immunity=%s, god=%s, resistance=%s, fractions=%s, impulse=%s, laser=%s, mapping=%s.\n",
+		physical ? "PASS" : "FAIL", armor ? "PASS" : "FAIL", blast ? "PASS" : "FAIL", immunity ? "PASS" : "FAIL",
+		god ? "PASS" : "FAIL", resistance ? "PASS" : "FAIL", fractions ? "PASS" : "FAIL", impulse ? "PASS" : "FAIL", laserArmor ? "PASS" : "FAIL", mapping ? "PASS" : "FAIL");
+	source->Destroy(); shot->Destroy();
 }
 
 // Deliberately restricted to the generated fixture. Positioning is test setup;

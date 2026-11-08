@@ -159,6 +159,7 @@ int ifhitbyweapon_d(DDukeActor *actor)
 		{
 			if (actor->isPlayer())
 			{
+				if (Superset::ConsumeCalebHit(actor)) return (adef->flags2 & SFLAG2_EXPLOSIVE) ? 2 : 0;
 				if (ud.god && !(adef->flags3 & SFLAG3_LIGHTDAMAGE)) return -1;
 
 				const auto p = getPlayer(actor->PlayerIndex());

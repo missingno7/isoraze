@@ -14,6 +14,7 @@ bool HasBloodMovement(DCorePlayer* player);
 bool PrepareBloodMovement(DCorePlayer* player);
 bool TickBloodMovement(DCorePlayer* player);
 void FinishBloodMovement(DCorePlayer* player);
+void TickSharedObjects();
 void SerializeBloodControllerState(FSerializer& arc);
 void ClearBloodControllerState();
 ::GameInterface* CreateInterface();

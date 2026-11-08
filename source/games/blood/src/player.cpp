@@ -1544,17 +1544,21 @@ void ProcessInput(DBloodPlayer* pPlayer, PlayerWorldServices* world)
 			}
 			else if (seqGetStatus(pPlayer->GetActor()) < 0)
 			{
-				if (pPlayer->GetActor())
-					pPlayer->GetActor()->spr.type = kThingBloodChunks;
-				actPostSprite(pPlayer->GetActor(), kStatThing);
-				seqSpawn(pPlayer->pDudeInfo->seqStartID + 15, pPlayer->GetActor(), -1);
-				playerReset(pPlayer);
-				if (gGameOptions.nGameType == 0 && numplayers == 1)
-				{
-					gameaction = ga_autoloadgame;
-				}
+				if (world) world->RestartPlayer(pPlayer);
 				else
-					playerStart(pPlayer->pnum);
+				{
+					if (pPlayer->GetActor())
+						pPlayer->GetActor()->spr.type = kThingBloodChunks;
+					actPostSprite(pPlayer->GetActor(), kStatThing);
+					seqSpawn(pPlayer->pDudeInfo->seqStartID + 15, pPlayer->GetActor(), -1);
+					playerReset(pPlayer);
+					if (gGameOptions.nGameType == 0 && numplayers == 1)
+					{
+						gameaction = ga_autoloadgame;
+					}
+					else
+						playerStart(pPlayer->pnum);
+				}
 			}
 			pInput->actions &= ~SB_OPEN;
 		}
@@ -2057,7 +2061,7 @@ void flagDropped(DBloodPlayer* pPlayer, int a2)
 //
 //---------------------------------------------------------------------------
 
-int playerDamageSprite(DBloodActor* source, DBloodPlayer* pPlayer, DAMAGE_TYPE nDamageType, int nDamage)
+int playerDamageSprite(DBloodActor* source, DBloodPlayer* pPlayer, DAMAGE_TYPE nDamageType, int nDamage, PlayerWorldServices* world)
 {
 	assert(pPlayer != NULL);
 	if (pPlayer->damageControl[nDamageType] || pPlayer->godMode)
@@ -2177,42 +2181,46 @@ int playerDamageSprite(DBloodActor* source, DBloodPlayer* pPlayer, DAMAGE_TYPE n
 	if (nDeathSeqID != 16)
 	{
 		powerupClear(pPlayer);
-		if (pActor->sector()->hasX() && pActor->sector()->xs().Exit)
+		if (!world && pActor->sector()->hasX() && pActor->sector()->xs().Exit)
 			trTriggerSector(pActor->sector(), kCmdSectorExit);
 		pActor->spr.flags |= 7;
-		for (int p = connecthead; p >= 0; p = connectpoint2[p])
+		if (world) world->PlayerDied(pPlayer);
+		else
 		{
-			if (getPlayer(p)->fragger == pPlayer->GetActor() && getPlayer(p)->deathTime > 0)
-				getPlayer(p)->fragger = nullptr;
-		}
-		FragPlayer(pPlayer, source);
-		trTriggerSprite(pActor, kCmdOff);
+			for (int p = connecthead; p >= 0; p = connectpoint2[p])
+			{
+				if (getPlayer(p)->fragger == pPlayer->GetActor() && getPlayer(p)->deathTime > 0)
+					getPlayer(p)->fragger = nullptr;
+			}
+			FragPlayer(pPlayer, source);
+			trTriggerSprite(pActor, kCmdOff);
 
 #ifdef NOONE_EXTENSIONS
-		// allow drop items and keys in multiplayer
-		if (gModernMap && gGameOptions.nGameType != kGameTypeSinglePlayer && pPlayer->GetActor()->xspr.health <= 0) {
+			// allow drop items and keys in multiplayer
+			if (gModernMap && gGameOptions.nGameType != kGameTypeSinglePlayer && pPlayer->GetActor()->xspr.health <= 0) {
 
-			DBloodActor* pItem = nullptr;
-			if (pPlayer->GetActor()->xspr.dropMsg && (pItem = actDropItem(pActor, pPlayer->GetActor()->xspr.dropMsg)) != NULL)
-				evPostActor(pItem, 500, kCallbackRemove);
-
-			if (pPlayer->GetActor()->xspr.key) {
-
-				int i; // if all players have this key, don't drop it
-				for (i = connecthead; i >= 0; i = connectpoint2[i]) {
-					if (!getPlayer(i)->hasKey[pPlayer->GetActor()->xspr.key])
-						break;
-				}
-
-				if (i == 0 && (pItem = actDropKey(pActor, (pPlayer->GetActor()->xspr.key + kItemKeyBase) - 1)) != NULL)
+				DBloodActor* pItem = nullptr;
+				if (pPlayer->GetActor()->xspr.dropMsg && (pItem = actDropItem(pActor, pPlayer->GetActor()->xspr.dropMsg)) != NULL)
 					evPostActor(pItem, 500, kCallbackRemove);
 
+				if (pPlayer->GetActor()->xspr.key) {
+
+					int i; // if all players have this key, don't drop it
+					for (i = connecthead; i >= 0; i = connectpoint2[i]) {
+						if (!getPlayer(i)->hasKey[pPlayer->GetActor()->xspr.key])
+							break;
+					}
+
+					if (i == 0 && (pItem = actDropKey(pActor, (pPlayer->GetActor()->xspr.key + kItemKeyBase) - 1)) != NULL)
+						evPostActor(pItem, 500, kCallbackRemove);
+
+				}
+
+
 			}
-
-
-		}
 #endif
 
+		}
 	}
 	assert(getSequence(pDudeInfo->seqStartID + nDeathSeqID) != NULL);
 	seqSpawn(pDudeInfo->seqStartID + nDeathSeqID, pPlayer->GetActor(), nKneelingPlayer);

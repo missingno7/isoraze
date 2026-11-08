@@ -1,8 +1,12 @@
 #pragma once
 
 #include "units.h"
+#include "vectors.h"
 
 namespace Duke3d { class DDukeActor; }
+class DCoreActor;
+class DCorePlayer;
+class PClassActor;
 
 namespace Superset
 {
@@ -25,4 +29,10 @@ Damage BloodTineDamage(bool playerTarget);
 bool PrepareDukeHit(Duke3d::DDukeActor* hitter, Damage damage);
 bool AccumulateDukeHit(Duke3d::DDukeActor* target, Duke3d::DDukeActor* hitter);
 void FinishDukeHit(Duke3d::DDukeActor* target);
+
+bool DukeDamageKind(PClassActor* type, DamageKind& kind);
+bool ApplyCalebDamage(DCorePlayer* player, Damage damage, DCoreActor* source);
+void ApplyCalebImpulse(DCorePlayer* player, const DVector2& impulse);
+bool ReceiveCalebHit(Duke3d::DDukeActor* target, Duke3d::DDukeActor* hitter);
+bool ConsumeCalebHit(Duke3d::DDukeActor* target);
 }

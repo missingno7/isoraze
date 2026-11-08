@@ -6956,6 +6956,8 @@ void actPostSprite(DBloodActor* actor, int nStatus)
 	}
 }
 
+void actClearPost() { gPost.Clear(); }
+
 void actPostProcess(void)
 {
 	for (auto& p : gPost)

@@ -234,6 +234,7 @@ bool actCheckRespawn(DBloodActor *pSprite);
 void actFireVector(DBloodActor* shooter, double offset, double zoffset, DVector3 dv, VECTOR_TYPE vectorType, double nRange = -1);
 void actPostSprite(DBloodActor* actor, int status);
 void actPostProcess(void);
+void actClearPost();
 void MakeSplash(DBloodActor *actor);
 void actBuildMissile(DBloodActor* spawned, DBloodActor* actor);
 

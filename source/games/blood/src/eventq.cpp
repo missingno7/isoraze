@@ -117,12 +117,19 @@ static void createBucketHeads()
 //
 //---------------------------------------------------------------------------
 
+void evClear()
+{
+	queue.clear();
+	memset(rxBucket, 0, sizeof(rxBucket));
+	memset(bucketHead, 0, sizeof(bucketHead));
+	bucketCount = 0;
+}
+
 void evInit(TArray<DBloodActor*>& actors)
 {
 	int nCount = 0;
 
-	queue.clear();
-	memset(rxBucket, 0, sizeof(rxBucket));
+	evClear();
 
 	// add all the tags to the bucket array
 	for (auto& sect : sector)

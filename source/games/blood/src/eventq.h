@@ -241,6 +241,7 @@ struct EVENT
 };
 
 void evInit(TArray<DBloodActor*>& actors);
+void evClear();
 void evPostActor(DBloodActor*, unsigned int nDelta, COMMAND_ID command, DBloodActor* initiator);
 void evPostActor(DBloodActor*, unsigned int nDelta, CALLBACK_ID callback);
 

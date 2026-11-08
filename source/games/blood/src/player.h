@@ -103,6 +103,8 @@ struct PlayerWorldServices
 	virtual int CheckRoomLink(DBloodActor* actor) = 0;
 	virtual void UseAction(DBloodPlayer* player) = 0;
 	virtual void CollectPickups(DBloodPlayer* player) = 0;
+	virtual void PlayerDied(DBloodPlayer* player) = 0;
+	virtual void RestartPlayer(DBloodPlayer* player) = 0;
 };
 
 struct AMMOINFO
@@ -160,7 +162,7 @@ DBloodActor* playerFireMissile(DBloodPlayer* pPlayer, double xyoff, const DVecto
 DBloodActor* playerFireThing(DBloodPlayer* pPlayer, double xyoff, double zvel, int thingType, double nSpeed);
 void playerFrag(DBloodPlayer* pKiller, DBloodPlayer* pVictim);
 int playerDamageArmor(DBloodPlayer* pPlayer, DAMAGE_TYPE nType, int nDamage);
-int playerDamageSprite(DBloodActor* nSource, DBloodPlayer* pPlayer, DAMAGE_TYPE nDamageType, int nDamage);
+int playerDamageSprite(DBloodActor* nSource, DBloodPlayer* pPlayer, DAMAGE_TYPE nDamageType, int nDamage, PlayerWorldServices* world = nullptr);
 int UseAmmo(DBloodPlayer* pPlayer, int nAmmoType, int nDec);
 void voodooTarget(DBloodPlayer* pPlayer);
 void playerLandingSound(DBloodPlayer* pPlayer, PlayerWorldServices* world = nullptr);

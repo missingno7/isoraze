@@ -53,7 +53,8 @@ void animatesprites_d(tspriteArray& tsprites, const DVector2& viewVec, DAngle vi
 	for (unsigned j = 0; j < tsprites.Size(); j++)
 	{
 		t = tsprites.get(j);
-		h = static_cast<DDukeActor*>(t->ownerActor);
+		h = dyn_cast<DDukeActor>(t->ownerActor);
+		if (!h) continue;
 
 		if ((!(h->flags2 & SFLAG2_FORCESECTORSHADE) && (t->cstat & CSTAT_SPRITE_ALIGNMENT_WALL)) || (badguy(static_cast<DDukeActor*>(t->ownerActor)) && t->extra > 0) || t->statnum == STAT_PLAYER)
 		{
@@ -74,7 +75,8 @@ void animatesprites_d(tspriteArray& tsprites, const DVector2& viewVec, DAngle vi
 	{
 		t = tsprites.get(j);
 
-		h = static_cast<DDukeActor*>(t->ownerActor);
+		h = dyn_cast<DDukeActor>(t->ownerActor);
+		if (!h) continue;
 		auto OwnerAc = h->GetOwner();
 
 		if (iseffector(h))

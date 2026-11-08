@@ -5,6 +5,7 @@
 #include "../duke/src/dukeactor.h"
 #include "../blood/src/blood.h"
 #include "damage.h"
+#include "superset.h"
 #include "mashup_player.h"
 #include "c_dispatch.h"
 
@@ -82,6 +83,60 @@ void FinishDukeHit(Duke3d::DDukeActor* target)
 		target->spr.extra = target->isPlayer() ? 0 : -1;
 		target->supersetDamageRemainder = 0;
 	}
+}
+
+bool DukeDamageKind(PClassActor* type, DamageKind& kind)
+{
+	if (!type || !type->IsDescendantOf(RUNTIME_CLASS(Duke3d::DDukeActor))) return false;
+	auto defaults = static_cast<Duke3d::DDukeActor*>(GetDefaultByType(type));
+	if ((defaults->flags2 & SFLAG2_FREEZEDAMAGE) || type->IsDescendantOf(Duke3d::DukeShrinkSparkClass) ||
+		type->IsDescendantOf(Duke3d::DukeGrowSparkClass)) return false;
+	if (defaults->flags2 & SFLAG2_EXPLOSIVE) kind = DamageKind::Blast;
+	else if (type->IsDescendantOf(Duke3d::DukeShotSparkClass) || type->IsDescendantOf(Duke3d::DukeMeleeAttackClass) ||
+		type->IsDescendantOf(Duke3d::DukeFirelaserClass)) kind = DamageKind::Physical;
+	else return false; // Flames and mod-specific attacks need explicit mappings.
+	return true;
+}
+
+namespace
+{
+void DukeImpulse(Duke3d::DDukePlayer* player, DAngle angle, Units::Health amount, const Duke3d::DDukeActor* defaults)
+{
+	// Both native horizontal movers consume world displacement once per step.
+	// Apply impulse independently of armor, resistance or health damage.
+	double scale = defaults->flags2 & SFLAG2_DOUBLEDMGTHRUST ? .25 : .125;
+	ApplyCalebImpulse(player, angle.ToVector() * Units::HealthPoints(amount) * scale);
+}
+}
+
+bool ReceiveCalebHit(Duke3d::DDukeActor* target, Duke3d::DDukeActor* hitter)
+{
+	if (!target->isPlayer()) return false;
+	auto player = Duke3d::getPlayer(target->PlayerIndex());
+	if (!HasBloodMovement(player)) return false;
+	DamageKind kind;
+	if (!DukeDamageKind(static_cast<PClassActor*>(hitter->GetClass()), kind)) return false;
+	if (Duke3d::ud.god) return true;
+	auto amount = hitter->supersetHitDamage >= 0 ? hitter->supersetHitDamage : Units::FromDukeHealth(max(0, int(hitter->spr.extra)));
+	if (!ApplyCalebDamage(player, {amount, kind}, hitter->GetOwner())) return false;
+	DukeImpulse(player, hitter->spr.Angles.Yaw, amount, hitter);
+	return true;
+}
+
+bool ConsumeCalebHit(Duke3d::DDukeActor* target)
+{
+	auto player = Duke3d::getPlayer(target->PlayerIndex());
+	if (!HasBloodMovement(player)) return false;
+	DamageKind kind;
+	if (!DukeDamageKind(target->attackertype, kind)) return false;
+	auto amount = Units::FromDukeHealth(target->hitextra);
+	// Remove the native queue before importing other world changes, so the
+	// shared receiver cannot recursively consume this same hit.
+	target->hitextra = -1;
+	if (Duke3d::ud.god) return true;
+	ApplyCalebDamage(player, {amount, kind}, target->GetHitOwner());
+	DukeImpulse(player, target->hitang, amount, target->attackerDefaults());
+	return true;
 }
 
 namespace

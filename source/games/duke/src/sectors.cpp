@@ -1472,8 +1472,9 @@ void checkhitdefault(DDukeActor* targ, DDukeActor* proj)
 					hitpic = DukeFlamethrowerFlameClass;
 			}
 
+			bool received = Superset::ReceiveCalebHit(targ, proj);
 			targ->attackertype = hitpic;
-			if (!Superset::AccumulateDukeHit(targ, proj)) targ->hitextra += proj->spr.extra;
+			if (!received && !Superset::AccumulateDukeHit(targ, proj)) targ->hitextra += proj->spr.extra;
 			if (!(targ->flags4 & SFLAG4_NODAMAGETURN))
 				targ->hitang = proj->spr.Angles.Yaw;
 			targ->SetHitOwner(Owner);
