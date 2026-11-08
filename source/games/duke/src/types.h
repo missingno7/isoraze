@@ -81,6 +81,10 @@ public:
 	int64_t supersetHitDamage = -1;
 	uint8_t supersetDamageRemainder = 0;
 	bool supersetPendingDamage = false;
+	uint8_t supersetHitKind = 0;
+	bool supersetDamageOnly = false;
+	int supersetBurnTime = 0, supersetBurnFxTime = 0;
+	TObjPtr<DCoreActor*> supersetBurnSource;
 	short tempval, basepicnum;
 	unsigned short timetosleep;
 	bool mapSpawned;

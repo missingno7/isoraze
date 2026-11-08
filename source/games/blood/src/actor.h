@@ -204,6 +204,15 @@ void TreeToGibCallback(int, int);
 
 bool IsUnderwaterSector(sectortype* pSector);
 struct PlayerWorldServices;
+struct ProjectileWorldServices
+{
+	virtual ~ProjectileWorldServices() = default;
+	virtual DCoreActor* CollisionOwner(DBloodActor* missile) = 0;
+	virtual void CheckRoomLink(DBloodActor* missile) = 0;
+};
+int actMoveMissile(DBloodActor* actor, THitInfo<DCoreActor>& hit, ProjectileWorldServices* world = nullptr);
+DBloodActor* actSpawnMissile(DBloodActor* source, sectortype* sector, const DVector3& pos, const DVector3& direction, int type);
+void fxSpawnFlameLick(DCoreActor* actor, const DVector3& velocity);
 void actProcessDudeMovement(DBloodActor* actor, PlayerWorldServices* world = nullptr);
 void actInit(TArray<DBloodActor*>& actors);
 void actWallBounceVector(DBloodActor* actor, walltype* pWall, double factor);

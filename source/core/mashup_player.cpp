@@ -37,7 +37,9 @@ Blood::DBloodPlayer* Secondary(DCorePlayer* player)
 
 Duke3d::DDukePlayer* Owner(DCoreActor* actor)
 {
-	if (!CombatEnabled()) return nullptr;
+	// Identity must remain stable while an emitted projectile/effect outlives
+	// the selected weapon mode. Ordinary Blood never enters Duke player lookup.
+	if (!isDuke() || isRR()) return nullptr;
 	for (int i = connecthead; i >= 0; i = connectpoint2[i])
 	{
 		auto duke = Duke3d::getPlayer(i);
@@ -58,6 +60,9 @@ void SyncPose(Duke3d::DDukePlayer* duke, Blood::DBloodPlayer* blood)
 	actor->spr.pos = DVector3(body->spr.pos.XY(), blood->zView + blood->pPosture[blood->lifeMode][blood->posture].eyeAboveZ);
 	actor->spr.Angles = body->spr.Angles;
 	actor->spr.Angles.Pitch = duke->getPitchWithView();
+	// Duke player velocity is already world displacement per simulation step.
+	// Native Blood projectiles inherit half this vector when they are emitted.
+	actor->vel = duke->vel;
 	blood->slope = actor->spr.Angles.Pitch.Tan();
 	blood->zWeapon = blood->zView + 4;
 	blood->aim = DVector3(actor->spr.Angles.Yaw.ToVector(), blood->slope);
@@ -277,9 +282,11 @@ void PrepareCombat(DCorePlayer* player)
 	// their world adapters exist. Selection and QAV transitions remain native.
 	int weapon = blood->cmd.ucmd.getNewWeapon();
 	bool supported = weapon == Blood::kWeapPitchFork || (Superset::IsActive() &&
-		(weapon == Blood::kWeapShotgun || weapon == Blood::kWeapTommyGun));
+		(weapon == Blood::kWeapShotgun || weapon == Blood::kWeapTommyGun || weapon == Blood::kWeapSpraycan));
 	if (weapon && !supported && weapon != WeaponSel_Next && weapon != WeaponSel_Prev)
 		blood->cmd.ucmd.setNewWeapon(Blood::kWeapNone);
+	// Thrown cans need thing physics and blast/environment adapters first.
+	if (Superset::IsActive() && blood->curWeapon == Blood::kWeapSpraycan) blood->cmd.ucmd.actions &= ~SB_ALTFIRE;
 	duke->quick_kick = duke->last_quick_kick = duke->knee_incs = 0;
 	duke->kickback_pic = duke->okickback_pic = 0;
 	duke->cmd.ucmd.actions &= ~(SB_QUICK_KICK | SB_HOLSTER);
@@ -310,7 +317,8 @@ bool DrawCombat(DCorePlayer* player, double interpolation)
 	Blood::WeaponDraw(blood, duke->GetActor()->spr.shade, 160, 200, 0, nullAngle);
 	if (Superset::IsActive())
 	{
-		const char* name = blood->curWeapon == Blood::kWeapShotgun ? "Shotgun" : blood->curWeapon == Blood::kWeapTommyGun ? "Tommy gun" : "Pitchfork";
+		const char* name = blood->curWeapon == Blood::kWeapShotgun ? "Shotgun" : blood->curWeapon == Blood::kWeapTommyGun ? "Tommy gun" :
+			blood->curWeapon == Blood::kWeapSpraycan ? "Spray can (primary)" : "Pitchfork";
 		FString line = FStringf("Blood %s", name);
 		if (blood->weaponAmmo >= 0) line.AppendFormat("   Ammo %d", blood->ammoCount[blood->weaponAmmo]);
 		DrawText(twod, SmallFont, CR_WHITE, 6, 150, line.GetChars(), DTA_VirtualWidth, 320, DTA_VirtualHeight, 200, DTA_KeepRatio, true, TAG_DONE);
@@ -325,6 +333,7 @@ bool DrawCombat(DCorePlayer* player, double interpolation)
 
 bool FireBloodVector(DCoreActor* source, double offset, double zoffset, DVector3 direction, int type, double range)
 {
+	if (!CombatEnabled()) return false;
 	auto owner = Owner(source);
 	if (!owner) return false;
 	if (inputProbeActive) ++inputProbeVectors;

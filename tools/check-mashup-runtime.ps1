@@ -4,6 +4,7 @@ param(
     [string]$ExePath = (Join-Path $PSScriptRoot '../build-mashup/Release/raze.exe'),
     [string]$DukeGrp,
     [string]$BloodRff,
+    [switch]$BloodProjectiles,
     [string]$MashupBloodDirectory,
     [switch]$MashupCombat,
     [switch]$Superset,
@@ -17,6 +18,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 if (!$DukeGrp -and !$BloodRff) { throw 'Specify -DukeGrp and/or -BloodRff.' }
+if ($BloodProjectiles -and !$BloodRff) { throw '-BloodProjectiles requires -BloodRff.' }
 if ($MashupCombat -and !$MashupBloodDirectory) { throw '-MashupCombat requires -MashupBloodDirectory.' }
 if ($Superset -and !$MashupBloodDirectory) { throw '-Superset requires -MashupBloodDirectory.' }
 if ($SupersetPlayer -eq 'caleb' -and !$Superset) { throw '-SupersetPlayer caleb requires -Superset.' }
@@ -120,6 +122,15 @@ cl_resumesavegame=true
         $commands += @("map $DukeTransitionMap", 'wait 120', 'gc full', 'mashup_runtime_check', $frontendCheck, $resourceCheck, $movementCheck, $inputCheck, $combatCheck, 'wait 15', 'screenshot', 'wait 10')
         $expectedCount++
     }
+    if ($BloodProjectiles -and $case.Name -eq 'blood-E1M1') {
+        $commands += @('give weapons', 'wait 4', 'slot 2', 'wait 60',
+            'save nativeflare-before "Native flare before"', 'wait 2', '+Fire', 'wait 15', '-Fire', 'wait 2',
+            'save nativeflare-after "Native flare after"', 'wait 2', 'slot 7', 'wait 60',
+            'save nativespray-before "Native spray before"', 'wait 2', '+Fire', 'wait 30', '-Fire', 'wait 2',
+            'save nativespray-after "Native spray after"', 'wait 2', 'screenshot',
+            'load nativespray-after', 'wait 30', 'mashup_runtime_check', 'wait 2')
+        $expectedCount++
+    }
     $commands += 'quit'
     $commands -join '; ' | Set-Content -LiteralPath $scriptPath
 
@@ -170,6 +181,29 @@ cl_resumesavegame=true
         if ($resourceChecks.Count -ne $expectedCount) { throw "$($case.Name) failed resource checks; inspect $logPath" }
     }
     $save = Join-Path $saveRoot 'foundation.dsave'
+    if ($BloodProjectiles -and $case.Name -eq 'blood-E1M1') {
+        $states = @{}
+        foreach ($name in @('nativeflare-before', 'nativeflare-after', 'nativespray-before', 'nativespray-after')) {
+            $archive = [IO.Compression.ZipFile]::OpenRead((Join-Path $saveRoot "$name.dsave"))
+            try {
+                $reader = [IO.StreamReader]::new($archive.GetEntry('session.json').Open())
+                try { $states[$name] = $reader.ReadToEnd() | ConvertFrom-Json -AsHashtable } finally { $reader.Dispose() }
+            } finally { $archive.Dispose() }
+        }
+        foreach ($weapon in @(@('nativeflare', 2, 1), @('nativespray', 7, 6))) {
+            $before = @($states["$($weapon[0])-before"].objects | Where-Object { $_.classtype -eq 'BloodPlayer' })[0]
+            $after = @($states["$($weapon[0])-after"].objects | Where-Object { $_.classtype -eq 'BloodPlayer' })[0]
+            if (!$before -or !$after -or $before.curweapon -ne $weapon[1] -or $after.curweapon -ne $weapon[1] -or
+                $before.ammocount[$weapon[2]] -le $after.ammocount[$weapon[2]]) {
+                throw "Native Blood $($weapon[0]) input/ammo check failed; inspect $logPath"
+            }
+        }
+        $flames = @($states['nativespray-after'].objects | Where-Object {
+            $_.classtype -eq 'BloodActor' -and $_.sprite.statnum -eq 5 -and $_.sprite.lotag -eq 304
+        })
+        if (!$flames.Count) { throw "No native Blood flame missiles persisted; inspect $logPath" }
+        Write-Output 'Native Blood: PASS (flare/spray input, ammo use, flame missile persistence and reload)'
+    }
     if ($Superset -and $case.Name.StartsWith('duke-')) {
         $frontendChecks = @(Select-String -LiteralPath $logPath -SimpleMatch -Pattern 'Superset check: identity/config=PASS, content manifest=PASS, save isolation=PASS, shared units=PASS.')
         if ($frontendChecks.Count -ne $expectedCount) { throw "$($case.Name) failed Superset frontend checks; inspect $logPath" }

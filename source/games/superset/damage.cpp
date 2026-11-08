@@ -55,13 +55,39 @@ Damage BloodVectorDamage(int vectorType, bool playerTarget)
 	return damage;
 }
 
-bool PrepareDukeHit(Duke3d::DDukeActor* hitter, Damage damage)
+bool PrepareDukeHit(Duke3d::DDukeActor* hitter, Damage damage, bool impulse)
 {
-	if (damage.kind != DamageKind::Physical || damage.amount < 0 ||
+	if ((damage.kind != DamageKind::Physical && damage.kind != DamageKind::Heat) || damage.amount < 0 ||
 		damage.amount > Units::FromDukeHealth(INT16_MAX)) return false;
 	hitter->supersetHitDamage = damage.amount;
+	hitter->supersetHitKind = uint8_t(damage.kind);
+	hitter->supersetDamageOnly = !impulse;
 	hitter->spr.extra = int(damage.amount / Units::HealthPerPoint);
 	return true;
+}
+
+bool ApplyDukeHealthDamage(Duke3d::DDukeActor* target, Damage damage, DCoreActor* source)
+{
+	if (!IsActive() || !target || target->spr.extra <= 0 || damage.amount < 0 ||
+		damage.amount > Units::FromDukeHealth(INT16_MAX)) return false;
+	if (damage.kind == DamageKind::Heat)
+	{
+		double factor = target->FloatVar(FName("supersetheatfactor"));
+		if (!std::isfinite(factor) || factor < 0 || factor > 256) return false;
+		damage.amount = Units::Health(damage.amount * factor);
+		if (damage.amount == 0) return true;
+	}
+	auto owner = dyn_cast<Duke3d::DDukeActor>(source);
+	if (!owner) owner = dyn_cast<Duke3d::DDukeActor>(Mashup::WorldSoundActor(source));
+	auto hitter = Duke3d::CreateActor(target->sector(), target->spr.pos, static_cast<PClassActor*>(RUNTIME_CLASS(Duke3d::DDukeActor)),
+		0, DVector2(0, 0), nullAngle, 0, 0, owner, STAT_MISC);
+	if (!hitter) return false;
+	ChangeActorStat(hitter, MAXSTATUS - 2);
+	hitter->flags3 |= SFLAG3_NOHITJIBS;
+	bool prepared = PrepareDukeHit(hitter, damage, false);
+	if (prepared) Duke3d::checkhitsprite(target, hitter);
+	hitter->Destroy();
+	return prepared;
 }
 
 bool AccumulateDukeHit(Duke3d::DDukeActor* target, Duke3d::DDukeActor* hitter)
@@ -121,11 +147,12 @@ bool ReceiveCalebHit(Duke3d::DDukeActor* target, Duke3d::DDukeActor* hitter)
 	auto player = Duke3d::getPlayer(target->PlayerIndex());
 	if (!HasBloodMovement(player)) return false;
 	DamageKind kind;
-	if (!DukeDamageKind(static_cast<PClassActor*>(hitter->GetClass()), kind)) return false;
+	if (hitter->supersetHitDamage >= 0) kind = DamageKind(hitter->supersetHitKind);
+	else if (!DukeDamageKind(static_cast<PClassActor*>(hitter->GetClass()), kind)) return false;
 	if (Duke3d::ud.god) return true;
 	auto amount = hitter->supersetHitDamage >= 0 ? hitter->supersetHitDamage : Units::FromDukeHealth(max(0, int(hitter->spr.extra)));
 	if (!ApplyCalebDamage(player, {amount, kind}, hitter->GetOwner())) return false;
-	DukeImpulse(player, hitter->spr.Angles.Yaw, amount, hitter);
+	if (!hitter->supersetDamageOnly) DukeImpulse(player, hitter->spr.Angles.Yaw, amount, hitter);
 	return true;
 }
 

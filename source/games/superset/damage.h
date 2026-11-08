@@ -25,9 +25,10 @@ bool NativeBloodDamageKind(DamageKind kind, int& nativeKind);
 Damage BloodTineDamage(bool playerTarget);
 Damage BloodVectorDamage(int vectorType, bool playerTarget);
 
-// The first Duke receiver handles physical hits through the native onHit path.
+// Duke receivers handle Physical and Heat through the native onHit path.
 // Unsupported categories return false instead of acquiring invented reactions.
-bool PrepareDukeHit(Duke3d::DDukeActor* hitter, Damage damage);
+bool PrepareDukeHit(Duke3d::DDukeActor* hitter, Damage damage, bool impulse = true);
+bool ApplyDukeHealthDamage(Duke3d::DDukeActor* target, Damage damage, DCoreActor* source);
 bool AccumulateDukeHit(Duke3d::DDukeActor* target, Duke3d::DDukeActor* hitter);
 void FinishDukeHit(Duke3d::DDukeActor* target);
 

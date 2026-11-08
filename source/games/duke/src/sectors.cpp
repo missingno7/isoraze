@@ -1427,7 +1427,7 @@ void checkhitdefault(DDukeActor* targ, DDukeActor* proj)
 			auto Owner = proj->GetOwner();
 
 			if (Owner && Owner->isPlayer() && !(targ->flags3 & SFLAG3_NOSHOTGUNBLOOD))
-				if (getPlayer(Owner->PlayerIndex())->curr_weapon == SHOTGUN_WEAPON)
+				if (!proj->supersetDamageOnly && getPlayer(Owner->PlayerIndex())->curr_weapon == SHOTGUN_WEAPON)
 				{
 					shoot(targ, DukeBloodSplat3Class);
 					shoot(targ, DukeBloodSplat1Class);
@@ -1435,7 +1435,7 @@ void checkhitdefault(DDukeActor* targ, DDukeActor* proj)
 					shoot(targ, DukeBloodSplat4Class);
 				}
 
-			if (!(targ->flags2 & SFLAG2_NODAMAGEPUSH))
+			if (!proj->supersetDamageOnly && !(targ->flags2 & SFLAG2_NODAMAGEPUSH))
 			{
 				if ((targ->spr.cstat & CSTAT_SPRITE_ALIGNMENT_MASK) == 0)
 					targ->spr.Angles.Yaw = proj->spr.Angles.Yaw + DAngle180;
@@ -1475,7 +1475,7 @@ void checkhitdefault(DDukeActor* targ, DDukeActor* proj)
 			bool received = Superset::ReceiveCalebHit(targ, proj);
 			targ->attackertype = hitpic;
 			if (!received && !Superset::AccumulateDukeHit(targ, proj)) targ->hitextra += proj->spr.extra;
-			if (!(targ->flags4 & SFLAG4_NODAMAGETURN))
+			if (!proj->supersetDamageOnly && !(targ->flags4 & SFLAG4_NODAMAGETURN))
 				targ->hitang = proj->spr.Angles.Yaw;
 			targ->SetHitOwner(Owner);
 		}

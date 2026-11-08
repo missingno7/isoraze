@@ -125,6 +125,8 @@ class DukeActor : CoreActor native
 		landmovefactor 1;
 		watermovefactor 1;
 		gravityfactor 1;
+		SupersetHeatFactor 1;
+		SupersetBurnable true;
 		sparkoffset 5;
 		move "SHRUNKVELS", 32;
 		move "RESPAWN_ACTOR_FLAG";
@@ -265,6 +267,8 @@ class DukeActor : CoreActor native
 	meta double watermovefactor;
 	meta double gravityfactor;
 	meta double minhitscale;
+	meta double supersetheatfactor;
+	meta int supersetburnable;
 
 	property prefix: none;
 	property gutsoffset: gutsoffset;
@@ -286,6 +290,8 @@ class DukeActor : CoreActor native
 	property watermovefactor: watermovefactor;
 	property gravityfactor: gravityfactor;
 	property minhitscale: minhitscale;
+	property SupersetHeatFactor: supersetheatfactor;
+	property SupersetBurnable: supersetburnable;
 
 	
 	native void SetSpritesetImage(int index);

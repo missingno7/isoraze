@@ -52,7 +52,8 @@ Use `-iwad` for Duke data and `-blooddata` for the isolated Blood bank:
 
 The default player remains Duke. Add `-superset-player caleb` to select native
 Blood movement, camera inertia, jumping/crouching and the native pitchfork.
-Blood shotgun/Tommy gun and selected native pickups are available through the
+Blood shotgun/Tommy gun, spray-can primary fire and selected native pickups are
+available through the
 explicit spawn commands described below; Duke pickups are not replaced yet.
 `-superset-player duke` retains Duke movement; the optional `+mashup_combat 1`
 Blood weapon/inventory mode is also available with Duke. The HUD and map mechanisms
@@ -84,8 +85,9 @@ and verify the separate configuration section. `-MashupCombat` additionally
 exercises the existing pitchfork prototype.
 
 The next milestones are hardening Caleb's navigation in the Duke world,
-shared targeting/damage in both directions, burning a Duke enemy and
-freezing a Blood enemy, then the reverse map adapter and expanded mixed content.
+shared targeting/damage in both directions and freezing a Blood enemy, then
+the reverse map adapter and expanded mixed content. Initial spray-can burning
+of Duke enemies is implemented; full actor reactions and cross-effect rules remain work.
 The common health/time definitions are present, and the pitchfork now submits
 shared Q4 physical hits. Other attacks and receivers still need migration.
 Original-game regression checks remain required.
@@ -111,8 +113,8 @@ This is an incremental native adapter, not the final shared actor/AI model.
 
 No scale compensation is applied: initial idle eye height is 56.6875 world units
 and horizontal radius is 12. Native Blood SEQ state and the selected controller
-are serialized with the session. Save schema is 2; rules revision is now 5
-after integrating native Blood pickups and shotgun/Tommy gun vectors. Earlier
+are serialized with the session. Save schema is 2; rules revision is now 6
+after integrating native Blood flame missiles and shared burning. Earlier
 Superset bootstrap saves are intentionally incompatible with this experimental
 schema. The legacy native game save signatures remain separate.
 
@@ -462,7 +464,7 @@ superset_spawn_pickup drum
 superset_spawn_pickup bodyarmor
 ```
 
-The command without arguments lists supported names: `shotgun`, `tommy`,
+The command without arguments lists supported names: `shotgun`, `tommy`, `spraycan`, `sprayfuel`,
 `shells`, `shellbox`, `bullets`, `drum`, `medpouch`, `essence`, `lifeseed`,
 `redpotion`, `basicarmor`, `bodyarmor`, `firearmor`, `spiritarmor`, `superarmor`.
 Items spawn on the floor ahead and retain native artwork, collection distance,
@@ -501,6 +503,94 @@ FX and save checks (`runtime-20261108T021142379`). Original Duke E1L1 and Blood
 E1M1 passed runtime/save regressions (`runtime-20261108T021249822`). These are
 component checks on local Plutonium Pak data, not stock-map playthroughs or
 proof of automatic pickup conversion and arbitrary CON compatibility.
+
+## Native flame projectiles and shared burning
+
+The spray can's primary attack now uses Blood's native weapon/QAV callback,
+fuel consumption, missile artwork, velocity, drag, collision algorithm and
+sequence/event lifetime. Select it with slot 7 after collecting `spraycan`;
+`sprayfuel` supplies its native ammunition. Caleb and Duke's optional Blood
+weapon profile can both use it. Alternate throw/drop requires thing physics
+and explosion/environment adapters; alternate fire is disabled for this weapon
+until those work. Other missile weapons remain outside the selectable set.
+
+`actSpawnMissile` extracts native missile initialization. `actMoveMissile`
+retains native movement with a generic collision result and an injected
+environment interface for collision ownership and room links. The original
+Blood caller keeps its native impact handlers, wall triggers and room links.
+The Duke environment excludes the physical shooter from collision and routes
+flame contacts to shared gameplay without treating Duke actors as Blood actors
+or starting Blood map mechanisms. Duke projectile transport/water-portal
+variants are not implemented by this adapter yet.
+
+Duke's player velocity is copied into the secondary weapon state in the same
+world-units-per-step representation. Native flame initialization can therefore
+retain its half-source-velocity inheritance with either movement profile.
+For emitted flame-lick FX, Duke enemy forward speed is converted to a vector
+using its facing angle; it is not interpreted as Blood's world-space X speed.
+
+Flame contact submits two separate operations: eight Q4 units of Heat damage
+(0.5 health point), and ignition. Ignition adds Blood's native
+`(4 + difficulty) * 4` clock duration, capped at 2400 clocks for enemies.
+The ordinary burn tick then removes four clocks and submits eight Q4 Heat units,
+matching Blood's ordinary burning tick. Repeated native flame contacts can
+extend the duration. `superset_blood_difficulty` supplies the source difficulty
+for this formula (0–4, initially 2), independently of Duke's native difficulty;
+it is saved with the session. This is not a resolved mapping between the games'
+difficulty curves or a promise that all Blood AI settings use that option yet.
+
+Duke enemies default to normal Heat damage and allow ignition. Actor defaults
+can override `SupersetHeatFactor` (0 means health immunity, 0.5 halves damage)
+and `SupersetBurnable` independently. Thus Heat damage does not automatically
+ignite an actor, an unignitable actor can still take direct Heat damage, and a
+Heat-immune actor can still receive the effect unless ignition is also disabled.
+These are configurable starting responses, not settled boss or mod-specific
+exceptions. Factors use shared Q4 precision and must be finite within 0–256.
+
+Health-only hits retain native Duke `onHit`/CON consumption and death handling,
+with fractional damage carried as before. They suppress the default hit push,
+damage turn, shotgun blood and hit gibs. They do not add impulse as a side effect
+of burn damage. Burning does not yet switch Duke enemies to a specialized
+burning AI/death animation. Fire versus frozen actors, extinguishing policy,
+and special actor exceptions still require explicit rules. Existing native
+CON responses to special states remain authoritative in this adapter; this
+increment does not establish a shared freezing/thawing model.
+
+Burn duration, visual cadence and source identity serialize on the native world
+actor, with GC tracking. Attribution uses the physical player rather than the
+secondary controller, and emitted projectiles retain that resolution after the
+Blood weapon mode is disabled. Blood's flame-lick FX spawning is reused, with
+extents adjusted for centered Blood sprites and feet-based Duke sprites.
+Shared object ticks advance projectiles and statuses once after the Duke world
+phase. Blood enemy AI and the reverse Blood map adapter are still pending.
+
+```powershell
+./tools/check-superset-flames.ps1 -DukeGrp 'D:/games/duke/duke3d.grp' -BloodDirectory 'D:/games/blood' -PythonPath python -EnableSound
+```
+
+The fixture test uses actual pickup/input/QAV/projectile processing and a
+controlled native Duke target. It checks fuel use, contacts, damage without
+impulse, burn ownership, restored moving missiles and burn state, source
+difficulty restoration, ownership after disabling the weapon mode, expiry,
+separate heat/ignition responses and actual native CON death. A final movement
+check verifies that nonzero player motion reaches the weapon state. Target AI is
+paused during timing checks; this is not a combat playthrough. Add
+`-BloodProjectiles` with `-BloodRff` to the ordinary runtime harness to exercise
+native Blood flare/spray input, ammunition, saved flame missiles and reload.
+
+Verified on 2026-11-08: Release build passed. Both profiles passed the flame,
+response, save/ownership/expiry and motion checks with audio
+(`flames-20261108T024153548`), and the burning/spray screenshot was inspected.
+Caleb's inventory/hitscan regression passed (`inventory-20261108T023935061`).
+Caleb E1L1, save/load, damage, death/restart and fresh E1L2 checks passed
+(`runtime-20261108T023737629`). One preceding E1L2 movement probe reported no
+jump/crouch; a rerun passed without a controller change. Its cause is not
+established; the movement diagnostic now records received input and health
+details on failure. Final original Duke E1L1 and Blood E1M1 checks, including
+native Blood flare/spray firing, saved flame missiles and reload, passed
+(`runtime-20261108T024442754`). The final Duke-profile flame/motion rerun also
+passed (`flames-20261108T024541017`). These remain component checks, not full map or
+enemy-family compatibility coverage.
 
 ## Build and regression checks
 

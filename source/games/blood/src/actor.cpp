@@ -32,6 +32,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "blood.h"
 #include "texids.h"
 #include "mashup_player.h"
+#include "games/superset/projectiles.h"
 
 BEGIN_BLD_NS
 
@@ -5190,20 +5191,21 @@ void MoveDude(DBloodActor* actor, PlayerWorldServices* world)
 //
 //---------------------------------------------------------------------------
 
-int MoveMissile(DBloodActor* actor)
+int actMoveMissile(DBloodActor* actor, THitInfo<DCoreActor>& hitInfo, ProjectileWorldServices* world)
 {
 	auto Owner = actor->GetOwner();
+	DCoreActor* collisionOwner = world ? world->CollisionOwner(actor) : Owner;
 	int cliptype = -1;
 	ESpriteFlags bakCstat = 0;
-	if (Owner)
+	if (collisionOwner)
 	{
-		bakCstat = Owner->spr.cstat;
-		if (Owner->IsDudeActor())
+		bakCstat = collisionOwner->spr.cstat;
+		if (world || (Owner && Owner->IsDudeActor()))
 		{
-			Owner->spr.cstat &= ~CSTAT_SPRITE_BLOCK_ALL;
+			collisionOwner->spr.cstat &= ~CSTAT_SPRITE_BLOCK_ALL;
 		}
 	}
-	gHitInfo.clearObj();
+	hitInfo.clearObj();
 	if (actor->spr.type == kMissileFlameSpray) actAirDrag(actor, 0x1000);
 
 	if (actor->GetTarget() != nullptr && !actor->vel.isZero())
@@ -5237,7 +5239,7 @@ int MoveMissile(DBloodActor* actor)
 			enginecompatibility_mode = ENGINECOMPATIBILITY_NONE; // improved clipmove accuracy
 			actor->spr.cstat &= ~CSTAT_SPRITE_BLOCK_ALL; // remove self collisions for accurate clipmove
 		}
-		Collision clipmoveresult;
+		TCollision<DCoreActor> clipmoveresult;
 		ClipMove(ppos, &pSector2, vel.XY(), actor->clipdist, (ppos.Z - top) / 4, (bottom - ppos.Z) / 4, CLIPMASK0, clipmoveresult, 1);
 		enginecompatibility_mode = bakCompat; // restore
 		actor->spr.cstat = bakSpriteCstat;
@@ -5249,13 +5251,13 @@ int MoveMissile(DBloodActor* actor)
 		}
 		if (clipmoveresult.type == kHitSprite)
 		{
-			gHitInfo.hitActor = clipmoveresult.actor();
+			hitInfo.hitActor = clipmoveresult.hitActor;
 			cliptype = 3;
 		}
 		else if (clipmoveresult.type == kHitWall)
 		{
-			gHitInfo.hitWall = clipmoveresult.hitWall;
-			if (!gHitInfo.hitWall->twoSided()) cliptype = 0;
+			hitInfo.hitWall = clipmoveresult.hitWall;
+			if (!hitInfo.hitWall->twoSided()) cliptype = 0;
 			else
 			{
 				double fz, cz;
@@ -5267,7 +5269,7 @@ int MoveMissile(DBloodActor* actor)
 		if (cliptype == 4)
 		{
 			walltype* pWall = clipmoveresult.hitWall;
-			if (pWall->hasX())
+			if (!world && pWall->hasX())
 			{
 				XWALL* pXWall = &pWall->xw();
 				if (pXWall->triggerVector)
@@ -5317,14 +5319,26 @@ int MoveMissile(DBloodActor* actor)
 			assert(pSector);
 			ChangeActorSect(actor, pSector);
 		}
-		CheckLink(actor);
-		gHitInfo.hitSector = actor->sector();
-		gHitInfo.hitpos = actor->spr.pos;
+		if (world) world->CheckRoomLink(actor);
+		else CheckLink(actor);
+		hitInfo.hitSector = actor->sector();
+		hitInfo.hitpos = actor->spr.pos;
 		break;
 	}
-	if (Owner) Owner->spr.cstat = bakCstat;
+	if (collisionOwner) collisionOwner->spr.cstat = bakCstat;
 
 	return cliptype;
+}
+
+int MoveMissile(DBloodActor* actor)
+{
+	THitInfo<DCoreActor> hit {};
+	int code = actMoveMissile(actor, hit);
+	gHitInfo.hitActor = dyn_cast<DBloodActor>(hit.hitActor);
+	gHitInfo.hitWall = hit.hitWall;
+	gHitInfo.hitSector = hit.hitSector;
+	gHitInfo.hitpos = hit.hitpos;
+	return code;
 }
 
 //---------------------------------------------------------------------------
@@ -6457,6 +6471,8 @@ void actBuildMissile(DBloodActor* spawned, DBloodActor* actor)
 
 DBloodActor* actFireMissile(DBloodActor* actor, double xyoff, double zoff, DVector3 dv, int nType)
 {
+	DBloodActor* result = nullptr;
+	if (Superset::FireBloodMissile(actor, xyoff, zoff, dv, nType, result)) return result;
 	assert(nType >= kMissileBase && nType < kMissileMax);
 	bool impact = false;
 	const MissileType* pMissileInfo = &missileInfo[nType - kMissileBase];
@@ -6479,7 +6495,22 @@ DBloodActor* actFireMissile(DBloodActor* actor, double xyoff, double zoff, DVect
 			vect.SetXY(gHitInfo.hitpos.XY() - actor->spr.Angles.Yaw.ToVector() * pMissileInfo->fClipDist() * 2);
 		}
 	}
-	auto spawned = actSpawnSprite(actor->sector(), vect, 5, 1);
+	auto spawned = actSpawnMissile(actor, actor->sector(), vect, dv, nType);
+	if (!spawned) return nullptr;
+	if (impact)
+	{
+		actImpactMissile(spawned, hit);
+		return nullptr;
+	}
+	return spawned;
+}
+
+DBloodActor* actSpawnMissile(DBloodActor* actor, sectortype* sector, const DVector3& pos, const DVector3& dv, int nType)
+{
+	if (!actor || !sector || nType < kMissileBase || nType >= kMissileMax || dv.isZero()) return nullptr;
+	const MissileType* pMissileInfo = &missileInfo[nType - kMissileBase];
+	auto spawned = actSpawnSprite(sector, pos, kStatProjectile, true);
+	if (!spawned) return nullptr;
 
 	spawned->spr.cstat2 |= CSTAT2_SPRITE_MAPPED;
 	spawned->spr.type = nType;
@@ -6499,11 +6530,6 @@ DBloodActor* actFireMissile(DBloodActor* actor, double xyoff, double zoff, DVect
 
 	actBuildMissile(spawned, actor);
 
-	if (impact)
-	{
-		actImpactMissile(spawned, hit);
-		return nullptr;
-	}
 	return spawned;
 }
 

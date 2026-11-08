@@ -12,6 +12,7 @@
 #include "mashup_resources.h"
 #include "units.h"
 #include "damage.h"
+#include "projectiles.h"
 #include "c_dispatch.h"
 
 namespace Blood { void SerializeSequences(FSerializer& arc); void SerializeEvents(FSerializer& arc); }
@@ -40,6 +41,8 @@ struct MovementProbe
 {
 	bool active = false, moved = false, jumped = false, crouched = false;
 	bool oneCollider = true, clock = true;
+	bool jumpInput = false, crouchInput = false;
+	int minHealth = 65535;
 	int ticks = 0, lastClock = 0;
 	DVector3 start;
 	double eye = 0;
@@ -292,6 +295,9 @@ bool TickBloodMovement(DCorePlayer* player)
 	Duke3d::tickaccessswitch_d(duke);
 	if (probe.active)
 	{
+		probe.jumpInput |= !!(blood->cmd.ucmd.actions & SB_JUMP);
+		probe.crouchInput |= !!(blood->cmd.ucmd.actions & SB_CROUCH);
+		probe.minHealth = min(probe.minHealth, int(state->xspr.health));
 		if (probe.ticks) probe.clock &= PlayClock - probe.lastClock == Units::ClocksPerStep;
 		probe.lastClock = PlayClock;
 		++probe.ticks;
@@ -317,6 +323,8 @@ void TickSharedObjects()
 {
 	if (!IsActive()) return;
 	AdvanceBloodSequences();
+	TickBloodProjectiles();
+	TickStatusEffects();
 	Blood::gFX.fxProcess();
 	Blood::actPostProcess();
 }
@@ -333,6 +341,7 @@ void SerializeBloodControllerState(FSerializer& arc)
 {
 	if (arc.BeginObject("superset.blood_controller"))
 	{
+		SerializeProjectileOptions(arc);
 		Blood::SerializeSequences(arc);
 		Blood::SerializeEvents(arc);
 		arc.EndObject();
@@ -368,8 +377,9 @@ CCMD(superset_movement_check)
 	bool nativeProfile = probe.eye > 55. && probe.eye < 58. && state->clipdist == 12.;
 	bool inputs = probe.ticks > 0 && probe.moved && probe.jumped && probe.crouched;
 	if (!inputs || !nativeProfile)
-		Printf("Caleb movement detail: ticks=%d moved=%d jumped=%d crouched=%d initial eye=%.4f radius=%.2f.\n",
-			probe.ticks, probe.moved, probe.jumped, probe.crouched, probe.eye, state->clipdist);
+		Printf("Caleb movement detail: ticks=%d moved=%d jumped=%d crouched=%d initial eye=%.4f radius=%.2f input=%d/%d minhealth=%d posture=%d height=%.2f.\n",
+			probe.ticks, probe.moved, probe.jumped, probe.crouched, probe.eye, state->clipdist, probe.jumpInput, probe.crouchInput,
+			probe.minHealth, player->posture, state->xspr.height);
 	Printf("Superset movement check: native profile=%s, move/jump/crouch=%s, one collider=%s, clock=%s.\n",
 		nativeProfile ? "PASS" : "FAIL", inputs ? "PASS" : "FAIL", probe.oneCollider ? "PASS" : "FAIL", probe.clock ? "PASS" : "FAIL");
 	probe.active = false;

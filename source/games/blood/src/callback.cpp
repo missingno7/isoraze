@@ -36,11 +36,17 @@ BEGIN_BLD_NS
 //
 //---------------------------------------------------------------------------
 
-void fxFlameLick(DBloodActor* actor, sectortype*) // 0
+void fxSpawnFlameLick(DCoreActor* actor, const DVector3& velocity)
 {
 	if (!actor) return;
 	double top, bottom;
-	GetActorExtents(actor, &top, &bottom);
+	GetSpriteExtents(&actor->spr, &top, &bottom);
+	if (!dyn_cast<DBloodActor>(actor))
+	{
+		double height;
+		bottom = actor->spr.pos.Z + actor->GetOffsetAndHeight(height);
+		top = bottom - height;
+	}
 	auto tex = TexMan.GetGameTexture(actor->spr.spritetexture());
 	double nDist = (actor->spr.scale.X * tex->GetDisplayWidth()) * (1. / 4);
 	for (int i = 0; i < 3; i++)
@@ -53,11 +59,17 @@ void fxFlameLick(DBloodActor* actor, sectortype*) // 0
 		auto pFX = gFX.fxSpawnActor(FX_32, actor->sector(), DVector3(pos, z));
 		if (pFX)
 		{
-			pFX->vel.X = actor->vel.X + Random2F(-int(16 * dv.X));
-			pFX->vel.Y = actor->vel.Y + Random2F(-int(16 * dv.Y));
-			pFX->vel.Z = actor->vel.Z - Random2F(0x1aaaa);
+			pFX->vel.X = velocity.X + Random2F(-int(16 * dv.X));
+			pFX->vel.Y = velocity.Y + Random2F(-int(16 * dv.Y));
+			pFX->vel.Z = velocity.Z - Random2F(0x1aaaa);
 		}
 	}
+}
+
+void fxFlameLick(DBloodActor* actor, sectortype*) // 0
+{
+	if (!actor) return;
+	fxSpawnFlameLick(actor, actor->vel);
 	if (actor->xspr.burnTime > 0)
 		evPostActor(actor, 5, kCallbackFXFlameLick);
 }
