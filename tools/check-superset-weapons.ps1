@@ -24,7 +24,7 @@ function Read-Snapshot([string]$Root, [string]$Name) {
     $zip = [IO.Compression.ZipFile]::OpenRead((Join-Path $Root "weapons-$Name.dsave"))
     try {
         $reader = [IO.StreamReader]::new($zip.GetEntry('session.json').Open())
-        try { $data = $reader.ReadToEnd() | ConvertFrom-Json -AsHashtable } finally { $reader.Dispose() }
+        try { $data = (ConvertFrom-SupersetSnapshot ($reader.ReadToEnd())) } finally { $reader.Dispose() }
     } finally { $zip.Dispose() }
     $player = @($data.objects | Where-Object { $_.classtype -eq 'DukePlayer' -and $_.Contains('actor') -and $null -ne $_.actor })[0]
     $blood = $data.objects[$player.bloodcombat]
@@ -45,7 +45,7 @@ i_pauseinbackground=false
 vid_vsync=false
 cl_nostartscreens=true
 '@ | Set-Content -LiteralPath $config
-    $commands = @('wait 90', 'superset_navigation pose 2', 'wait 4', 'save weapons-start "Duke weapon startup"', 'wait 2')
+    $commands = @('wait 90', 'superset_pickup_switch 0', 'superset_navigation pose 2', 'wait 4', 'save weapons-start "Duke weapon startup"', 'wait 2')
     if ($player -eq 'caleb') {
         $commands += @('superset_incoming_check', 'superset_movement_check start', '+Jump', 'wait 30', '-Jump', 'wait 40',
             '+Crouch', 'wait 30', '+Move_Forward', 'wait 30', '-Move_Forward', '-Crouch', 'wait 30', 'superset_movement_check')

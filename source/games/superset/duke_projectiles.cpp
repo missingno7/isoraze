@@ -388,6 +388,13 @@ CCMD(superset_duke_projectile_check)
 			if (!inside(center.X, center.Y, &candidate)) continue;
 			double floor = getflorzofslopeptr(&candidate, center), ceiling = getceilzofslopeptr(&candidate, center);
 			if (floor - ceiling < bottom - top + 16) continue;
+			// An otherwise open room may contain a raised coffin/platform at its
+			// centroid. Do not put Caleb on that surface and the enemy below it.
+			CollisionBase ceilingHit, floorHit;
+			double supportCeiling, supportFloor;
+			getzrange(DVector3(center, floor - feet), &candidate, &supportCeiling, ceilingHit, &supportFloor, floorHit,
+				source->clipdist, CLIPMASK0);
+			if (fabs(supportFloor - floor) > 1) continue;
 			DVector3 origin(center, floor - feet - eye);
 			bool clear = true;
 			for (int n = 0; n < 8; ++n)

@@ -818,6 +818,7 @@ DEFINE_ACTION_FUNCTION_NATIVE(_tspritetype, setSpritePic, tspritetype_setSpriteP
 //=============================================================================
 
 DEFINE_FIELD(DCorePlayer, pnum)
+DEFINE_FIELD(DCorePlayer, sharedInventory)
 
 DEFINE_FIELD_NAMED(DCoreActor, spr.sectp, sector)
 DEFINE_FIELD_NAMED(DCoreActor, spr.cstat, cstat)

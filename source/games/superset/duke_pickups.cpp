@@ -7,6 +7,7 @@
 #include "../blood/src/blood.h"
 #include "duke_pickups.h"
 #include "duke_weapons.h"
+#include "level.h"
 #include "superset.h"
 #include "mashup_resources.h"
 #include "c_dispatch.h"
@@ -83,6 +84,14 @@ void InitBloodMapDukePickups()
 	// These classes are referenced by stock pickup predicates, not ticked here.
 	Duke3d::BindSecondaryDukeActor(PClass::FindActor("DukePigcop"), Mashup::DukeTileNumber(Mashup::DukeTexture("PIGCOP")));
 	Duke3d::BindSecondaryDukeActor(PClass::FindActor("DukeAtomicHealth"), Mashup::DukeTileNumber(Mashup::DukeTexture("ATOMICHEALTH")));
+	const char* extra[][2] = {
+		{"DukeShotgunShot","SHOTGUN"}, {"DukeShotSpark","SHOTSPARK1"}, {"DukeBlood","BLOOD"}, {"DukeBloodPool","BLOODPOOL"},
+		{"DukeJibs1","JIBS1"}, {"DukeJibs2","JIBS2"}, {"DukeJibs3","JIBS3"}, {"DukeJibs4","JIBS4"}, {"DukeJibs5","JIBS5"}, {"DukeJibs6","JIBS6"},
+		{"DukeShield","SHIELD"}, {"DukeBloodSplat1","BLOODSPLAT1"}, {"DukeShrinkSpark","SHRINKSPARK"}, {"DukeGrowSpark","GROWSPARK"},
+		{"DukeFreezeblast","FREEZEBLAST"}, {"DukeRadiusExplosion","RADIUSEXPLOSION"}, {"DukeRPG","RPG"}
+	};
+	for (auto& entry : extra)
+		if (auto type = PClass::FindActor(entry[0])) Duke3d::BindSecondaryDukeActor(type, Mashup::DukeTileNumber(Mashup::DukeTexture(entry[1])));
 }
 
 bool IsBloodDukePickup(Duke3d::DDukeActor* actor)
@@ -98,9 +107,7 @@ bool BloodDukePickupEnvironment(Duke3d::DDukeActor* actor, int& medium)
 	// Refresh every step so Blood's moving surfaces remain authoritative.
 	CollisionBase ceiling, floor;
 	getzrange(actor->spr.pos.plusZ(-1), actor->sector(), &actor->ceilingz, ceiling, &actor->floorz, floor, 7.9375, CLIPMASK0);
-	auto upper = dyn_cast<Blood::DBloodActor>(actor->sector()->upperLink.Get());
-	medium = actor->sector()->hasX() && actor->sector()->xs().Underwater ? 2 :
-		upper && upper->spr.type == Blood::kMarkerUpWater ? 1 : 0;
+	medium = int(LevelEnvironment(actor->sector()).medium);
 	return true;
 }
 
@@ -132,13 +139,13 @@ void TickBloodMapDukePickups()
 		auto blood = Blood::getPlayer(myconnectindex);
 		if (!player) player = PrepareBloodMapDukePlayer(blood);
 		int beforeAmmo = 0, beforeWeapons = 0;
-		for (int n = 0; n <= Duke3d::CHAINGUN_WEAPON; ++n) { beforeAmmo += player->ammo_amount[n]; beforeWeapons += player->gotweapon[n]; }
+		for (int n = 0; n <= Duke3d::CHAINGUN_WEAPON; ++n) { beforeAmmo += player->AmmoAmounts()[n]; beforeWeapons += player->WeaponOwnership()[n]; }
 		double distance;
 		Duke3d::findplayer(item, &distance);
 		int kill = 0;
 		Duke3d::execute(item, player, distance, &kill, &conServices);
 		int afterAmmo = 0, afterWeapons = 0;
-		for (int n = 0; n <= Duke3d::CHAINGUN_WEAPON; ++n) { afterAmmo += player->ammo_amount[n]; afterWeapons += player->gotweapon[n]; }
+		for (int n = 0; n <= Duke3d::CHAINGUN_WEAPON; ++n) { afterAmmo += player->AmmoAmounts()[n]; afterWeapons += player->WeaponOwnership()[n]; }
 		if (afterAmmo != beforeAmmo || afterWeapons != beforeWeapons) blood->pickupEffect = 30;
 		if (kill == 1) item->Destroy();
 		else ++item->counter; // Native move() advances this even when ammo is full.
@@ -205,20 +212,20 @@ CCMD(superset_duke_pickup_check)
 	if (!stricmp(argv[1], "init"))
 	{
 		Duke3d::resetweapons(player);
-		for (int n = 1; n <= Duke3d::CHAINGUN_WEAPON; ++n) { player->ammo_amount[n] = 0; player->gotweapon[n] = false; }
+		for (int n = 1; n <= Duke3d::CHAINGUN_WEAPON; ++n) { player->AmmoAmounts()[n] = 0; player->WeaponOwnership()[n] = false; }
 		player->curr_weapon = Duke3d::KNEE_WEAPON;
 		player->kickback_pic = player->okickback_pic = 0;
 	}
 	if (!stricmp(argv[1], "full") || !stricmp(argv[1], "empty"))
 		for (int n = 1; n <= Duke3d::CHAINGUN_WEAPON; ++n)
-			player->ammo_amount[n] = !stricmp(argv[1], "full") ? Duke3d::gs.max_ammo_amount[n] : 0;
+			player->AmmoAmounts()[n] = !stricmp(argv[1], "full") ? Duke3d::gs.max_ammo_amount[n] : 0;
 	if (!stricmp(argv[1], "frail"))
 	{
 		Blood::getPlayer(myconnectindex)->GetActor()->xspr.health = 1;
 		PrepareBloodMapDukePlayer(Blood::getPlayer(myconnectindex));
 	}
 	Printf("Superset Duke pickup state: ammo=%d/%d/%d weapons=%d/%d/%d mode=%d.\n",
-		player->ammo_amount[1], player->ammo_amount[2], player->ammo_amount[3],
-		player->gotweapon[1], player->gotweapon[2], player->gotweapon[3], player->supersetWeaponMode);
+		player->AmmoAmounts()[1], player->AmmoAmounts()[2], player->AmmoAmounts()[3],
+		player->WeaponOwnership()[1], player->WeaponOwnership()[2], player->WeaponOwnership()[3], player->supersetWeaponMode);
 }
 }

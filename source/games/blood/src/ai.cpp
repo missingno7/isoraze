@@ -28,6 +28,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 #include "blood.h"
 #include "games/superset/status.h"
+#include "games/superset/level.h"
 
 BEGIN_BLD_NS
 
@@ -905,6 +906,7 @@ void aiActivateDude(DBloodActor* actor)
 
 void aiSetTarget(DBloodActor* actor, const DVector3& pos)
 {
+	if (Superset::IsRuntimeActor(actor)) actor->gameplayEntity->target = nullptr;
 	actor->SetTarget(nullptr);
 	actor->xspr.TargetPos = pos;
 }
@@ -913,6 +915,7 @@ void aiSetTarget(DBloodActor* actor, DBloodActor* target)
 {
 	if (target == nullptr)
 	{
+		if (Superset::IsRuntimeActor(actor)) actor->gameplayEntity->target = nullptr;
 		actor->SetTarget(nullptr);
 		return;
 	}
@@ -920,6 +923,11 @@ void aiSetTarget(DBloodActor* actor, DBloodActor* target)
 	{
 		if (actor->GetOwner() != target)
 		{
+			if (Superset::IsRuntimeActor(actor))
+			{
+				actor->gameplayEntity->target = Superset::ResolveGameplayActor(target);
+				GC::WriteBarrier(actor->gameplayEntity, actor->gameplayEntity->target.Get());
+			}
 			actor->SetTarget(target);
 			DUDEINFO* pDudeInfo = getDudeInfo(target->spr.type);
 			double eyeHeight = (pDudeInfo->eyeHeight * target->spr.scale.Y);

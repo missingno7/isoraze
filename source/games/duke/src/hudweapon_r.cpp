@@ -324,7 +324,7 @@ void displayweapon_r(DDukePlayer* const p, double interpfrac)
 			offsets.X += 8;
 			offsets.Y += 10;
 
-			if (p->ammo_amount[BOWLING_WEAPON])
+			if (p->AmmoAmounts()[BOWLING_WEAPON])
 			{
 				hud_drawpal(162 + offsets.X, 214 + offsets.Y + (*kb << 3), "BOWLINGBALLHUD", shade, o, pal, angle);
 			}
@@ -345,7 +345,7 @@ void displayweapon_r(DDukePlayer* const p, double interpfrac)
 			offsets.X += 8;
 			offsets.Y += 10;
 
-			if (p->ammo_amount[POWDERKEG_WEAPON])
+			if (p->AmmoAmounts()[POWDERKEG_WEAPON])
 			{
 				hud_drawpal(180 + offsets.X, 214 + offsets.Y + (*kb << 3), "POWDERH", shade, o, pal, angle, 36700);
 				hud_drawpal(90 + offsets.X, 214 + offsets.Y + (*kb << 3), "POWDERH", shade, o | 4, pal, angle, 36700);

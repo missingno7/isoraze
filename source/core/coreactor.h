@@ -5,6 +5,7 @@
 #include "build.h"
 #include "actorinfo.h"
 #include "clip.h"
+#include "gameplayentity.h"
 
 enum
 {
@@ -39,6 +40,7 @@ public:
 	FWallSpriteInfo* wallspriteinfo; // this is render data but needs to be attached to the actor so it can be found.
 
 	spritetype spr;
+	TObjPtr<DGameplayEntity*> gameplayEntity;
 	spriteext_t sprext;
 	spritesmooth_t spsmooth;
 

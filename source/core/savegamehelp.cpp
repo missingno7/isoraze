@@ -636,6 +636,7 @@ FSerializer& Serialize(FSerializer& arc, const char* key, ActorStatList& c, Acto
 void DCorePlayer::Serialize(FSerializer& arc)
 {
 	Super::Serialize(arc);
+	arc("superset.inventory", sharedInventory);
 	arc("pnum", pnum)
 		("actor", actor)
 		("actions", cmd.ucmd.actions)
@@ -654,6 +655,7 @@ void DCorePlayer::Serialize(FSerializer& arc)
 void DCoreActor::Serialize(FSerializer& arc)
 {
 	Super::Serialize(arc);
+	arc("superset.entity", gameplayEntity);
 	arc("link_stat", link_stat)
 		("link_sector", link_sector)
 		("prevstat", prevStat)

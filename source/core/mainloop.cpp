@@ -108,6 +108,7 @@ DCorePlayer* PlayerArray[MAXPLAYERS];
 IMPLEMENT_CLASS(DCorePlayer, true, true)
 IMPLEMENT_POINTERS_START(DCorePlayer)
 IMPLEMENT_POINTER(actor)
+IMPLEMENT_POINTER(sharedInventory)
 IMPLEMENT_POINTERS_END
 
 void MarkPlayers()

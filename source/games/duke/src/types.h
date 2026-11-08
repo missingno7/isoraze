@@ -307,6 +307,10 @@ public:
 
 	short last_extra, subweapon;
 	short ammo_amount[MAX_WEAPONS], frag, fraggedself;
+	auto& AmmoAmounts() { return sharedInventory ? sharedInventory->dukeAmmo : ammo_amount; }
+	const auto& AmmoAmounts() const { return sharedInventory.Get() ? sharedInventory->dukeAmmo : ammo_amount; }
+	auto& WeaponOwnership() { return sharedInventory ? sharedInventory->dukeWeapons : gotweapon; }
+	const auto& WeaponOwnership() const { return sharedInventory.Get() ? sharedInventory->dukeWeapons : gotweapon; }
 
 	short curr_weapon, last_weapon, otipincs, tipincs, wantweaponfire;
 	short holoduke_amount, hurt_delay, hbomb_hold_delay;

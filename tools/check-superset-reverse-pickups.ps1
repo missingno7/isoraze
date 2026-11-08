@@ -31,7 +31,9 @@ cl_loadingscreens=false
 use_mouse=false
 use_joystick=false
 '@ | Set-Content -LiteralPath $config
-    Write-SupersetCheckScript -Commands $Commands -ScriptPath $script
+    # This regression deliberately collects into the inactive arsenal. The
+    # combined-bank check exercises all shared automatic switching policies.
+    Write-SupersetCheckScript -Commands (@('superset_pickup_switch 0') + $Commands) -ScriptPath $script
     $start = [Diagnostics.ProcessStartInfo]::new()
     $start.FileName = $ExePath; $start.WorkingDirectory = Split-Path -Parent $ExePath
     $start.UseShellExecute = $false; $start.CreateNoWindow = $true; $start.WindowStyle = [Diagnostics.ProcessWindowStyle]::Hidden
@@ -54,7 +56,7 @@ function Read-State([string]$Root, [string]$Name) {
     $zip = [IO.Compression.ZipFile]::OpenRead((Join-Path $Root "pickup-$Name.dsave"))
     try {
         $reader = [IO.StreamReader]::new($zip.GetEntry('session.json').Open())
-        try { $data = $reader.ReadToEnd() | ConvertFrom-Json -AsHashtable } finally { $reader.Dispose() }
+        try { $data = (ConvertFrom-SupersetSnapshot ($reader.ReadToEnd())) } finally { $reader.Dispose() }
     } finally { $zip.Dispose() }
     $player = if ($data.Contains('superset.duke_program')) { $data.objects[$data['superset.duke_program'].players[0]] }
         else { @($data.objects | Where-Object { $_.classtype -eq 'DukePlayer' -and $_.Contains('actor') })[0] }

@@ -114,6 +114,7 @@ class BloodPlayer : CorePlayer native
 	native int        weaponMode[14];
 	native int        weaponOrder[2][14];
 	native int        ammoCount[12];
+	native int GetAmmo(int index);
 	native bool       qavLoop;
 	native int        fuseTime;
 	native int        throwTime;

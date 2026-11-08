@@ -1,5 +1,41 @@
 # Blood–Duke Superset
 
+## Shared runtime slice — rules revision 16
+
+The current architecture and migration limits are recorded in
+[superset-migration.md](superset-migration.md). Superset now owns a level registry,
+imported environment/interaction bindings, stable entity identities and lifecycle,
+and one combined weapon/ammo inventory. Both original map formats remain usable.
+The original whole-map world phase and player pose adapters remain temporary.
+
+Both shotguns can be owned in bank 3; press 3 again to cycle them. Next/previous
+also traverses the combined banks. Their ammunition and Blood alternate fire
+remain native. For example, `superset_weapon_bank 3 blood.shotgun duke.shotgun`
+changes the saved order. `superset_pickup_switch 0|1|2` selects manual, newly
+owned (default), or every accepted weapon pickup, using the same policy across
+the entire inventory. Ammo-only pickups do not select weapons. The legacy
+`superset_weapons` commands remain debugging/compatibility controls.
+
+Use `superset_replacement 0|1|2` and `superset_replacement_seed <integer>` before
+loading a map for original, opposite-game or seeded mixed archetypes. The first
+supported imported archetypes are ordinary axe zombies, Pig Cops, and both
+shotgun pickups. Respawning/progression bindings requiring further support stay
+outside replacement. `superset_spawn blood.zombie|duke.pigcop|blood.shotgun|duke.shotgun`
+uses the same common factory and creates a real single actor. Saved choices and
+event bindings restore without rerolling. These direct entities are distinct
+from the earlier paired-enemy diagnostic prototype discussed below.
+
+```powershell
+./tools/check-superset-level.ps1 -DukeGrp D:/dos/duke3D/duke3d.grp -BloodRff D:/prog/isoraze/build-isoraze/run/blood-data/BLOOD.RFF
+./tools/check-superset-arsenal.ps1 -DukeGrp D:/dos/duke3D/duke3d.grp -BloodRff D:/prog/isoraze/build-isoraze/run/blood-data/BLOOD.RFF
+```
+
+The sections below also describe earlier adapter milestones; their remaining
+limits are superseded only where the migration document says so. In particular,
+armor/powerup components and all direct-actor status responses are not yet a
+complete shared inventory/effects model. No movement scaling, ammo sharing or
+armor equivalence is introduced by this migration.
+
 ## Goal and architecture agreed for the experimental branch
 
 Build a first-class combined game module under Raze, with one process and one
@@ -18,9 +54,9 @@ parameters worth generalizing for shared objects. Preserve dedicated collision,
 timing and special-behavior handlers when parameters cannot reproduce an
 algorithm. Enabling a capability must not force every object to use it.
 
-Map logic remains separate: Duke maps use Duke sector effects, switches, doors
-and events; Blood maps use Blood's equivalents. Shared players, enemies, weapons,
-projectiles and pickups access each map through environment services. Health
+Map mechanisms retain their native algorithms behind imported common interaction
+bindings. Shared players, enemies, weapons, projectiles and pickups access the
+runtime level through environment services. Health
 damage, knockback, ignition, freezing and shrinking are distinct operations.
 Character selection supplies an identity and movement profile, not a permanent
 restriction on weapons/pickups. A unified movement profile can be added later.
@@ -36,7 +72,7 @@ The initial playable combination remains:
 - Preserve Duke map geometry, artwork, scenery, mechanisms and world simulation.
 - Use Blood player movement, weapons, alternate fire, health, armor and pickups.
 - Test Atomic Edition maps first, with Duke enemies. Native Blood axe zombies
-  can now be spawned alongside them; automatic enemy replacement comes later.
+  can be spawned alongside them or replace supported source archetypes.
 - Keep Caleb at his native size and maps at their original scale initially.
 - Add jetpack and shrinking compatibility abilities for Duke progression.
 - Develop this independently of the isometric presentation.
@@ -54,7 +90,7 @@ For Duke maps the default player remains Duke. Add `-superset-player caleb` to s
 Blood movement, camera inertia, jumping/crouching and the native pitchfork.
 Blood shotgun/Tommy gun, spray-can primary fire and selected native pickups are
 available through the explicit spawn commands described below; Duke pickups
-are not replaced yet.
+are replaced only where the supported import policy explicitly enables it.
 `-superset-player duke` retains Duke movement. Add `-superset-weapons blood`
 or `-superset-weapons duke` to choose a weapon family independently of the
 character. `-superset-weapons auto` uses the character's default (Caleb/Blood,
@@ -334,8 +370,8 @@ native CON program/restore/content validation fixture
 
 Select `-superset-weapons duke` with the Blood-map launch command above, or use
 `superset_weapons duke` during play. `superset_weapons blood` returns to Caleb's
-native weapons after the current action can safely finish. Both inventories
-are retained separately. Character selection still controls movement and body
+native weapons after the current action can safely finish. Both weapon sets
+are retained in the common inventory. Character selection still controls movement and body
 size independently of this choice.
 
 The first supported Duke attacks are the knee, pistol, shotgun and chaingun.
@@ -605,8 +641,8 @@ This is an incremental native adapter, not the final shared actor/AI model.
 
 No scale compensation is applied: initial idle eye height is 56.6875 world units
 and horizontal radius is 12. Native Blood SEQ state and the selected controller
-are serialized with the session. Save schema is 2; rules revision is now 15
-after adding reverse Duke weapon/pickup state and the chosen fire/ice rule. Earlier
+are serialized with the session. Save schema is 2; rules revision is now 16
+after adding common arsenal, entity identity and level/event state. Earlier
 Superset bootstrap saves are intentionally incompatible with this experimental
 schema. The legacy native game save signatures remain separate.
 

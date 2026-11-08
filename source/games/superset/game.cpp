@@ -19,6 +19,11 @@
 #include "duke_sounds.h"
 #include "duke_weapons.h"
 #include "duke_pickups.h"
+#include "arsenal.h"
+#include "level.h"
+#include "mashup_player.h"
+#include "coreplayer.h"
+#include "build.h"
 #include <memory>
 #include <utility>
 
@@ -47,7 +52,7 @@ bool calebPlayer = false;
 bool bloodMap = false;
 FString bloodDataPath, dukeDataPath;
 constexpr int SaveSchema = 2;
-constexpr int RulesRevision = 15;
+constexpr int RulesRevision = 16;
 constexpr const char* SaveSignature = GAMENAME ".Superset";
 
 FString FingerprintPrimaryArchive()
@@ -99,6 +104,7 @@ public:
 	void app_init() override
 	{
 		world->app_init();
+		InitRuntimeLevel();
 		if (const char* weapons = Args->CheckValue("-superset-weapons"))
 			superset_weapon_profile = !stricmp(weapons, "blood") ? 1 : !stricmp(weapons, "duke") ? 2 : 0;
 		if (bloodMap)
@@ -110,7 +116,7 @@ public:
 			InitDukeEffects();
 		}
 		Printf("Superset frontend: independent identity/configuration/saves; %s map adapter.\n", bloodMap ? "Blood" : "Duke");
-		Printf("Superset controller: %s. Mixed inventory and full damage normalization remain pending.\n",
+		Printf("Superset controller: %s. Shared weapon banks and imported entity lifecycle; other inventory components remain native.\n",
 			CalebSelected() ? "Caleb (native Blood movement)" : "Duke (native Duke movement)");
 	}
 
@@ -183,6 +189,7 @@ public:
 			Duke3d::SerializeSecondaryDukeProgram(arc);
 		}
 		else SerializeBloodControllerState(arc);
+		SerializeRuntimeLevel(arc);
 	}
 
 	// Bootstrap delegation preserves the native map behavior. Shared gameplay
@@ -194,6 +201,7 @@ public:
 	void loadPalette() override { world->loadPalette(); if (bloodMap) Duke3d::InitAnimationTables(); }
 	void FreeLevelData() override
 	{
+		ClearRuntimeLevel();
 		if (bloodMap) { ClearBloodMapDukeWeapons(); ClearDukeEffects(); } else ClearBloodControllerState();
 		world->FreeLevelData();
 	}
@@ -222,14 +230,15 @@ public:
 		{
 			TickDukeEffects();
 			TickBloodMapDukePickups();
-			FinishDukeProjectileStep();
 		}
+		if (PlayClock != before) TickRuntimeLevel();
+		if (bloodMap && PlayClock != before) FinishDukeProjectileStep();
 	}
 	int GetPlayerChecksum(int pnum) override { return world->GetPlayerChecksum(pnum); }
 	const char* CheckCheatMode() override { return world->CheckCheatMode(); }
 	const char* GenericCheat(int player, int cheat) override { return world->GenericCheat(player, cheat); }
-	void NextLevel(MapRecord* map, int skill) override { world->NextLevel(map, skill); }
-	void NewGame(MapRecord* map, int skill, bool special) override { if (bloodMap) ResetBloodMapDukeWeapons(); world->NewGame(map, skill, special); }
+	void NextLevel(MapRecord* map, int skill) override { ClearRuntimeLevel(); world->NextLevel(map, skill); if (!bloodMap) Mashup::PrepareCombat(PlayerArray[myconnectindex]); ImportRuntimeLevel(bloodMap); }
+	void NewGame(MapRecord* map, int skill, bool special) override { ClearRuntimeLevel(); ResetArsenalNewGame(); if (bloodMap) ResetBloodMapDukeWeapons(); world->NewGame(map, skill, special); if (!bloodMap) Mashup::PrepareCombat(PlayerArray[myconnectindex]); ImportRuntimeLevel(bloodMap); }
 	void LevelCompleted(MapRecord* map, int skill) override { world->LevelCompleted(map, skill); }
 	bool DrawAutomapPlayer(const DVector2& mxy, const DVector2& cpos, DAngle cang,
 		const DVector2& xydim, double zoom, double frac) override
@@ -240,7 +249,10 @@ public:
 	void SwitchCoopView() override { world->SwitchCoopView(); }
 	void ToggleShowWeapon() override { world->ToggleShowWeapon(); }
 	void processSprites(tspriteArray& sprites, const DVector3& view, DAngle angle, double frac) override
-		{ world->processSprites(sprites, view, angle, frac); }
+	{
+		world->processSprites(sprites, view, angle, frac);
+		for (unsigned i = 0; i < sprites.Size(); ++i) AnimateRuntimeEntity(sprites.get(i), view.XY(), frac);
+	}
 	void UpdateCameras(double ratio) override { world->UpdateCameras(ratio); }
 	void EnterPortal(DCoreActor* viewer, int type) override { world->EnterPortal(viewer, type); }
 	void LeavePortal(DCoreActor* viewer, int type) override { world->LeavePortal(viewer, type); }
@@ -294,6 +306,7 @@ bool IsDukeMap() { return active && !bloodMap; }
 bool CalebSelected() { return active && calebPlayer; }
 bool BloodWeaponsRequested()
 {
+	if (int family = RequestedWeaponFamily(); family >= 0) return family != 0;
 	int profile = clamp(int(superset_weapon_profile), 0, 2);
 	return active && (profile == 1 || (profile == 0 && (calebPlayer || mashup_combat)));
 }
@@ -308,6 +321,7 @@ CCMD(superset_weapons)
 		else if (!stricmp(argv[1], "blood")) superset_weapon_profile = 1;
 		else if (!stricmp(argv[1], "duke")) superset_weapon_profile = 2;
 		else { Printf("superset_weapons auto|blood|duke\n"); return; }
+		RequestLegacyWeaponFamily(superset_weapon_profile == 1 || (superset_weapon_profile == 0 && (calebPlayer || mashup_combat)));
 	}
 	Printf("Superset weapon family requested: %s.\n", BloodWeaponsRequested() ? "Blood" : "Duke");
 }

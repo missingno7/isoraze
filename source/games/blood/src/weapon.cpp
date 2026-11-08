@@ -29,6 +29,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 #include "blood.h"
 #include "bloodactor.h"
+#include "games/superset/level.h"
+#include "games/superset/superset.h"
 
 BEGIN_BLD_NS
 
@@ -218,7 +220,7 @@ static bool CheckWeaponAmmo(DBloodPlayer* pPlayer, int weapon, int ammotype, int
 		return 1;
 	if (weapon == kWeapLifeLeech && pPlayer->GetActor()->xspr.health > 0)
 		return 1;
-	return pPlayer->ammoCount[ammotype] >= count;
+	return pPlayer->AmmoAmounts()[ammotype] >= count;
 }
 
 //---------------------------------------------------------------------------
@@ -237,7 +239,7 @@ static bool CheckAmmo(DBloodPlayer* pPlayer, int ammotype, int count)
 		return 1;
 	if (pPlayer->curWeapon == kWeapLifeLeech && pPlayer->GetActor()->xspr.health >= unsigned(count << 4))
 		return 1;
-	return pPlayer->ammoCount[ammotype] >= count;
+	return pPlayer->AmmoAmounts()[ammotype] >= count;
 }
 
 //---------------------------------------------------------------------------
@@ -252,7 +254,7 @@ static bool checkAmmo2(const DBloodPlayer* pPlayer, int ammotype, int amount)
 		return 1;
 	if (ammotype == -1)
 		return 1;
-	return pPlayer->ammoCount[ammotype] >= amount;
+	return pPlayer->AmmoAmounts()[ammotype] >= amount;
 }
 
 //---------------------------------------------------------------------------
@@ -503,6 +505,28 @@ void UpdateAimVector(DBloodPlayer* pPlayer)
 				targetactor = actor;
 			}
 		}
+		// Hitscan weapons consume a common aim vector. Native object-targeted
+		// seekers retain their own typed target list until that controller is migrated.
+		if (Superset::IsActive() && !pWeaponTrack->bIsProjectile && pPlayer->curWeapon != kWeapVoodooDoll && pPlayer->curWeapon != kWeapLifeLeech)
+			Superset::ForEachRuntimeTarget([&](const Superset::TargetInfo& target)
+			{
+				auto actor = target.actor;
+				if (!target.alive || dyn_cast<DBloodActor>(actor)) return;
+				auto point = target.aim;
+				double distance = (point.XY() - pos.XY()).Length();
+				if (!distance || distance > 3200) return;
+				auto angle = (point - pos).Angle();
+				if (absangle(angle, plActor->spr.Angles.Yaw) > DAngle::fromBuild(pWeaponTrack->angleRange)) return;
+				auto ray = pos + DVector3(plActor->spr.Angles.Yaw.ToVector(), pPlayer->slope) * distance;
+				double range = distance * (9460 / 16384.);
+				if (ray.Z - range > point.Z + target.height * .5 || ray.Z + range < point.Z - target.height * .5) return;
+				double separation = (ray - point).Length();
+				if (separation >= nClosest || !cansee(pos, plActor->sector(), point, actor->sector())) return;
+				nClosest = separation;
+				Aim.SetXY(angle.ToVector()); Aim.Z = (point.Z - pos.Z) / distance;
+				targetactor = nullptr;
+				if (plActor->gameplayEntity) { plActor->gameplayEntity->target = actor; GC::WriteBarrier(plActor->gameplayEntity, actor); }
+			});
 		if (pWeaponTrack->thingAngle > 0)
 		{
 			BloodStatIterator itr(kStatThing);
@@ -659,24 +683,24 @@ void WeaponRaise(DBloodPlayer* pPlayer)
 	case kWeapShotgun:
 		if (powerupCheck(pPlayer, kPwUpTwoGuns))
 		{
-			if (gInfiniteAmmo || pPlayer->ammoCount[2] >= 4)
+			if (gInfiniteAmmo || pPlayer->AmmoAmounts()[2] >= 4)
 				StartQAV(pPlayer, kQAV2SHOTUP);
 			else
 				StartQAV(pPlayer, kQAVSHOTUP);
-			if (gInfiniteAmmo || pPlayer->ammoCount[2] >= 4)
+			if (gInfiniteAmmo || pPlayer->AmmoAmounts()[2] >= 4)
 				pPlayer->weaponState = 7;
-			else if (pPlayer->ammoCount[2] > 1)
+			else if (pPlayer->AmmoAmounts()[2] > 1)
 				pPlayer->weaponState = 3;
-			else if (pPlayer->ammoCount[2] > 0)
+			else if (pPlayer->AmmoAmounts()[2] > 0)
 				pPlayer->weaponState = 2;
 			else
 				pPlayer->weaponState = 1;
 		}
 		else
 		{
-			if (gInfiniteAmmo || pPlayer->ammoCount[2] > 1)
+			if (gInfiniteAmmo || pPlayer->AmmoAmounts()[2] > 1)
 				pPlayer->weaponState = 3;
-			else if (pPlayer->ammoCount[2] > 0)
+			else if (pPlayer->AmmoAmounts()[2] > 0)
 				pPlayer->weaponState = 2;
 			else
 				pPlayer->weaponState = 1;
@@ -1016,7 +1040,7 @@ void WeaponUpdateState(DBloodPlayer* pPlayer)
 			StartQAV(pPlayer, kQAVLITEFLAM);
 			break;
 		case 2:
-			if (pPlayer->ammoCount[5] > 0)
+			if (pPlayer->AmmoAmounts()[5] > 0)
 			{
 				pPlayer->weaponState = 3;
 				StartQAV(pPlayer, kQAVBUNUP);
@@ -1051,7 +1075,7 @@ void WeaponUpdateState(DBloodPlayer* pPlayer)
 			SetQAV(pPlayer, kQAVREMIDLE2);
 			break;
 		case 12:
-			if (pPlayer->ammoCount[11] > 0)
+			if (pPlayer->AmmoAmounts()[11] > 0)
 			{
 				pPlayer->weaponState = 10;
 				StartQAV(pPlayer, kQAVREMUP2);
@@ -1078,7 +1102,7 @@ void WeaponUpdateState(DBloodPlayer* pPlayer)
 			{
 				sfxPlay3DSound(pPlayer->GetActor(), 410, 3, 2);
 				StartQAV(pPlayer, kQAVSHOTL1, nClientEjectShell);
-				if (gInfiniteAmmo || pPlayer->ammoCount[2] > 1)
+				if (gInfiniteAmmo || pPlayer->AmmoAmounts()[2] > 1)
 					pPlayer->weaponState = 3;
 				else
 					pPlayer->weaponState = 2;
@@ -1748,7 +1772,7 @@ void AltFireVoodoo(int nTrigger, DBloodPlayer* pPlayer)
 		// by NoOne: trying to simulate v1.0x voodoo here.
 		// dunno how exactly it works, but at least it not spend all the ammo on alt fire
 		if (gGameOptions.weaponsV10x && !VanillaMode()) {
-			int nCount = ClipHigh(pPlayer->ammoCount[9], pPlayer->aimTargetsCount);
+			int nCount = ClipHigh(pPlayer->AmmoAmounts()[9], pPlayer->aimTargetsCount);
 			if (nCount > 0)
 			{
 				for (int i = 0; i < pPlayer->aimTargetsCount; i++)
@@ -1760,8 +1784,8 @@ void AltFireVoodoo(int nTrigger, DBloodPlayer* pPlayer)
 					double nDist = (targetactor->spr.pos.XY() - pPlayer->GetActor()->spr.pos.XY()).Length();
 					if (nDist > 0 && nDist < 3200)
 					{
-						int vc = pPlayer->ammoCount[9] >> 3;
-						int v8 = pPlayer->ammoCount[9] << 1;
+						int vc = pPlayer->AmmoAmounts()[9] >> 3;
+						int v8 = pPlayer->AmmoAmounts()[9] << 1;
 						int nDamage = (v8 + Random(vc)) << 4;
 						nDamage = int((nDamage * ((3200 - nDist) + 1/16.)) / 3200);
 						nDamage = actDamageSprite(actor, targetactor, kDamageSpirit, nDamage);
@@ -1783,10 +1807,10 @@ void AltFireVoodoo(int nTrigger, DBloodPlayer* pPlayer)
 		}
 
 		//int nAmmo = pPlayer->ammCount[9];
-		int nCount = ClipHigh(pPlayer->ammoCount[9], pPlayer->aimTargetsCount);
+		int nCount = ClipHigh(pPlayer->AmmoAmounts()[9], pPlayer->aimTargetsCount);
 		if (nCount > 0)
 		{
-			int v4 = pPlayer->ammoCount[9] - (pPlayer->ammoCount[9] / nCount) * nCount;
+			int v4 = pPlayer->AmmoAmounts()[9] - (pPlayer->AmmoAmounts()[9] / nCount) * nCount;
 			for (int i = 0; i < pPlayer->aimTargetsCount; i++)
 			{
 				DBloodActor* targetactor = pPlayer->aimTargets[i];
@@ -1798,8 +1822,8 @@ void AltFireVoodoo(int nTrigger, DBloodPlayer* pPlayer)
 				double nDist = (targetactor->spr.pos.XY() - pPlayer->GetActor()->spr.pos.XY()).Length();
 				if (nDist > 0 && nDist < 3200)
 				{
-					int vc = pPlayer->ammoCount[9] >> 3;
-					int v8 = pPlayer->ammoCount[9] << 1;
+					int vc = pPlayer->AmmoAmounts()[9] >> 3;
+					int v8 = pPlayer->AmmoAmounts()[9] << 1;
 					int nDamage = (v8 + Random2(vc)) << 4;
 					nDamage = int((nDamage * ((3200 - nDist) + 1/16.)) / 3200);
 					nDamage = actDamageSprite(actor, targetactor, kDamageSpirit, nDamage);
@@ -1814,8 +1838,8 @@ void AltFireVoodoo(int nTrigger, DBloodPlayer* pPlayer)
 				}
 			}
 		}
-		UseAmmo(pPlayer, 9, pPlayer->ammoCount[9]);
-		pPlayer->hasWeapon[kWeapVoodooDoll] = 0;
+		UseAmmo(pPlayer, 9, pPlayer->AmmoAmounts()[9]);
+		pPlayer->WeaponOwnership()[kWeapVoodooDoll] = 0;
 		pPlayer->weaponState = -1;
 	}
 }
@@ -1832,11 +1856,11 @@ void DropVoodoo(int, DBloodPlayer* pPlayer)
 	auto spawned = playerFireThing(pPlayer, 0, -4730 / 65536., kThingVoodooHead, 12.8);
 	if (spawned)
 	{
-		spawned->xspr.data1 = pPlayer->ammoCount[9];
+		spawned->xspr.data1 = pPlayer->AmmoAmounts()[9];
 		evPostActor(spawned, 90, kCallbackDropVoodoo);
 		UseAmmo(pPlayer, 6, gAmmoItemData[0].count);
-		UseAmmo(pPlayer, 9, pPlayer->ammoCount[9]);
-		pPlayer->hasWeapon[kWeapVoodooDoll] = 0;
+		UseAmmo(pPlayer, 9, pPlayer->AmmoAmounts()[9]);
+		pPlayer->WeaponOwnership()[kWeapVoodooDoll] = 0;
 	}
 }
 
@@ -1959,7 +1983,7 @@ void AltFireNapalm(int, DBloodPlayer* pPlayer)
 	auto missile = playerFireThing(pPlayer, 0, -4730 / 65536., kThingNapalmBall, 18.13333);
 	if (missile)
 	{
-		missile->xspr.data4 = ClipHigh(pPlayer->ammoCount[4], 12);
+		missile->xspr.data4 = ClipHigh(pPlayer->AmmoAmounts()[4], 12);
 		UseAmmo(pPlayer, 4, missile->xspr.data4);
 		seqSpawn(22, missile, -1);
 		actBurnSprite(pPlayer->GetActor(), missile, 600);
@@ -2018,7 +2042,7 @@ void AltFireLifeLeech(int, DBloodPlayer* pPlayer)
 		evPostActor(missile, 120, kCallbackLeechStateTimer);
 		if (gGameOptions.nGameType <= 1)
 		{
-			int nAmmo = pPlayer->ammoCount[8];
+			int nAmmo = pPlayer->AmmoAmounts()[8];
 			if (nAmmo < 25 && pPlayer->GetActor()->xspr.health > unsigned((25 - nAmmo) << 4))
 			{
 				actDamageSprite(actor, actor, kDamageSpirit, ((25 - nAmmo) << 4));
@@ -2029,10 +2053,10 @@ void AltFireLifeLeech(int, DBloodPlayer* pPlayer)
 		}
 		else
 		{
-			missile->xspr.data3 = pPlayer->ammoCount[8];
-			pPlayer->ammoCount[8] = 0;
+			missile->xspr.data3 = pPlayer->AmmoAmounts()[8];
+			pPlayer->AmmoAmounts()[8] = 0;
 		}
-		pPlayer->hasWeapon[kWeapLifeLeech] = 0;
+		pPlayer->WeaponOwnership()[kWeapLifeLeech] = 0;
 	}
 }
 
@@ -2075,6 +2099,7 @@ static const uint8_t gWeaponUpgrade[][13] = {
 
 int WeaponUpgrade(DBloodPlayer* pPlayer, int newWeapon)
 {
+	if (pPlayer->sharedInventory) return pPlayer->curWeapon; // Shared pickup policy queues selection.
 	int weaponswitch = WeaponSwitch(pPlayer->pnum);
 	int weapon = pPlayer->curWeapon;
 	if (!checkLitSprayOrTNT(pPlayer) && (weaponswitch & 1) && (gWeaponUpgrade[pPlayer->curWeapon][newWeapon] || (weaponswitch & 2)))
@@ -2100,7 +2125,7 @@ static int WeaponFindNext(DBloodPlayer* pPlayer, int* a2, int bDir)
 			weapon = OrderNext[weapon];
 		else
 			weapon = OrderPrev[weapon];
-		if (weaponModes[weapon].update && pPlayer->hasWeapon[weapon])
+		if (weaponModes[weapon].update && pPlayer->WeaponOwnership()[weapon])
 		{
 			if (weapon == kWeapLifeLeech)
 			{
@@ -2152,7 +2177,7 @@ static int WeaponFindLoaded(DBloodPlayer* pPlayer, int* a2)
 		for (int i = 0; i < 14; i++)
 		{
 			int weapon = pPlayer->weaponOrder[vc][i];
-			if (pPlayer->hasWeapon[weapon])
+			if (pPlayer->WeaponOwnership()[weapon])
 			{
 				for (int j = 0; j < weaponModes[weapon].update; j++)
 				{
@@ -2655,7 +2680,7 @@ void WeaponProcess(DBloodPlayer* pPlayer) {
 				return;
 			}
 		}
-		if (pPlayer->GetActor()->xspr.health == 0 || pPlayer->hasWeapon[pPlayer->newWeapon] == 0)
+		if (pPlayer->GetActor()->xspr.health == 0 || pPlayer->WeaponOwnership()[pPlayer->newWeapon] == 0)
 		{
 			pPlayer->newWeapon = kWeapNone;
 			return;
@@ -2882,7 +2907,7 @@ void WeaponProcess(DBloodPlayer* pPlayer) {
 				StartQAV(pPlayer, kQAVREMDROP, nClientDropRemote);
 				return;
 			case 11:
-				if (pPlayer->ammoCount[11] > 0)
+				if (pPlayer->AmmoAmounts()[11] > 0)
 				{
 					pPlayer->weaponState = 10;
 					StartQAV(pPlayer, kQAVREMUP1);
@@ -2907,7 +2932,7 @@ void WeaponProcess(DBloodPlayer* pPlayer) {
 				StartQAV(pPlayer, kQAVREMDROP, nClientDropRemote);
 				return;
 			case 11:
-				if (pPlayer->ammoCount[11] > 0)
+				if (pPlayer->AmmoAmounts()[11] > 0)
 				{
 					pPlayer->weaponState = 10;
 					StartQAV(pPlayer, kQAVREMUP1);

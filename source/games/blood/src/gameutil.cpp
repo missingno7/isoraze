@@ -271,7 +271,7 @@ int VectorScan(DBloodActor* actor, double nOffset, double nZOffset, const DVecto
 	{
 		if (nRange && (gHitInfo.hitpos.XY() - actor->spr.pos.XY()).Length() > nRange)
 			return -1;
-		auto other = gHitInfo.actor();
+		auto other = gHitInfo.hitActor; // Pixel/geometry tracing uses the common actor representation.
 		if (other != nullptr)
 		{
 			if ((other->spr.flags & 8) && !(ac & 1))

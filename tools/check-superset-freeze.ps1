@@ -24,7 +24,7 @@ function Read-State([string]$Path) {
     $archive = [IO.Compression.ZipFile]::OpenRead($Path)
     try {
         $reader = [IO.StreamReader]::new($archive.GetEntry('session.json').Open())
-        try { return $reader.ReadToEnd() | ConvertFrom-Json -AsHashtable } finally { $reader.Dispose() }
+        try { return (ConvertFrom-SupersetSnapshot ($reader.ReadToEnd())) } finally { $reader.Dispose() }
     } finally { $archive.Dispose() }
 }
 function Snapshot([string]$Root, [string]$Name) {

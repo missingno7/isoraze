@@ -521,6 +521,7 @@ IMPLEMENT_CLASS(DCoreActor, false, false)
 
 size_t DCoreActor::PropagateMark()
 {
+	GC::Mark(gameplayEntity);
 	GC::Mark(prevStat);
 	GC::Mark(nextStat);
 	GC::Mark(prevSect);

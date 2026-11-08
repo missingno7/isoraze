@@ -7,6 +7,7 @@
 #include "damage.h"
 #include "superset.h"
 #include "enemies.h"
+#include "level.h"
 #include "mashup_player.h"
 #include "c_dispatch.h"
 #include "vm.h"
@@ -65,13 +66,11 @@ bool ApplyHealthDamage(DCoreActor* target, Damage damage, DCoreActor* source)
 		// amounts into native signed-int resistance, armor and death arithmetic.
 		damage.amount < 0 || damage.amount > Units::FromDukeHealth(INT16_MAX) ||
 		unsigned(damage.kind) > unsigned(DamageKind::Cold)) return false;
-	if (IsBloodMap())
+	if (auto native = dyn_cast<Blood::DBloodActor>(target))
 	{
-		auto native = dyn_cast<Blood::DBloodActor>(target);
-		auto nativeSource = dyn_cast<Blood::DBloodActor>(source);
+		auto nativeSource = BloodState(source);
 		int kind;
-		if (!native || !native->hasX() || !NativeBloodDamageKind(damage.kind, kind) ||
-			(source && !nativeSource)) return false;
+		if (!native->hasX() || !NativeBloodDamageKind(damage.kind, kind)) return false;
 		if (native->spr.statnum == Blood::kStatDude)
 		{
 			if (!native->IsDudeActor()) return false;
@@ -79,12 +78,17 @@ bool ApplyHealthDamage(DCoreActor* target, Damage damage, DCoreActor* source)
 		else if (native->spr.statnum != Blood::kStatThing ||
 			native->spr.type < Blood::kThingBase || native->spr.type >= Blood::kThingMax) return false;
 		// A zero request must not retarget AI or acquire Tesla/heat reactions.
-		if (damage.amount) Blood::actDamageSprite(nativeSource, native, Blood::DAMAGE_TYPE(kind), int(damage.amount));
+		if (damage.amount)
+		{
+			native->supersetDamageSource = source && !nativeSource ? source : nullptr;
+			GC::WriteBarrier(native, native->supersetDamageSource.Get());
+			Blood::actDamageSprite(nativeSource, native, Blood::DAMAGE_TYPE(kind), int(damage.amount));
+		}
 		return true;
 	}
 	if (HasBloodEnemy(target)) return ApplyBloodEnemyDamage(target, damage, source);
 	auto duke = dyn_cast<Duke3d::DDukeActor>(target);
-	if (!IsDukeMap() || !duke) return false;
+	if (!duke) return false;
 	if (duke->isPlayer())
 	{
 		auto player = Duke3d::getPlayer(duke->PlayerIndex());
@@ -143,7 +147,7 @@ bool PrepareDukeHit(Duke3d::DDukeActor* hitter, Damage damage, bool impulse)
 bool ApplyDukeHealthDamage(Duke3d::DDukeActor* target, Damage damage, DCoreActor* source)
 {
 	if (HasBloodEnemy(target)) return ApplyBloodEnemyDamage(target, damage, source);
-	if (!IsDukeMap() || !target || target->spr.extra <= 0 || damage.amount < 0 ||
+	if (!target || target->spr.extra <= 0 || damage.amount < 0 ||
 		damage.amount > Units::FromDukeHealth(INT16_MAX)) return false;
 	if (damage.kind == DamageKind::Heat)
 	{
@@ -158,6 +162,7 @@ bool ApplyDukeHealthDamage(Duke3d::DDukeActor* target, Damage damage, DCoreActor
 		0, DVector2(0, 0), nullAngle, 0, 0, owner, STAT_MISC);
 	if (!hitter) return false;
 	ChangeActorStat(hitter, MAXSTATUS - 2);
+	hitter->supersetAttackSource = source; GC::WriteBarrier(hitter, source);
 	hitter->flags3 |= SFLAG3_NOHITJIBS;
 	bool prepared = PrepareDukeHit(hitter, damage, false);
 	if (prepared) Duke3d::checkhitsprite(target, hitter);
@@ -167,6 +172,12 @@ bool ApplyDukeHealthDamage(Duke3d::DDukeActor* target, Damage damage, DCoreActor
 
 bool AccumulateDukeHit(Duke3d::DDukeActor* target, Duke3d::DDukeActor* hitter)
 {
+	if (IsRuntimeActor(target))
+	{
+		auto source = hitter->supersetAttackSource ? hitter->supersetAttackSource.Get() : hitter->GetOwner();
+		target->gameplayEntity->damageSource = ResolveGameplayActor(source);
+		GC::WriteBarrier(target->gameplayEntity, target->gameplayEntity->damageSource.Get());
+	}
 	if (hitter->supersetHitDamage < 0) return false;
 	// Only reached after native self-hit, size and friendly-fire rejection.
 	// Integer CON health remains a facade: carry every unrepresentable fraction
@@ -360,8 +371,13 @@ CCMD(superset_health_check)
 		!ApplyHealthDamage(target, {Units::FromDukeHealth(INT16_MAX) + 1, DamageKind::Physical}, owner) &&
 		!ApplyHealthDamage(target, {Units::Health(INT_MAX) + 1, DamageKind::Physical}, owner) &&
 		!ApplyHealthDamage(target, {128, DamageKind(255)}, owner) &&
-		!ApplyHealthDamage(target, {128, DamageKind::Cold}, owner) &&
-		!ApplyHealthDamage(target, {128, DamageKind::Physical}, hitter) && target->xspr.health == 16000;
+		!ApplyHealthDamage(target, {128, DamageKind::Cold}, owner) && target->xspr.health == 16000;
+	// Foreign attackers no longer need a Blood shadow actor. The native
+	// receiver still applies its resistance, and retains the real core source.
+	bool foreignSource = ApplyHealthDamage(target, {128, DamageKind::Physical}, hitter) &&
+		target->xspr.health == 16000 - MulScale(128, Blood::getDudeInfo(target->spr.type)->damageVal[Blood::kDamageBullet], 8) &&
+		target->supersetDamageSource == hitter;
+	rejection &= foreignSource;
 	DamageKind kind;
 	rejection &= !DukeDamageKind(Duke3d::DukeFreezeBlastClass, kind) &&
 		!DukeDamageKind(Duke3d::DukeShrinkSparkClass, kind) && !DukeDamageKind(Duke3d::DukeGrowSparkClass, kind);

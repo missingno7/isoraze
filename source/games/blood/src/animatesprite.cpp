@@ -585,7 +585,7 @@ void viewProcessSprites(tspriteArray& tsprites, const DVector3& cPos, DAngle cA,
 		auto owneractor = dyn_cast<DBloodActor>(pTSprite->ownerActor);
 		if (!owneractor)
 		{
-			if (!Superset::DrawDukeEffect(pTSprite, interpfrac)) pTSprite->scale = DVector2(0, 0);
+			if (!Superset::DrawDukeEffect(pTSprite, interpfrac, cPos.XY(), cA)) pTSprite->scale = DVector2(0, 0);
 			continue;
 		}
 		if (owneractor->spr.detail > gDetail)

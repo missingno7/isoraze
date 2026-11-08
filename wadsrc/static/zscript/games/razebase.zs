@@ -250,8 +250,18 @@ struct Raze
 	}
 }
 
+class GameplayInventory native
+{
+	native int16 dukeAmmo[17];
+	native bool dukeWeapons[17];
+	native int bloodAmmo[12];
+	native bool bloodWeapons[14];
+	readonly native int selectedWeapon, pendingWeapon;
+}
+
 class CorePlayer native
 {
+	readonly native GameplayInventory sharedInventory;
 	native readonly uint8 pnum;
 }
 

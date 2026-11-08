@@ -330,7 +330,7 @@ class DukeHandHoldingLaser : DukeActor
 				bomb.temp_angle = bomb.Angle;
 
 				if (p)
-					p.ammo_amount[DukeWpn.TRIPBOMB_WEAPON]--; // this should be elsewhere.
+					p.SetAmmo(DukeWpn.TRIPBOMB_WEAPON, p.GetAmmo(DukeWpn.TRIPBOMB_WEAPON) - 1); // this should be elsewhere.
 			}
 		}
 		return true;

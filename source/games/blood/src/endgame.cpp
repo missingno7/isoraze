@@ -26,6 +26,7 @@
 #include "d_net.h"
 #include "screenjob.h"
 #include "blood.h"
+#include "games/superset/level.h"
 
 BEGIN_BLD_NS
 
@@ -68,6 +69,7 @@ bool AllowedKillType(DBloodActor* actor)
 
 void AddKill(DBloodActor* killer, DBloodActor* killed)
 {
+	if (Superset::EntityDied(killed, killer)) return;
 	if (AllowedKillType(killed))
 	{
 		int playernum = killer && killer->IsPlayerActor() ? killer->GetType() - kDudePlayer1 : -1;

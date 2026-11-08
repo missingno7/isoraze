@@ -9,6 +9,7 @@
 #include "damage.h"
 #include "projectiles.h"
 #include "status.h"
+#include "level.h"
 #include "mashup_player.h"
 #include "mashup_resources.h"
 #include "c_dispatch.h"
@@ -132,7 +133,11 @@ class DukeEnemyWorld final : public Blood::MovementWorldServices
 {
 public:
 	bool NoClip() const override { return false; }
-	bool IsUnderwater(sectortype* sector) const override { return sector->lotag == ST_2_UNDERWATER; }
+	bool IsUnderwater(sectortype* sector) const override
+	{
+		auto environment = LevelEnvironment(sector);
+		return environment.imported ? environment.medium == Medium::Underwater : sector->lotag == ST_2_UNDERWATER;
+	}
 	int SurfaceType(CollisionBase& hit) const override
 	{
 		FTextureID texture = FNullTextureID();

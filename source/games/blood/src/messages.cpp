@@ -82,13 +82,13 @@ void SetAmmo(DBloodPlayer* pPlayer, bool stat)
 	if (stat)
 	{
 		for (int i = 0; i < 12; i++)
-			pPlayer->ammoCount[i] = gAmmoInfo[i].max;
+			pPlayer->AmmoAmounts()[i] = gAmmoInfo[i].max;
 		viewSetMessage(GStrings.GetString("TXTB_FULLAMMO"));
 	}
 	else
 	{
 		for (int i = 0; i < 12; i++)
-			pPlayer->ammoCount[i] = 0;
+			pPlayer->AmmoAmounts()[i] = 0;
 		viewSetMessage(GStrings.GetString("TXTB_NOAMMO"));
 	}
 }
@@ -97,7 +97,7 @@ void SetWeapons(DBloodPlayer* pPlayer, bool stat)
 {
 	for (int i = 0; i < 14; i++)
 	{
-		pPlayer->hasWeapon[i] = stat;
+		pPlayer->WeaponOwnership()[i] = stat;
 	}
 	SetAmmo(pPlayer, stat);
 	if (stat)
@@ -107,7 +107,7 @@ void SetWeapons(DBloodPlayer* pPlayer, bool stat)
 		if (!VanillaMode())
 		{
 			// Keep the pitchfork to avoid freeze
-			pPlayer->hasWeapon[kWeapPitchFork] = 1;
+			pPlayer->WeaponOwnership()[kWeapPitchFork] = 1;
 			pPlayer->curWeapon = kWeapNone;
 			pPlayer->nextWeapon = kWeapPitchFork;
 		}
@@ -418,7 +418,7 @@ const char* GameInterface::GenericCheat(int player, int cheat)
 		SetWooMode(pPlayer, true);
 		powerupActivate(pPlayer, kPwUpDeliriumShroom);
 		pPlayer->GetActor()->xspr.health = 16;
-		pPlayer->hasWeapon[kWeapPitchFork] = 1;
+		pPlayer->WeaponOwnership()[kWeapPitchFork] = 1;
 		pPlayer->curWeapon = kWeapNone;
 		pPlayer->nextWeapon = kWeapPitchFork;
 		break;

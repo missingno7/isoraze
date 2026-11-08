@@ -133,8 +133,8 @@ CCMD(superset_inventory_check)
 		int type = PickupType(argv[2]);
 		switch (type)
 		{
-		case Blood::kItemWeaponSawedoff: pass &= blood->hasWeapon[3] && blood->ammoCount[2] == 8 && blood->curWeapon == 3; break;
-		case Blood::kItemWeaponTommygun: pass &= blood->hasWeapon[4] && blood->ammoCount[3] == 50 && blood->curWeapon == 4; break;
+		case Blood::kItemWeaponSawedoff: pass &= blood->WeaponOwnership()[3] && blood->AmmoAmounts()[2] == 8 && blood->curWeapon == 3; break;
+		case Blood::kItemWeaponTommygun: pass &= blood->WeaponOwnership()[4] && blood->AmmoAmounts()[3] == 50 && blood->curWeapon == 4; break;
 		case Blood::kItemHealthLifeEssense: pass &= state->xspr.health == 1120 && body->spr.extra == 70; break;
 		case Blood::kItemHealthMedPouch: pass &= state->xspr.health == 1600 && body->spr.extra == 100; break;
 		case Blood::kItemArmorBody: pass &= blood->armor[0] == 1600 && blood->armor[1] == 0 && blood->armor[2] == 0; break;
@@ -142,7 +142,7 @@ CCMD(superset_inventory_check)
 		default: pass = false; break;
 		}
 		Printf("Superset inventory collected %s: %s (weapon=%d shells=%d bullets=%d health=%d armor=%d/%d/%d).\n",
-			argv[2], pass ? "PASS" : "FAIL", blood->curWeapon, blood->ammoCount[2], blood->ammoCount[3], state->xspr.health,
+			argv[2], pass ? "PASS" : "FAIL", blood->curWeapon, blood->AmmoAmounts()[2], blood->AmmoAmounts()[3], state->xspr.health,
 			blood->armor[0], blood->armor[1], blood->armor[2]);
 		return;
 	}
@@ -154,8 +154,8 @@ CCMD(superset_inventory_check)
 	}
 	if (!stricmp(argv[1], "snapshot"))
 	{
-		for (int i = 0; i < 12; ++i) snapshot.ammo[i] = blood->ammoCount[i];
-		for (int i = 0; i < 14; ++i) snapshot.weapons[i] = blood->hasWeapon[i];
+		for (int i = 0; i < 12; ++i) snapshot.ammo[i] = blood->AmmoAmounts()[i];
+		for (int i = 0; i < 14; ++i) snapshot.weapons[i] = blood->WeaponOwnership()[i];
 		for (int i = 0; i < 3; ++i) snapshot.armor[i] = blood->armor[i];
 		snapshot.health = state->xspr.health; snapshot.weapon = blood->curWeapon; snapshot.active = true;
 		return;
@@ -169,8 +169,8 @@ CCMD(superset_inventory_check)
 	if (!stricmp(argv[1], "saved"))
 	{
 		bool pass = snapshot.active && snapshot.health == state->xspr.health && snapshot.weapon == blood->curWeapon && FindPickupProbe();
-		for (int i = 0; i < 12; ++i) pass &= snapshot.ammo[i] == blood->ammoCount[i];
-		for (int i = 0; i < 14; ++i) pass &= snapshot.weapons[i] == blood->hasWeapon[i];
+		for (int i = 0; i < 12; ++i) pass &= snapshot.ammo[i] == blood->AmmoAmounts()[i];
+		for (int i = 0; i < 14; ++i) pass &= snapshot.weapons[i] == blood->WeaponOwnership()[i];
 		for (int i = 0; i < 3; ++i) pass &= snapshot.armor[i] == blood->armor[i];
 		Printf("Superset inventory save check: %s.\n", pass ? "PASS" : "FAIL");
 	}

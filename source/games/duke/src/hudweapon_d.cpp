@@ -769,7 +769,7 @@ void displayweapon_d(DDukePlayer* const p, double interpfrac)
 				{
 					const int i = Sgn(*kb >> 2);
 
-					if (p->ammo_amount[p->curr_weapon] & 1)
+					if (p->AmmoAmounts()[p->curr_weapon] & 1)
 					{
 						hud_drawpal(30 + offsets.X, 240 + offsets.Y, "DEVISTATOR", shade, o | 4, pal, angle);
 						hud_drawpal(268 + offsets.X, 238 + offsets.Y, frames[i], -32, o, pal, angle);
@@ -882,7 +882,7 @@ void displayweapon_d(DDukePlayer* const p, double interpfrac)
 			if (*kb == 0)
 			{
 				// the 'at rest' display
-				if (p->ammo_amount[cw] <= 0) //p->last_weapon >= 0)
+				if (p->AmmoAmounts()[cw] <= 0) //p->last_weapon >= 0)
 				{
 					hud_drawpal(184 + offsets.X, 240 + offsets.Y, coilfireframes[(*kb & 3)], -32, o, 0, angle);
 					hud_drawpal(188 + offsets.X, 240 + offsets.Y, "SHRINKERLITE", shade, o, pal, angle);

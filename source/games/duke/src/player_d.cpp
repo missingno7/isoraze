@@ -103,28 +103,28 @@ void selectweapon_d(DDukePlayer* const p, int weap) // playernum, weaponnum
 				switch (p->curr_weapon)
 				{
 					case SHRINKER_WEAPON:
-						if (p->ammo_amount[GROW_WEAPON] > 0 && p->gotweapon[GROW_WEAPON] && isPlutoPak())
+						if (p->AmmoAmounts()[GROW_WEAPON] > 0 && p->WeaponOwnership()[GROW_WEAPON] && isPlutoPak())
 						{
 							j = GROW_WEAPON;
 							p->subweapon |= (1 << GROW_WEAPON);
 						}
 						break;
 					case GROW_WEAPON:
-						if (p->ammo_amount[SHRINKER_WEAPON] > 0 && p->gotweapon[SHRINKER_WEAPON])
+						if (p->AmmoAmounts()[SHRINKER_WEAPON] > 0 && p->WeaponOwnership()[SHRINKER_WEAPON])
 						{
 							j = SHRINKER_WEAPON;
 							p->subweapon &= ~(1 << GROW_WEAPON);
 						}
 						break;
 					case FREEZE_WEAPON:
-						if (p->ammo_amount[FLAMETHROWER_WEAPON] > 0 && p->gotweapon[FLAMETHROWER_WEAPON] && isWorldTour())
+						if (p->AmmoAmounts()[FLAMETHROWER_WEAPON] > 0 && p->WeaponOwnership()[FLAMETHROWER_WEAPON] && isWorldTour())
 						{
 							j = FLAMETHROWER_WEAPON;
 							p->subweapon |= (1 << FLAMETHROWER_WEAPON);
 						}
 						break;
 					case FLAMETHROWER_WEAPON:
-						if (p->ammo_amount[FREEZE_WEAPON] > 0 && p->gotweapon[FREEZE_WEAPON])
+						if (p->AmmoAmounts()[FREEZE_WEAPON] > 0 && p->WeaponOwnership()[FREEZE_WEAPON])
 						{
 							j = FREEZE_WEAPON;
 							p->subweapon &= ~(1 << FLAMETHROWER_WEAPON);
@@ -168,7 +168,7 @@ void selectweapon_d(DDukePlayer* const p, int weap) // playernum, weaponnum
 					if (k == -1) k = 9;
 					else if (k == 10) k = 0;
 
-					if (p->gotweapon[k] && p->ammo_amount[k] > 0 &&
+					if (p->WeaponOwnership()[k] && p->AmmoAmounts()[k] > 0 &&
 						(!Superset::IsDukeWeaponActor(pact) || Superset::DukeWeaponSupported(k)))
 					{
 						if (isPlutoPak())	// JBF 20040116: so we don't select grower with v1.3d
@@ -181,26 +181,26 @@ void selectweapon_d(DDukePlayer* const p, int weap) // playernum, weaponnum
 						j = k;
 						break;
 					}
-					else if (isPlutoPak() && k == GROW_WEAPON && p->ammo_amount[GROW_WEAPON] == 0 && p->gotweapon[SHRINKER_WEAPON] && p->ammo_amount[SHRINKER_WEAPON] > 0)	// JBF 20040116: added isPlutoPak() so we don't select grower with v1.3d
+					else if (isPlutoPak() && k == GROW_WEAPON && p->AmmoAmounts()[GROW_WEAPON] == 0 && p->WeaponOwnership()[SHRINKER_WEAPON] && p->AmmoAmounts()[SHRINKER_WEAPON] > 0)	// JBF 20040116: added isPlutoPak() so we don't select grower with v1.3d
 					{
 						j = SHRINKER_WEAPON;
 						p->subweapon &= ~(1 << GROW_WEAPON);
 						break;
 					}
-					else if (isPlutoPak() && k == SHRINKER_WEAPON && p->ammo_amount[SHRINKER_WEAPON] == 0 && p->gotweapon[SHRINKER_WEAPON] && p->ammo_amount[GROW_WEAPON] > 0)	// JBF 20040116: added isPlutoPak() so we don't select grower with v1.3d
+					else if (isPlutoPak() && k == SHRINKER_WEAPON && p->AmmoAmounts()[SHRINKER_WEAPON] == 0 && p->WeaponOwnership()[SHRINKER_WEAPON] && p->AmmoAmounts()[GROW_WEAPON] > 0)	// JBF 20040116: added isPlutoPak() so we don't select grower with v1.3d
 					{
 						j = GROW_WEAPON;
 						p->subweapon |= (1 << GROW_WEAPON);
 						break;
 					}
 					//Twentieth Anniversary World Tour
-					else if (isWorldTour() && k == FLAMETHROWER_WEAPON && p->ammo_amount[FLAMETHROWER_WEAPON] == 0 && p->gotweapon[FREEZE_WEAPON] && p->ammo_amount[FREEZE_WEAPON] > 0)
+					else if (isWorldTour() && k == FLAMETHROWER_WEAPON && p->AmmoAmounts()[FLAMETHROWER_WEAPON] == 0 && p->WeaponOwnership()[FREEZE_WEAPON] && p->AmmoAmounts()[FREEZE_WEAPON] > 0)
 					{
 						j = FREEZE_WEAPON;
 						p->subweapon &= ~(1 << FLAMETHROWER_WEAPON);
 						break;
 					}
-					else if (isWorldTour() && k == FREEZE_WEAPON && p->ammo_amount[FREEZE_WEAPON] == 0 && p->gotweapon[FLAMETHROWER_WEAPON] && p->ammo_amount[FLAMETHROWER_WEAPON] > 0)
+					else if (isWorldTour() && k == FREEZE_WEAPON && p->AmmoAmounts()[FREEZE_WEAPON] == 0 && p->WeaponOwnership()[FLAMETHROWER_WEAPON] && p->AmmoAmounts()[FLAMETHROWER_WEAPON] > 0)
 					{
 						j = FLAMETHROWER_WEAPON;
 						p->subweapon |= (1 << FLAMETHROWER_WEAPON);
@@ -219,14 +219,14 @@ void selectweapon_d(DDukePlayer* const p, int weap) // playernum, weaponnum
 
 			k = -1;
 
-			if (j == HANDBOMB_WEAPON && p->ammo_amount[HANDBOMB_WEAPON] == 0)
+			if (j == HANDBOMB_WEAPON && p->AmmoAmounts()[HANDBOMB_WEAPON] == 0)
 			{
 				DukeStatIterator it(STAT_ACTOR);
 				while (auto act = it.Next())
 				{
 					if (act->GetClass() == DukePipeBombClass && act->GetOwner() == pact)
 					{
-						p->gotweapon[HANDBOMB_WEAPON] = true;
+						p->WeaponOwnership()[HANDBOMB_WEAPON] = true;
 						j = HANDREMOTE_WEAPON;
 						break;
 					}
@@ -238,17 +238,17 @@ void selectweapon_d(DDukePlayer* const p, int weap) // playernum, weaponnum
 			{
 				if (p->curr_weapon != FLAMETHROWER_WEAPON && p->curr_weapon != FREEZE_WEAPON)
 				{
-					if (p->ammo_amount[FLAMETHROWER_WEAPON] > 0)
+					if (p->AmmoAmounts()[FLAMETHROWER_WEAPON] > 0)
 					{
 						if ((p->subweapon & (1 << FLAMETHROWER_WEAPON)) == (1 << FLAMETHROWER_WEAPON))
 							j = FLAMETHROWER_WEAPON;
-						else if (p->ammo_amount[FREEZE_WEAPON] == 0)
+						else if (p->AmmoAmounts()[FREEZE_WEAPON] == 0)
 						{
 							j = FLAMETHROWER_WEAPON;
 							p->subweapon |= (1 << FLAMETHROWER_WEAPON);
 						}
 					}
-					else if (p->ammo_amount[FREEZE_WEAPON] > 0)
+					else if (p->AmmoAmounts()[FREEZE_WEAPON] > 0)
 						p->subweapon &= ~(1 << FLAMETHROWER_WEAPON);
 				}
 				else if (p->curr_weapon == FREEZE_WEAPON)
@@ -264,17 +264,17 @@ void selectweapon_d(DDukePlayer* const p, int weap) // playernum, weaponnum
 			{
 				if (p->curr_weapon != GROW_WEAPON && p->curr_weapon != SHRINKER_WEAPON)
 				{
-					if (p->ammo_amount[GROW_WEAPON] > 0)
+					if (p->AmmoAmounts()[GROW_WEAPON] > 0)
 					{
 						if ((p->subweapon & (1 << GROW_WEAPON)) == (1 << GROW_WEAPON))
 							j = GROW_WEAPON;
-						else if (p->ammo_amount[SHRINKER_WEAPON] == 0)
+						else if (p->AmmoAmounts()[SHRINKER_WEAPON] == 0)
 						{
 							j = GROW_WEAPON;
 							p->subweapon |= (1 << GROW_WEAPON);
 						}
 					}
-					else if (p->ammo_amount[SHRINKER_WEAPON] > 0)
+					else if (p->AmmoAmounts()[SHRINKER_WEAPON] > 0)
 						p->subweapon &= ~(1 << GROW_WEAPON);
 				}
 				else if (p->curr_weapon == SHRINKER_WEAPON)
@@ -292,7 +292,7 @@ void selectweapon_d(DDukePlayer* const p, int weap) // playernum, weaponnum
 				p->cmd.ucmd.actions |= SB_HOLSTER;
 				p->oweapon_pos = p->weapon_pos = -9;
 			}
-			else if (j >= MIN_WEAPON && p->gotweapon[j] && p->curr_weapon != j) switch (j)
+			else if (j >= MIN_WEAPON && p->WeaponOwnership()[j] && p->curr_weapon != j) switch (j)
 			{
 			case KNEE_WEAPON:
 				fi.addweapon(p, KNEE_WEAPON, true);
@@ -307,7 +307,7 @@ void selectweapon_d(DDukePlayer* const p, int weap) // playernum, weaponnum
 			case GROW_WEAPON:
 			case SHRINKER_WEAPON:
 
-				if (p->ammo_amount[j] == 0 && p->show_empty_weapon == 0)
+				if (p->AmmoAmounts()[j] == 0 && p->show_empty_weapon == 0)
 				{
 					p->show_empty_weapon = 32;
 					p->last_full_weapon = p->curr_weapon;
@@ -324,11 +324,11 @@ void selectweapon_d(DDukePlayer* const p, int weap) // playernum, weaponnum
 				}
 				break;
 			case HANDBOMB_WEAPON:
-				if (p->ammo_amount[HANDBOMB_WEAPON] > 0 && p->gotweapon[HANDBOMB_WEAPON])
+				if (p->AmmoAmounts()[HANDBOMB_WEAPON] > 0 && p->WeaponOwnership()[HANDBOMB_WEAPON])
 					fi.addweapon(p, HANDBOMB_WEAPON, true);
 				break;
 			case TRIPBOMB_WEAPON:
-				if (p->ammo_amount[TRIPBOMB_WEAPON] > 0 && p->gotweapon[TRIPBOMB_WEAPON])
+				if (p->AmmoAmounts()[TRIPBOMB_WEAPON] > 0 && p->WeaponOwnership()[TRIPBOMB_WEAPON])
 					fi.addweapon(p, TRIPBOMB_WEAPON, true);
 				break;
 			}
@@ -922,7 +922,7 @@ static void fireweapon(DDukePlayer* const p)
 	{
 	case HANDBOMB_WEAPON:
 		p->hbomb_hold_delay = 0;
-		if (p->ammo_amount[HANDBOMB_WEAPON] > 0)
+		if (p->AmmoAmounts()[HANDBOMB_WEAPON] > 0)
 			p->kickback_pic = 1;
 		break;
 	case HANDREMOTE_WEAPON:
@@ -931,25 +931,25 @@ static void fireweapon(DDukePlayer* const p)
 		break;
 
 	case PISTOL_WEAPON:
-		if (p->ammo_amount[PISTOL_WEAPON] > 0)
+		if (p->AmmoAmounts()[PISTOL_WEAPON] > 0)
 		{
-			p->ammo_amount[PISTOL_WEAPON]--;
+			p->AmmoAmounts()[PISTOL_WEAPON]--;
 			p->kickback_pic = 1;
 		}
 		break;
 
 
 	case CHAINGUN_WEAPON:
-		if (p->ammo_amount[CHAINGUN_WEAPON] > 0) // && p->random_club_frame == 0)
+		if (p->AmmoAmounts()[CHAINGUN_WEAPON] > 0) // && p->random_club_frame == 0)
 			p->kickback_pic = 1;
 		break;
 
 	case SHOTGUN_WEAPON:
-		if (p->ammo_amount[SHOTGUN_WEAPON] > 0 && p->random_club_frame == 0)
+		if (p->AmmoAmounts()[SHOTGUN_WEAPON] > 0 && p->random_club_frame == 0)
 			p->kickback_pic = 1;
 		break;
 	case TRIPBOMB_WEAPON:
-		if (p->ammo_amount[TRIPBOMB_WEAPON] > 0)
+		if (p->AmmoAmounts()[TRIPBOMB_WEAPON] > 0)
 		{
 			if (operateTripbomb(p))
 				p->kickback_pic = 1;
@@ -960,13 +960,13 @@ static void fireweapon(DDukePlayer* const p)
 	case GROW_WEAPON:
 		if (p->curr_weapon == GROW_WEAPON)
 		{
-			if (p->ammo_amount[GROW_WEAPON] > 0)
+			if (p->AmmoAmounts()[GROW_WEAPON] > 0)
 			{
 				p->kickback_pic = 1;
 				S_PlayActorSound(EXPANDERSHOOT, pact);
 			}
 		}
-		else if (p->ammo_amount[SHRINKER_WEAPON] > 0)
+		else if (p->AmmoAmounts()[SHRINKER_WEAPON] > 0)
 		{
 			p->kickback_pic = 1;
 			S_PlayActorSound(SHRINKER_FIRE, pact);
@@ -974,14 +974,14 @@ static void fireweapon(DDukePlayer* const p)
 		break;
 
 	case FREEZE_WEAPON:
-		if (p->ammo_amount[FREEZE_WEAPON] > 0)
+		if (p->AmmoAmounts()[FREEZE_WEAPON] > 0)
 		{
 			p->kickback_pic = 1;
 			S_PlayActorSound(CAT_FIRE, pact);
 		}
 		break;
 	case DEVISTATOR_WEAPON:
-		if (p->ammo_amount[DEVISTATOR_WEAPON] > 0)
+		if (p->AmmoAmounts()[DEVISTATOR_WEAPON] > 0)
 		{
 			p->kickback_pic = 1;
 			p->hbomb_hold_delay = !p->hbomb_hold_delay;
@@ -990,14 +990,14 @@ static void fireweapon(DDukePlayer* const p)
 		break;
 
 	case RPG_WEAPON:
-		if (p->ammo_amount[RPG_WEAPON] > 0)
+		if (p->AmmoAmounts()[RPG_WEAPON] > 0)
 		{
 			p->kickback_pic = 1;
 		}
 		break;
 
 	case FLAMETHROWER_WEAPON: // Twentieth Anniversary World Tour
-		if (isWorldTour() && p->ammo_amount[FLAMETHROWER_WEAPON] > 0) 
+		if (isWorldTour() && p->AmmoAmounts()[FLAMETHROWER_WEAPON] > 0)
 		{
 			p->kickback_pic = 1;
 			if (p->cursector->lotag != 2)
@@ -1039,7 +1039,7 @@ static void operateweapon(DDukePlayer* const p, ESyncBits actions)
 		{
 			double zvel, vel;
 
-			p->ammo_amount[HANDBOMB_WEAPON]--;
+			p->AmmoAmounts()[HANDBOMB_WEAPON]--;
 
 			if (p->on_ground && (actions & SB_CROUCH))
 			{
@@ -1109,7 +1109,7 @@ static void operateweapon(DDukePlayer* const p, ESyncBits actions)
 			p->okickback_pic = p->kickback_pic = 0;
 			int weapon = isNam() ? TRIPBOMB_WEAPON : HANDBOMB_WEAPON;
 
-			if (p->ammo_amount[weapon] > 0)
+			if (p->AmmoAmounts()[weapon] > 0)
 				fi.addweapon(p, weapon, true);
 			else
 				checkavailweapon(p);
@@ -1132,7 +1132,7 @@ static void operateweapon(DDukePlayer* const p, ESyncBits actions)
 
 		if (p->kickback_pic >= 5)
 		{
-			if (p->ammo_amount[PISTOL_WEAPON] <= 0 || (p->ammo_amount[PISTOL_WEAPON] % (isNam() ? 20 : 12)))
+			if (p->AmmoAmounts()[PISTOL_WEAPON] <= 0 || (p->AmmoAmounts()[PISTOL_WEAPON] % (isNam() ? 20 : 12)))
 			{
 				p->okickback_pic = p->kickback_pic = 0;
 				checkavailweapon(p);
@@ -1171,7 +1171,7 @@ static void operateweapon(DDukePlayer* const p, ESyncBits actions)
 		{
 			for(int ii = 0; ii < 7; ii++)
 				shoot(pact, DukeShotgunShotClass);
-			p->ammo_amount[SHOTGUN_WEAPON]--;
+			p->AmmoAmounts()[SHOTGUN_WEAPON]--;
 
 			S_PlayActorSound(SHOTGUN_FIRE, pact);
 
@@ -1218,13 +1218,13 @@ static void operateweapon(DDukePlayer* const p, ESyncBits actions)
 		{
 			if (((p->kickback_pic) % 3) == 0)
 			{
-				if (p->ammo_amount[CHAINGUN_WEAPON] <= 0)
+				if (p->AmmoAmounts()[CHAINGUN_WEAPON] <= 0)
 				{
-					p->ammo_amount[CHAINGUN_WEAPON] = 0;
+					p->AmmoAmounts()[CHAINGUN_WEAPON] = 0;
 					p->okickback_pic = p->kickback_pic = 0;
 					break;
 				}
-				p->ammo_amount[CHAINGUN_WEAPON]--;
+				p->AmmoAmounts()[CHAINGUN_WEAPON]--;
 
 				if ((p->kickback_pic % 3) == 0)
 				{
@@ -1277,12 +1277,12 @@ static void operateweapon(DDukePlayer* const p, ESyncBits actions)
 			if (isNam())
 			{
 				p->kickback_pic++;
-				if (p->ammo_amount[p->curr_weapon] <= 1)
+				if (p->AmmoAmounts()[p->curr_weapon] <= 1)
 					p->okickback_pic = p->kickback_pic = 0;
 			}
 			else
 				p->okickback_pic = p->kickback_pic = 0;
-			p->ammo_amount[p->curr_weapon]--;
+			p->AmmoAmounts()[p->curr_weapon]--;
 			shoot(pact, DukeGrowSparkClass);
 
 			if (!isNam())
@@ -1311,7 +1311,7 @@ static void operateweapon(DDukePlayer* const p, ESyncBits actions)
 			if (isNam()) p->kickback_pic++; // fire now, but wait for reload...
 			else p->okickback_pic = p->kickback_pic = 0;
 
-			p->ammo_amount[SHRINKER_WEAPON]--;
+			p->AmmoAmounts()[SHRINKER_WEAPON]--;
 			shoot(pact, DukeShrinkerClass);
 
 			if (!isNam())
@@ -1346,7 +1346,7 @@ static void operateweapon(DDukePlayer* const p, ESyncBits actions)
 					p->visibility = 0;
 					lastvisinc = PlayClock + 32;
 					shoot(pact, DukeRPGClass);
-					p->ammo_amount[DEVISTATOR_WEAPON]--;
+					p->AmmoAmounts()[DEVISTATOR_WEAPON]--;
 					checkavailweapon(p);
 				}
 				if (p->kickback_pic > 5) p->okickback_pic = p->kickback_pic = 0;
@@ -1356,9 +1356,9 @@ static void operateweapon(DDukePlayer* const p, ESyncBits actions)
 				p->visibility = 0;
 				lastvisinc = PlayClock + 32;
 				shoot(pact, DukeRPGClass);
-				p->ammo_amount[DEVISTATOR_WEAPON]--;
+				p->AmmoAmounts()[DEVISTATOR_WEAPON]--;
 				checkavailweapon(p);
-				if (p->ammo_amount[DEVISTATOR_WEAPON] <= 0) p->okickback_pic = p->kickback_pic = 0;
+				if (p->AmmoAmounts()[DEVISTATOR_WEAPON] <= 0) p->okickback_pic = p->kickback_pic = 0;
 			}
 			if (p->kickback_pic > 5) p->okickback_pic = p->kickback_pic = 0;
 		}
@@ -1371,7 +1371,7 @@ static void operateweapon(DDukePlayer* const p, ESyncBits actions)
 			p->kickback_pic++;
 			if (p->kickback_pic == 3)
 			{
-				p->ammo_amount[p->curr_weapon]--;
+				p->AmmoAmounts()[p->curr_weapon]--;
 
 				p->visibility = 0;
 				lastvisinc = PlayClock + 32;
@@ -1402,7 +1402,7 @@ static void operateweapon(DDukePlayer* const p, ESyncBits actions)
 		{
 			if (p->cursector->lotag != 2) 
 			{
-				p->ammo_amount[FLAMETHROWER_WEAPON]--;
+				p->AmmoAmounts()[FLAMETHROWER_WEAPON]--;
 				shoot(pact, DukeFireballClass);
 			}
 			checkavailweapon(p);
@@ -1454,7 +1454,7 @@ static void operateweapon(DDukePlayer* const p, ESyncBits actions)
 		p->kickback_pic++;
 		if (p->kickback_pic == 4)
 		{
-			p->ammo_amount[RPG_WEAPON]--;
+			p->AmmoAmounts()[RPG_WEAPON]--;
 			lastvisinc = PlayClock + 32;
 			p->visibility = 0;
 			shoot(pact, DukeRPGClass);
@@ -1491,12 +1491,12 @@ static void processweapon(DDukePlayer* const p, ESyncBits actions)
 				// now it uses the game definitions...
 				if (aplWeaponFlags(p->curr_weapon, p) & WEAPON_FLAG_HOLSTER_CLEARS_CLIP)
 				{
-					if (p->ammo_amount[p->curr_weapon] > aplWeaponClip(p->curr_weapon, p)
-						&& (p->ammo_amount[p->curr_weapon] % aplWeaponClip(p->curr_weapon, p)) != 0)
+					if (p->AmmoAmounts()[p->curr_weapon] > aplWeaponClip(p->curr_weapon, p)
+						&& (p->AmmoAmounts()[p->curr_weapon] % aplWeaponClip(p->curr_weapon, p)) != 0)
 					{
 						// throw away the remaining clip
-						p->ammo_amount[p->curr_weapon] -=
-							p->ammo_amount[p->curr_weapon] % aplWeaponClip(p->curr_weapon, p);
+						p->AmmoAmounts()[p->curr_weapon] -=
+							p->AmmoAmounts()[p->curr_weapon] % aplWeaponClip(p->curr_weapon, p);
 						p->kickback_pic = aplWeaponTotalTime(p->curr_weapon, p) + 1;	// animate, but don't shoot...
 						actions &= ~SB_FIRE; // not firing...
 					}
@@ -1506,10 +1506,10 @@ static void processweapon(DDukePlayer* const p, ESyncBits actions)
 		}
 		else if (p->curr_weapon == PISTOL_WEAPON)
 		{
-			if (p->ammo_amount[PISTOL_WEAPON] > 20)
+			if (p->AmmoAmounts()[PISTOL_WEAPON] > 20)
 			{
 				// throw away the remaining clip
-				p->ammo_amount[PISTOL_WEAPON] -= p->ammo_amount[PISTOL_WEAPON] % 20;
+				p->AmmoAmounts()[PISTOL_WEAPON] -= p->AmmoAmounts()[PISTOL_WEAPON] % 20;
 				p->kickback_pic = 3;	// animate, but don't shoot...
 				actions &= ~SB_FIRE; // not firing...
 			}

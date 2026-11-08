@@ -42,6 +42,7 @@ inline bool isDukeEngine() { return DukeGameFlags() & (GAMEFLAG_NAM | GAMEFLAG_N
 void InitSecondaryDukeProgram(const char* rootCon);
 DDukePlayer* SecondaryDukePlayer(int index);
 void BindSecondaryDukeActor(PClassActor* type, int tile);
+int SecondaryDukeActorTile(PClass* type);
 const ActorInfo* SecondaryDukeActorInfo(PClass* type);
 PClassActor* ConSpawnType(int tile);
 void SerializeSecondaryDukeProgram(FSerializer& arc);

@@ -28,6 +28,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "build.h"
 
 #include "blood.h"
+#include "games/superset/arsenal.h"
+#include "games/superset/level.h"
 #include "gstrings.h"
 #include "gamestate.h"
 #include "automap.h"
@@ -927,10 +929,10 @@ void playerReset(DBloodPlayer* pPlayer)
 	assert(pPlayer != NULL);
 	for (int i = 0; i < 14; i++)
 	{
-		pPlayer->hasWeapon[i] = gInfiniteAmmo;
+		pPlayer->WeaponOwnership()[i] = gInfiniteAmmo;
 		pPlayer->weaponMode[i] = 0;
 	}
-	pPlayer->hasWeapon[kWeapPitchFork] = 1;
+	pPlayer->WeaponOwnership()[kWeapPitchFork] = 1;
 	pPlayer->curWeapon = kWeapNone;
 	pPlayer->qavCallback = -1;
 	pPlayer->newWeapon = kWeapPitchFork;
@@ -942,9 +944,9 @@ void playerReset(DBloodPlayer* pPlayer)
 	for (int i = 0; i < 12; i++)
 	{
 		if (gInfiniteAmmo)
-			pPlayer->ammoCount[i] = gAmmoInfo[i].max;
+			pPlayer->AmmoAmounts()[i] = gAmmoInfo[i].max;
 		else
-			pPlayer->ammoCount[i] = 0;
+			pPlayer->AmmoAmounts()[i] = 0;
 	}
 	for (int i = 0; i < 3; i++)
 		pPlayer->armor[i] = 0;
@@ -1259,16 +1261,18 @@ bool PickupAmmo(DBloodPlayer* pPlayer, DBloodActor* ammoactor)
 {
 	const AMMOITEMDATA* pAmmoItemData = &gAmmoItemData[ammoactor->spr.type - kItemAmmoBase];
 	int nAmmoType = pAmmoItemData->type;
+	bool newlyOwned = pAmmoItemData->weaponType && !pPlayer->WeaponOwnership()[pAmmoItemData->weaponType];
 
-	if (pPlayer->ammoCount[nAmmoType] >= gAmmoInfo[nAmmoType].max) return 0;
+	if (pPlayer->AmmoAmounts()[nAmmoType] >= gAmmoInfo[nAmmoType].max) return 0;
 #ifdef NOONE_EXTENSIONS
 	else if (gModernMap && ammoactor->hasX() && ammoactor->xspr.data1 > 0) // allow custom amount for item
-		pPlayer->ammoCount[nAmmoType] = ClipHigh(pPlayer->ammoCount[nAmmoType] + ammoactor->xspr.data1, gAmmoInfo[nAmmoType].max);
+		pPlayer->AmmoAmounts()[nAmmoType] = ClipHigh(pPlayer->AmmoAmounts()[nAmmoType] + ammoactor->xspr.data1, gAmmoInfo[nAmmoType].max);
 #endif
 	else
-		pPlayer->ammoCount[nAmmoType] = ClipHigh(pPlayer->ammoCount[nAmmoType] + pAmmoItemData->count, gAmmoInfo[nAmmoType].max);
+		pPlayer->AmmoAmounts()[nAmmoType] = ClipHigh(pPlayer->AmmoAmounts()[nAmmoType] + pAmmoItemData->count, gAmmoInfo[nAmmoType].max);
 
-	if (pAmmoItemData->weaponType)  pPlayer->hasWeapon[pAmmoItemData->weaponType] = 1;
+	if (pAmmoItemData->weaponType)  pPlayer->WeaponOwnership()[pAmmoItemData->weaponType] = 1;
+	if (pAmmoItemData->weaponType) Superset::WeaponPickup(pPlayer, true, pAmmoItemData->weaponType, newlyOwned);
 	sfxPlay3DSound(pPlayer->GetActor(), 782, -1, 0);
 	return 1;
 }
@@ -1284,20 +1288,22 @@ bool PickupWeapon(DBloodPlayer* pPlayer, DBloodActor* weaponactor)
 	const WEAPONITEMDATA* pWeaponItemData = &gWeaponItemData[weaponactor->spr.type - kItemWeaponBase];
 	int nWeaponType = pWeaponItemData->type;
 	int nAmmoType = pWeaponItemData->ammoType;
-	if (!pPlayer->hasWeapon[nWeaponType] || gGameOptions.nWeaponSettings == 2 || gGameOptions.nWeaponSettings == 3) {
+	bool newlyOwned = !pPlayer->WeaponOwnership()[nWeaponType];
+	if (!pPlayer->WeaponOwnership()[nWeaponType] || gGameOptions.nWeaponSettings == 2 || gGameOptions.nWeaponSettings == 3) {
 		if (weaponactor->spr.type == kItemWeaponLifeLeech && gGameOptions.nGameType > 1 && findDroppedLeech(pPlayer, NULL))
 			return 0;
-		pPlayer->hasWeapon[nWeaponType] = 1;
+		pPlayer->WeaponOwnership()[nWeaponType] = 1;
 		if (nAmmoType == -1) return 0;
 		// allow to set custom ammo count for weapon pickups
 #ifdef NOONE_EXTENSIONS
 		else if (gModernMap && weaponactor->hasX() && weaponactor->xspr.data1 > 0)
-			pPlayer->ammoCount[nAmmoType] = ClipHigh(pPlayer->ammoCount[nAmmoType] + weaponactor->xspr.data1, gAmmoInfo[nAmmoType].max);
+			pPlayer->AmmoAmounts()[nAmmoType] = ClipHigh(pPlayer->AmmoAmounts()[nAmmoType] + weaponactor->xspr.data1, gAmmoInfo[nAmmoType].max);
 #endif
 		else
-			pPlayer->ammoCount[nAmmoType] = ClipHigh(pPlayer->ammoCount[nAmmoType] + pWeaponItemData->count, gAmmoInfo[nAmmoType].max);
+			pPlayer->AmmoAmounts()[nAmmoType] = ClipHigh(pPlayer->AmmoAmounts()[nAmmoType] + pWeaponItemData->count, gAmmoInfo[nAmmoType].max);
 
 		int nNewWeapon = WeaponUpgrade(pPlayer, nWeaponType);
+		Superset::WeaponPickup(pPlayer, true, nWeaponType, newlyOwned);
 		if (nNewWeapon != pPlayer->curWeapon) {
 			pPlayer->weaponState = 0;
 			pPlayer->nextWeapon = nNewWeapon;
@@ -1306,15 +1312,16 @@ bool PickupWeapon(DBloodPlayer* pPlayer, DBloodActor* weaponactor)
 		return 1;
 	}
 
-	if (!actGetRespawnTime(weaponactor) || nAmmoType == -1 || pPlayer->ammoCount[nAmmoType] >= gAmmoInfo[nAmmoType].max) return 0;
+	if (!actGetRespawnTime(weaponactor) || nAmmoType == -1 || pPlayer->AmmoAmounts()[nAmmoType] >= gAmmoInfo[nAmmoType].max) return 0;
 #ifdef NOONE_EXTENSIONS
 	else if (gModernMap && weaponactor->hasX() && weaponactor->xspr.data1 > 0)
-		pPlayer->ammoCount[nAmmoType] = ClipHigh(pPlayer->ammoCount[nAmmoType] + weaponactor->xspr.data1, gAmmoInfo[nAmmoType].max);
+		pPlayer->AmmoAmounts()[nAmmoType] = ClipHigh(pPlayer->AmmoAmounts()[nAmmoType] + weaponactor->xspr.data1, gAmmoInfo[nAmmoType].max);
 #endif
 	else
-		pPlayer->ammoCount[nAmmoType] = ClipHigh(pPlayer->ammoCount[nAmmoType] + pWeaponItemData->count, gAmmoInfo[nAmmoType].max);
+		pPlayer->AmmoAmounts()[nAmmoType] = ClipHigh(pPlayer->AmmoAmounts()[nAmmoType] + pWeaponItemData->count, gAmmoInfo[nAmmoType].max);
 
 	sfxPlay3DSound(pPlayer->GetActor(), 777, -1, 0);
+	Superset::WeaponPickup(pPlayer, true, nWeaponType, false);
 	return 1;
 }
 
@@ -1355,10 +1362,11 @@ void PickUp(DBloodPlayer* pPlayer, DBloodActor* actor, PlayerWorldServices* worl
 	if (!pickedUp) return;
 	else if (!world && actor->hasX())
 	{
-		if (actor->xspr.Pickup)
+		if (actor->xspr.Pickup && !Superset::IsRuntimeActor(actor))
 			trTriggerSprite(actor, kCmdSpritePickup);
 	}
 
+	Superset::EntityPickedUp(actor, pPlayer->GetActor());
 	if (world) world->PickupTaken(pPlayer, actor);
 	else if (!actCheckRespawn(actor))
 		actPostSprite(actor, kStatFree);
@@ -1635,7 +1643,9 @@ void ProcessInput(DBloodPlayer* pPlayer, PlayerWorldServices* world, PlayerWeapo
 				sndStartSample(snd, 255, 2, 0);
 			}
 			if (!key || pPlayer->hasKey[key])
-				trTriggerSector(pSector, kCmdSpritePush);
+			{
+				if (!Superset::ActivateLevelSector(pSector, pPlayer->GetActor())) trTriggerSector(pSector, kCmdSpritePush);
+			}
 			else if (pPlayer->pnum == myconnectindex)
 			{
 				viewSetMessage(GStrings.GetString("TXTB_KEY"));
@@ -2243,8 +2253,8 @@ int UseAmmo(DBloodPlayer* pPlayer, int nAmmoType, int nDec)
 		return 9999;
 	if (nAmmoType == -1)
 		return 9999;
-	pPlayer->ammoCount[nAmmoType] = ClipLow(pPlayer->ammoCount[nAmmoType] - nDec, 0);
-	return pPlayer->ammoCount[nAmmoType];
+	pPlayer->AmmoAmounts()[nAmmoType] = ClipLow(pPlayer->AmmoAmounts()[nAmmoType] - nDec, 0);
+	return pPlayer->AmmoAmounts()[nAmmoType];
 }
 
 //---------------------------------------------------------------------------
@@ -2403,6 +2413,7 @@ FSerializer& Serialize(FSerializer& arc, const char* keyname, POSTURE& w, POSTUR
 void DBloodPlayer::Serialize(FSerializer& arc)
 {
 	Super::Serialize(arc);
+	if (!sharedInventory) arc.Array("hasweapon", hasWeapon, countof(hasWeapon)).Array("ammocount", ammoCount, countof(ammoCount));
 	arc("newweapon", newWeapon)
 		("weaponqav", weaponQav)
 		("qavcallback", qavCallback)
@@ -2432,10 +2443,8 @@ void DBloodPlayer::Serialize(FSerializer& arc)
 		("weapontimer", weaponTimer)
 		("weaponstate", weaponState)
 		("weaponammo", weaponAmmo)
-		.Array("hasweapon", hasWeapon, countof(hasWeapon))
 		.Array("weaponmode", weaponMode, countof(weaponMode))
 		.Array("weaponorder", &weaponOrder[0][kWeapNone], +kWeapMax * 2)
-		.Array("ammocount", ammoCount, countof(ammoCount))
 		("qavloop", qavLoop)
 		("qavlastTick", qavLastTick)
 		("qavtimer", qavTimer)
@@ -2589,6 +2598,11 @@ DEFINE_FIELD(DBloodPlayer, weaponTimer)
 DEFINE_FIELD(DBloodPlayer, weaponState)
 DEFINE_FIELD(DBloodPlayer, weaponAmmo)  //rename
 DEFINE_FIELD(DBloodPlayer, hasWeapon)
+DEFINE_ACTION_FUNCTION(DBloodPlayer, GetAmmo)
+{
+	PARAM_SELF_PROLOGUE(DBloodPlayer); PARAM_INT(index);
+	ACTION_RETURN_INT(unsigned(index) < 12 ? self->AmmoAmounts()[index] : 0);
+}
 DEFINE_FIELD(DBloodPlayer, weaponMode)
 DEFINE_FIELD(DBloodPlayer, weaponOrder)
 DEFINE_FIELD(DBloodPlayer, ammoCount)

@@ -56,7 +56,7 @@ function Read-State([string]$Name) {
     $zip = [IO.Compression.ZipFile]::OpenRead((Join-Path $runRoot "reverse-$Name.dsave"))
     try {
         $reader = [IO.StreamReader]::new($zip.GetEntry('session.json').Open())
-        try { $data = $reader.ReadToEnd() | ConvertFrom-Json -AsHashtable } finally { $reader.Dispose() }
+        try { $data = (ConvertFrom-SupersetSnapshot ($reader.ReadToEnd())) } finally { $reader.Dispose() }
     } finally { $zip.Dispose() }
     $p = $data.objects[$data['superset.duke_program'].players[0]]
     $target = @($data.objects | Where-Object { $_.classtype -eq 'BloodActor' -and $_.sprite.owner -eq 31036 })[0]

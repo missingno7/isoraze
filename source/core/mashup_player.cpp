@@ -15,6 +15,7 @@
 #include "games/superset/damage.h"
 #include "games/superset/enemies.h"
 #include "games/superset/status.h"
+#include "games/superset/arsenal.h"
 #include "v_draw.h"
 #include "v_text.h"
 
@@ -128,13 +129,13 @@ CCMD(mashup_combat_input_check)
 		inputProbeActive = true;
 		inputProbeVectors = 0;
 		inputProbeTicks = inputProbeFireTicks = 0;
-		memcpy(inputProbeAmmo, duke->ammo_amount, sizeof(inputProbeAmmo));
+		memcpy(inputProbeAmmo, duke->AmmoAmounts(), sizeof(inputProbeAmmo));
 		return;
 	}
 	// A moving floor can carry the player over a pickup while Fire is held (the
 	// stock E2L1 start does this). Permit inventory gains, but never consumption.
 	bool noConsumption = true;
-	for (unsigned i = 0; i < countof(inputProbeAmmo); ++i) noConsumption &= duke->ammo_amount[i] >= inputProbeAmmo[i];
+	for (unsigned i = 0; i < countof(inputProbeAmmo); ++i) noConsumption &= duke->AmmoAmounts()[i] >= inputProbeAmmo[i];
 	bool passed = inputProbeActive && inputProbeFireTicks > 0 && inputProbeVectors > 0 && duke->kickback_pic == 0 && noConsumption;
 	inputProbeActive = false;
 	if (!passed)
@@ -226,11 +227,11 @@ CCMD(superset_weapon_input_check)
 		bool alternate = !stricmp(argv[3], "alternate");
 		weaponProbeVector = weaponProbeWeapon == Blood::kWeapShotgun ?
 			(alternate ? Blood::kVectorShellAP : Blood::kVectorShell) : (alternate ? Blood::kVectorTommyAP : Blood::kVectorTommyRegular);
-		weaponProbeBefore = blood->ammoCount[weaponProbeAmmo];
+		weaponProbeBefore = blood->AmmoAmounts()[weaponProbeAmmo];
 		inputProbeActive = true;
 		inputProbeVectors = inputProbeTicks = inputProbeFireTicks = 0;
 		memset(inputProbeVectorTypes, 0, sizeof(inputProbeVectorTypes));
-		memcpy(inputProbeAmmo, duke->ammo_amount, sizeof(inputProbeAmmo));
+		memcpy(inputProbeAmmo, duke->AmmoAmounts(), sizeof(inputProbeAmmo));
 		auto pos = DVector3(blood->GetActor()->spr.pos.XY(), blood->zWeapon) + body->spr.Angles.Yaw.ToVector() * 32;
 		target = Duke3d::CreateActor(body->sector(), pos, PClass::FindActor("DukeLizTrooper"),
 			0, DVector2(3, 3), nullAngle, 0, 0, body, STAT_MISC);
@@ -245,14 +246,14 @@ CCMD(superset_weapon_input_check)
 		}
 		return;
 	}
-	int spent = weaponProbeBefore - blood->ammoCount[weaponProbeAmmo];
+	int spent = weaponProbeBefore - blood->AmmoAmounts()[weaponProbeAmmo];
 	bool ammo = spent > 0 && inputProbeVectors == spent * (weaponProbeWeapon == Blood::kWeapShotgun ? 16 : 1);
 	// Native weapons may switch automatically after firing their last round.
 	bool vectors = inputProbeActive && inputProbeFireTicks > 0 &&
 		inputProbeVectors > 0 && inputProbeVectorTypes[weaponProbeVector] == inputProbeVectors;
 	bool damage = target && target->hitextra > 0 && target->attackertype == Duke3d::DukeShotSparkClass && target->GetHitOwner() == body;
 	bool nativeAmmo = true;
-	for (unsigned i = 0; i < countof(inputProbeAmmo); ++i) nativeAmmo &= duke->ammo_amount[i] >= inputProbeAmmo[i];
+	for (unsigned i = 0; i < countof(inputProbeAmmo); ++i) nativeAmmo &= duke->AmmoAmounts()[i] >= inputProbeAmmo[i];
 	Printf("Superset weapon input check: vectors=%s, Blood ammo=%s, Duke hit=%s, Duke ammo=%s (weapon=%d spent=%d vectors=%d hits=%d).\n",
 		vectors ? "PASS" : "FAIL", ammo ? "PASS" : "FAIL", damage ? "PASS" : "FAIL", nativeAmmo ? "PASS" : "FAIL",
 		weaponProbeWeapon, spent, inputProbeVectors, target ? int(target->hitextra) : -1);
@@ -325,9 +326,12 @@ void PrepareCombat(DCorePlayer* player)
 		GC::WriteBarrier(duke, blood);
 	}
 	blood->GetActor()->supersetWorldActor = duke->GetActor();
+	Superset::BindInventory(duke, blood, duke);
+	Superset::PrepareArsenalInput(duke, blood, duke);
 	GC::WriteBarrier(blood->GetActor(), duke->GetActor());
 	if (!Superset::PrepareBloodMovement(duke)) SyncPose(duke, blood);
 	PrepareWeaponFamily(duke, blood);
+	Superset::ApplyArsenalSelection(duke, blood, duke);
 	blood->cmd = duke->cmd;
 	if (!CombatEnabled()) return;
 	if (duke->newOwner || Duke3d::ud.cameraactor) blood->cmd.ucmd.actions &= ~(SB_FIRE | SB_ALTFIRE);
@@ -394,7 +398,7 @@ bool DrawCombat(DCorePlayer* player, double interpolation)
 		const char* name = blood->curWeapon == Blood::kWeapShotgun ? "Shotgun" : blood->curWeapon == Blood::kWeapTommyGun ? "Tommy gun" :
 			blood->curWeapon == Blood::kWeapSpraycan ? "Spray can (primary)" : "Pitchfork";
 		FString line = FStringf("Blood %s", name);
-		if (blood->weaponAmmo >= 0) line.AppendFormat("   Ammo %d", blood->ammoCount[blood->weaponAmmo]);
+		if (blood->weaponAmmo >= 0) line.AppendFormat("   Ammo %d", blood->AmmoAmounts()[blood->weaponAmmo]);
 		DrawText(twod, SmallFont, CR_WHITE, 6, 150, line.GetChars(), DTA_VirtualWidth, 320, DTA_VirtualHeight, 200, DTA_KeepRatio, true, TAG_DONE);
 		if (Superset::HasBloodMovement(player))
 		{
@@ -428,6 +432,12 @@ bool FireBloodVector(DCoreActor* source, double offset, double zoffset, DVector3
 	hitscan(origin, source->sector(), direction * 1024., hit, CLIPMASK1);
 	body->spr.cstat = flags;
 	if (!hit.hitSector || (range > 0 && (hit.hitpos.XY() - origin.XY()).Length() >= range)) return true;
+	if (auto bloodTarget = dyn_cast<Blood::DBloodActor>(hit.hitActor); Superset::IsActive() && bloodTarget)
+	{
+		Superset::ApplyHealthDamage(bloodTarget, Superset::BloodVectorDamage(type, bloodTarget->IsPlayerActor()), source);
+		Superset::ApplyBloodVectorImpulse(bloodTarget, type, direction);
+		return true;
+	}
 	auto attackClass = type == Blood::kVectorTine || type == Blood::kVectorAxe ? Duke3d::DukeMeleeAttackClass : Duke3d::DukeShotSparkClass;
 	auto hitter = Duke3d::CreateActor(hit.hitSector, hit.hitpos, attackClass,
 		-15, DVector2(0, 0), source->spr.Angles.Yaw, 0, 0, body, STAT_PROJECTILE);

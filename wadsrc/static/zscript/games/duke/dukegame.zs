@@ -240,6 +240,9 @@ class DukePlayer : CorePlayer native
 
 	native vector3 vel;
 	native bool gotweapon[DukeWpn.MAX_WEAPONS];
+	native int GetAmmo(int index);
+	native void SetAmmo(int index, int amount);
+	native bool OwnsWeapon(int index);
 
 	// Palette management uses indices into the engine's palette table now.
 	native color pals;

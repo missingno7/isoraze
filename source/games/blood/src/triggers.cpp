@@ -241,8 +241,8 @@ void LifeLeechOperate(DBloodActor* actor, EVENT event)
 			if (pPlayer->GetActor()->xspr.health > 0)
 			{
 				evKillActor(actor);
-				pPlayer->ammoCount[8] = ClipHigh(pPlayer->ammoCount[8] + actor->xspr.data3, gAmmoInfo[8].max);
-				pPlayer->hasWeapon[kWeapLifeLeech] = 1;
+				pPlayer->AmmoAmounts()[8] = ClipHigh(pPlayer->AmmoAmounts()[8] + actor->xspr.data3, gAmmoInfo[8].max);
+				pPlayer->WeaponOwnership()[kWeapLifeLeech] = 1;
 				if (pPlayer->curWeapon != kWeapLifeLeech)
 				{
 					if (!VanillaMode() && checkLitSprayOrTNT(pPlayer)) // if tnt/spray is actively used, do not switch weapon

@@ -109,8 +109,8 @@ void DDukePlayer::Serialize(FSerializer& arc)
 	arc("superset.weapon_mode", supersetWeaponMode)("superset.stowed_blood_weapon", supersetStowedBloodWeapon);
 	arc("superset.foreign_weapons_initialized", supersetForeignWeaponsInitialized);
 	arc("superset.foreign_start_with_weapons", supersetForeignStartWithWeapons);
-	arc.Array("gotweapon", gotweapon, MAX_WEAPONS)
-		("pals", pals)
+	if (!sharedInventory) arc.Array("gotweapon", gotweapon, MAX_WEAPONS).Array("ammo_count", ammo_amount, MAX_WEAPONS);
+	arc("pals", pals)
 		("fric", fric)
 		("exit", Exit)
 		("numloogs", numloogs)
@@ -133,7 +133,6 @@ void DDukePlayer::Serialize(FSerializer& arc)
 		("cursectnum", cursector)
 		("last_extra", last_extra)
 		("subweapon", subweapon)
-		.Array("ammo_count", ammo_amount, MAX_WEAPONS)
 		("wackedbyactor", wackedbyactor)
 		("frag", frag)
 		("fraggedself", fraggedself)

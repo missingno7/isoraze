@@ -34,6 +34,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "mashup_player.h"
 #include "games/superset/projectiles.h"
 #include "games/superset/superset.h"
+#include "games/superset/level.h"
+#include "games/superset/damage.h"
 
 BEGIN_BLD_NS
 
@@ -3400,13 +3402,14 @@ void actKillDude(DBloodActor* killerActor, DBloodActor* actor, DAMAGE_TYPE damag
 	int nType = actor->spr.type - kDudeBase;
 
 	if (actKillDudeStage1(actor, damageType)) return;
+	Superset::EntityDied(actor, (!killerActor || killerActor == actor) && actor->supersetDamageSource ? actor->supersetDamageSource.Get() : killerActor);
 
 	for (int p = connecthead; p >= 0; p = connectpoint2[p])
 	{
 		if (getPlayer(p)->fragger == actor && getPlayer(p)->deathTime > 0)
 			getPlayer(p)->fragger = nullptr;
 	}
-	if (!actor->supersetWorldActor && actor->spr.type != kDudeCultistBeast)
+	if (!actor->supersetWorldActor && !Superset::IsRuntimeActor(actor) && actor->spr.type != kDudeCultistBeast)
 		trTriggerSprite(actor, kCmdOff, killerActor);
 
 	actor->spr.flags |= 7;
@@ -6679,6 +6682,11 @@ void actFireVector(DBloodActor* shooter, double offset, double zoffset, DVector3
 	if (nRange < 0) nRange = pVectorData->fMaxDist();
 	// The vector for hitscan must be longer than what we got here as long as it works with integers.
 	int hit = VectorScan(shooter, offset, zoffset, dv, nRange, 1);
+	if (hit == 3 && Superset::IsActive() && gHitInfo.hitActor && !dyn_cast<DBloodActor>(gHitInfo.hitActor))
+	{
+		Superset::ApplyHealthDamage(gHitInfo.hitActor, Superset::BloodVectorDamage(vectorType, false), shooter);
+		return;
+	}
 	if (hit == 3)
 	{
 		auto hitactor = gHitInfo.actor();

@@ -15,6 +15,7 @@
 #include "projectiles.h"
 #include "enemies.h"
 #include "status.h"
+#include "level.h"
 #include "c_dispatch.h"
 
 namespace Blood { void SerializeSequences(FSerializer& arc); void SerializeEvents(FSerializer& arc); }
@@ -131,7 +132,11 @@ public:
 	bool useRequested = false;
 	bool UseBloodWeapons() const override { return Mashup::IsCombatPlayer(Duke3d::getPlayer(myconnectindex)); }
 	bool NoClip() const override { return Duke3d::ud.clipping != 0; }
-	bool IsUnderwater(sectortype* sector) const override { return sector->lotag == ST_2_UNDERWATER; }
+	bool IsUnderwater(sectortype* sector) const override
+	{
+		auto environment = LevelEnvironment(sector);
+		return environment.imported ? environment.medium == Medium::Underwater : sector->lotag == ST_2_UNDERWATER;
+	}
 	int SurfaceType(CollisionBase& hit) const override
 	{
 		FTextureID texture = FNullTextureID();

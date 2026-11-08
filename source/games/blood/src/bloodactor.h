@@ -220,6 +220,10 @@ public:
 	int                 weaponOrder[2][kWeapMax];
 	//int               at149[14];
 	int                 ammoCount[12];
+	auto& AmmoAmounts() { return sharedInventory ? sharedInventory->bloodAmmo : ammoCount; }
+	const auto& AmmoAmounts() const { return sharedInventory.Get() ? sharedInventory->bloodAmmo : ammoCount; }
+	auto& WeaponOwnership() { return sharedInventory ? sharedInventory->bloodWeapons : hasWeapon; }
+	const auto& WeaponOwnership() const { return sharedInventory.Get() ? sharedInventory->bloodWeapons : hasWeapon; }
 	bool                qavLoop;
 	int                 qavLastTick;
 	int                 qavTimer;

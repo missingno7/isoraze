@@ -47,46 +47,46 @@ void addweapon_r(DDukePlayer* p, int weapon, bool wswitch)
 	int cw = p->curr_weapon;
 	if (p->OnMotorcycle || p->OnBoat)
 	{
-		p->gotweapon[weapon] = true;;
+		p->WeaponOwnership()[weapon] = true;;
 		if (weapon == THROWSAW_WEAPON)
 		{
-			p->gotweapon[BUZZSAW_WEAPON] = true;
-			p->ammo_amount[BUZZSAW_WEAPON] = 1;
+			p->WeaponOwnership()[BUZZSAW_WEAPON] = true;
+			p->AmmoAmounts()[BUZZSAW_WEAPON] = 1;
 		}
 		else if (weapon == CROSSBOW_WEAPON)
 		{
-			p->gotweapon[CHICKEN_WEAPON] = true;
-			p->gotweapon[DYNAMITE_WEAPON] = true;
+			p->WeaponOwnership()[CHICKEN_WEAPON] = true;
+			p->WeaponOwnership()[DYNAMITE_WEAPON] = true;
 		}
 		else if (weapon == SLINGBLADE_WEAPON)
 		{
-			p->ammo_amount[SLINGBLADE_WEAPON] = 1;
+			p->AmmoAmounts()[SLINGBLADE_WEAPON] = 1;
 		}
 		return;
 	}
 
-	if (p->gotweapon[weapon] == 0)
+	if (p->WeaponOwnership()[weapon] == 0)
 	{
-		p->gotweapon[weapon] = true;;
+		p->WeaponOwnership()[weapon] = true;;
 		if (weapon == THROWSAW_WEAPON)
 		{
-			p->gotweapon[BUZZSAW_WEAPON] = true;
-			p->ammo_amount[BUZZSAW_WEAPON] = 1;
+			p->WeaponOwnership()[BUZZSAW_WEAPON] = true;
+			p->AmmoAmounts()[BUZZSAW_WEAPON] = 1;
 		}
 		if (isRRRA())
 		{
 			if (weapon == CROSSBOW_WEAPON)
 			{
-				p->gotweapon[CHICKEN_WEAPON] = true;
+				p->WeaponOwnership()[CHICKEN_WEAPON] = true;
 			}
 			if (weapon == SLINGBLADE_WEAPON)
 			{
-				p->ammo_amount[SLINGBLADE_WEAPON] = 50;
+				p->AmmoAmounts()[SLINGBLADE_WEAPON] = 50;
 			}
 		}
 		if (weapon == CROSSBOW_WEAPON)
 		{
-			p->gotweapon[DYNAMITE_WEAPON] = true;
+			p->WeaponOwnership()[DYNAMITE_WEAPON] = true;
 		}
 
 		if (weapon != DYNAMITE_WEAPON)

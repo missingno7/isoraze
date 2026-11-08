@@ -40,6 +40,7 @@ source as it is released.
 #include "dukeactor.h"
 #include "interpolate.h"
 #include "games/superset/duke_weapons.h"
+#include "mashup_resources.h"
 #include "vm.h"
 
 BEGIN_DUKE_NS
@@ -125,6 +126,12 @@ DDukeActor* CreateActor(sectortype* whatsectp, const DVector3& pos, PClassActor*
 	SetupGameVarsForActor(act);
 
 	setFromSpawnRec(act, nullptr);
+	if (HasSecondaryDukeContext())
+	{
+		int tile = SecondaryDukeActorTile(act->GetClass());
+		if (tile >= 0) act->spr.setspritetexture(Mashup::DukeTile(tile));
+		if (s_ow && (Superset::RuntimeConServices(s_ow) || Superset::IsRuntimeDukeEffect(s_ow))) act->supersetForeignFx = true;
+	}
 	act->spr.pos = pos;
 	act->spr.shade = s_shd;
 	if (!scale.isZero()) act->spr.scale = DVector2(scale.X, scale.Y);
@@ -269,6 +276,7 @@ DDukeActor* spawn(DDukeActor* actj, PClassActor * cls)
 {
 	DDukeActor* foreign = nullptr;
 	if (actj && cls && Superset::SpawnDukeWeaponEffect(actj, cls, foreign)) return foreign;
+	if (actj && Superset::SpawnRuntimeDukeObject(actj, cls, foreign)) return foreign;
 	if (actj && cls)
 	{
 		auto spawned = CreateActor(actj->sector(), actj->spr.pos, cls, 0, DVector2(0, 0), nullAngle, 0., 0., actj, 0);
@@ -289,6 +297,7 @@ DDukeActor* spawn(DDukeActor* actj, PClassActor * cls)
 
 DDukeActor* spawnsprite(DDukeActor* origin, int typeId)
 {
+	if (HasSecondaryDukeContext()) return spawn(origin, ConSpawnType(typeId));
 	auto srec = spawnMap.CheckKey(typeId);
 	if (srec && !srec->basetex.isValid()) return spawn(origin, srec->cls);
 
@@ -316,7 +325,7 @@ static void commonEnemySetup(DDukeActor* self, DDukeActor* owner)
 		self->actorstayput = self->spr.sectp;
 	}
 
-	if (gs.actorinfo[self->spr.picnum].scriptaddress)	// default scale only applies to actors with a CON part. Note: needs fixing later!
+	if (self->conInfo()) // Script identity is independent of the resource bank's texture IDs.
 	{
 		//  Init the size. This is different for internal and user enemies.
 		self->clipdist = 20;

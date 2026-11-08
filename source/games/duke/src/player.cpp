@@ -35,6 +35,7 @@ source as it is released.
 
 #include "ns.h"
 #include "games/superset/duke_weapons.h"
+#include "games/superset/arsenal.h"
 #include "global.h"
 #include "mapinfo.h"
 #include "dukeactor.h"
@@ -157,7 +158,7 @@ double hits(DDukeActor* actor)
 double hitasprite(DDukeActor* actor, DDukeActor** hitsp)
 {
 	double zoff;
-	HitInfo hit{};
+	THitInfo<DCoreActor> hit{};
 
 	if (badguy(actor))
 		zoff = 42;
@@ -166,7 +167,7 @@ double hitasprite(DDukeActor* actor, DDukeActor** hitsp)
 
 	auto pos = actor->spr.pos;
 	hitscan(pos.plusZ(-zoff), actor->sector(), DVector3(actor->spr.Angles.Yaw.ToVector() * 1024, 0), hit, CLIPMASK1);
-	if (hitsp) *hitsp = hit.actor();
+	if (hitsp) *hitsp = dyn_cast<DDukeActor>(hit.hitActor);
 
 	if (hit.hitWall != nullptr && (hit.hitWall->cstat & CSTAT_WALL_MASKED) && badguy(actor))
 		return INT_MAX;
@@ -344,6 +345,11 @@ static DCoreActor* AimActor(DDukeActor* actor, int abase, bool force, bool* b)
 			while (auto act = it.Next()) consider({act, !!badguy(act), act->isPlayer(), act->spr.extra >= 0,
 				act->spr.scale.X < .46875 && !(act->flags1 & SFLAG_SHRINKAUTOAIM), act->spr.pal == 1,
 				-32. + act->IntVar(NAME_aimoffset)});
+			if (k == 2) Superset::ForEachRuntimeTarget([&](const Superset::TargetInfo& target)
+			{
+				if (!dyn_cast<DDukeActor>(target.actor))
+					consider({target.actor, target.enemy, false, target.alive, false, false, target.aim.Z - target.actor->spr.pos.Z});
+			});
 		}
 	}
 
@@ -1276,27 +1282,39 @@ void playerdrink(DDukePlayer* p, int amount)
 
 int playeraddammo(DDukePlayer* p, int weaponindex, int amount)
 {
-	if (p->ammo_amount[weaponindex] >= gs.max_ammo_amount[weaponindex])
+	if (p->AmmoAmounts()[weaponindex] >= gs.max_ammo_amount[weaponindex])
 	{
 		return false;
 	}
 	addammo(weaponindex, p, amount);
+	if (p->sharedInventory)
+	{
+		// Ammo-only pickups do not select weapons. Weapon grants use the common
+		// pickup policy in playeraddweapon, independent of their source game.
+		return true;
+	}
 	if (p->curr_weapon == KNEE_WEAPON)
-		if (p->gotweapon[weaponindex] && (WeaponSwitch(p->pnum) & 1))
+		if (p->WeaponOwnership()[weaponindex] && (WeaponSwitch(p->pnum) & 1))
 			fi.addweapon(p, weaponindex, true);
 	return true;
 }
 
 int playeraddweapon(DDukePlayer* p, int weaponindex, int amount)
 {
-	if (p->gotweapon[weaponindex] == 0) fi.addweapon(p, weaponindex, !!(WeaponSwitch(p->pnum) & 1));
-	else if (p->ammo_amount[weaponindex] >= gs.max_ammo_amount[weaponindex])
+	bool newlyOwned = !p->WeaponOwnership()[weaponindex];
+	if (newlyOwned) fi.addweapon(p, weaponindex, !p->sharedInventory && !!(WeaponSwitch(p->pnum) & 1));
+	else if (p->AmmoAmounts()[weaponindex] >= gs.max_ammo_amount[weaponindex])
 	{
 		return false;
 	}
 	addammo(weaponindex, p, amount);
+	if (p->sharedInventory)
+	{
+		Superset::WeaponPickup(p, false, weaponindex, newlyOwned);
+		return true;
+	}
 	if (p->curr_weapon == KNEE_WEAPON)
-		if (p->gotweapon[weaponindex] && (WeaponSwitch(p->pnum) & 1))
+		if (p->WeaponOwnership()[weaponindex] && (WeaponSwitch(p->pnum) & 1))
 			fi.addweapon(p, weaponindex, true);
 
 	return true;

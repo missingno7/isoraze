@@ -89,6 +89,11 @@ const ActorInfo* SecondaryDukeActorInfo(PClass* type)
 	auto tile = actorTiles.CheckKey(type);
 	return tile && gs.actorinfo[*tile].scriptaddress ? &gs.actorinfo[*tile] : nullptr;
 }
+int SecondaryDukeActorTile(PClass* type)
+{
+	auto tile = actorTiles.CheckKey(type);
+	return tile ? *tile : -1;
+}
 PClassActor* ConSpawnType(int tile)
 {
 	if (!HasSecondaryDukeContext()) return GetSpawnType(tile);
@@ -353,13 +358,13 @@ CCMD(superset_duke_program_check)
 	if (!stricmp(argv[1], "mutate"))
 	{
 		SetGameVarID(global, 999, nullptr, 0); SetGameVarID(perPlayer, 888, nullptr, 0);
-		getPlayer(0)->ammo_amount[1] = 77;
+		getPlayer(0)->AmmoAmounts()[1] = 77;
 	}
 	const bool distinct = getPlayer(0) != PlayerArray[0] && getPlayer(0)->GetActor() == nullptr &&
 		getPlayer(1) != getPlayer(0) && getPlayer(1) != PlayerArray[1];
 	Printf("Duke CON fixture: global=%d player0=%d player1=%d ammo=%d private_players=%s map=%s.\n",
 		GetGameVarID(global, nullptr, 0).safeValue(), GetGameVarID(perPlayer, nullptr, 0).safeValue(),
-		GetGameVarID(perPlayer, nullptr, 1).safeValue(), getPlayer(0)->ammo_amount[1], distinct ? "PASS" : "FAIL",
+		GetGameVarID(perPlayer, nullptr, 1).safeValue(), getPlayer(0)->AmmoAmounts()[1], distinct ? "PASS" : "FAIL",
 		currentLevel ? currentLevel->labelName.GetChars() : "none");
 }
 }

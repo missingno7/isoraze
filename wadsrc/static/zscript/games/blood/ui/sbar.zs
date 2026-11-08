@@ -524,7 +524,7 @@ class BloodStatusBar : RazeStatusBar
 		int foreignAmmo = pPlayer.GetForeignWeaponAmmo();
 		if (foreignAmmo >= 0 || (foreignAmmo == -2 && pPlayer.curWeapon && pPlayer.weaponAmmo != -1))
 		{
-			int num = foreignAmmo >= 0 ? foreignAmmo : pPlayer.ammoCount[pPlayer.weaponAmmo];
+			int num = foreignAmmo >= 0 ? foreignAmmo : pPlayer.GetAmmo(pPlayer.weaponAmmo);
 			if (foreignAmmo == -2 && pPlayer.weaponAmmo == 6)
 				num /= 10;
 			DrawStatNumber("%3d", num, "SBarNumberAmmo", 216, 183, 0, 0);
@@ -533,13 +533,13 @@ class BloodStatusBar : RazeStatusBar
 		{
 			int x = 135 + ((i - 1) / 3) * 23;
 			int y = 182 + ((i - 1) % 3) * 6;
-			int num = pPlayer.ammoCount[i];
+			int num = pPlayer.GetAmmo(i);
 			if (i == 6)
 				num /= 10;
 			DrawStatNumber("%3d", num, "SBarAmmoAmount", x, y, foreignAmmo == -2 && i == pPlayer.weaponAmmo ? -128 : 32, 10);
 		}
-		DrawStatNumber("%2d", pPlayer.ammoCount[10], "SBarAmmoAmount", 291, 194, pPlayer.weaponAmmo == 10 ? -128 : 32, 10);
-		DrawStatNumber("%2d", pPlayer.ammoCount[11], "SBarAmmoAmount", 309, 194, pPlayer.weaponAmmo == 11 ? -128 : 32, 10);
+		DrawStatNumber("%2d", pPlayer.GetAmmo(10), "SBarAmmoAmount", 291, 194, pPlayer.weaponAmmo == 10 ? -128 : 32, 10);
+		DrawStatNumber("%2d", pPlayer.GetAmmo(11), "SBarAmmoAmount", 309, 194, pPlayer.weaponAmmo == 11 ? -128 : 32, 10);
 
 		if (pPlayer.armor[1])
 		{
@@ -596,7 +596,7 @@ class BloodStatusBar : RazeStatusBar
 		int foreignAmmo = pPlayer.GetForeignWeaponAmmo();
 		if (foreignAmmo >= 0 || (foreignAmmo == -2 && pPlayer.curWeapon && pPlayer.weaponAmmo != -1))
 		{
-			int num = foreignAmmo >= 0 ? foreignAmmo : pPlayer.ammoCount[pPlayer.weaponAmmo];
+			int num = foreignAmmo >= 0 ? foreignAmmo : pPlayer.GetAmmo(pPlayer.weaponAmmo);
 			if (foreignAmmo == -2 && pPlayer.weaponAmmo == 6)
 				num /= 10;
 			DrawStatNumber("%3d", num, "SBarNumberAmmo", 42, 183 - 200, 0, 0);
@@ -675,7 +675,7 @@ class BloodStatusBar : RazeStatusBar
 		int foreignAmmo = pPlayer.GetForeignWeaponAmmo();
 		if (foreignAmmo >= 0 || (foreignAmmo == -2 && pPlayer.curWeapon && pPlayer.weaponAmmo != -1))
 		{
-			int num = foreignAmmo >= 0 ? foreignAmmo : pPlayer.ammoCount[pPlayer.weaponAmmo];
+			int num = foreignAmmo >= 0 ? foreignAmmo : pPlayer.GetAmmo(pPlayer.weaponAmmo);
 			if (foreignAmmo == -2 && pPlayer.weaponAmmo == 6)
 				num /= 10;
 			if (foreignAmmo == -2 && gAmmoIcons[pPlayer.weaponAmmo])
@@ -863,7 +863,7 @@ class BloodStatusBar : RazeStatusBar
 				stats.ammoselect = stats.ammoicons.Size();
 			}
 			stats.ammoicons.Push(gAmmoIcons[ammonum]);
-			int num = pPlayer.ammoCount[ammonum];
+			int num = pPlayer.GetAmmo(ammonum);
 			if (ammonum == 6)
 				num /= 10;
 			stats.ammovalues.Push(num);

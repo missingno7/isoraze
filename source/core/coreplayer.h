@@ -4,6 +4,7 @@
 #include "packet.h"
 #include "gamestate.h"
 #include "gamefuncs.h"
+#include "gameplayinventory.h"
 
 class DCorePlayer : public DObject
 {
@@ -31,6 +32,7 @@ public:
 	DVector3 CameraPos;
 	ticcmd_t lastcmd, cmd;
 	DCoreActor* actor;
+	TObjPtr<DGameplayInventory*> sharedInventory;
 	uint8_t pnum;
 
 	DCorePlayer(uint8_t p) : pnum(p) {}

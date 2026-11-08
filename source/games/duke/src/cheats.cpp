@@ -179,12 +179,12 @@ const char* GameInterface::GenericCheat(int player, int cheat)
 
 	case CHT_BIKE:
 		OnMotorcycle(p);
-		p->ammo_amount[MOTORCYCLE_WEAPON] = gs.max_ammo_amount[MOTORCYCLE_WEAPON];
+		p->AmmoAmounts()[MOTORCYCLE_WEAPON] = gs.max_ammo_amount[MOTORCYCLE_WEAPON];
 		return DukeQuotes().GetQuote(QUOTE_ON_BIKE);
 
 	case CHT_BOAT:
 		OnBoat(p);
-		p->ammo_amount[BOAT_WEAPON] = gs.max_ammo_amount[BOAT_WEAPON];
+		p->AmmoAmounts()[BOAT_WEAPON] = gs.max_ammo_amount[BOAT_WEAPON];
 		return DukeQuotes().GetQuote(QUOTE_ON_BOAT);
 
 	case CHT_TONY:
@@ -197,7 +197,7 @@ const char* GameInterface::GenericCheat(int player, int cheat)
 
 	case CHT_RHETT:
 		ud.god = 0;
-		memset(p->gotweapon, 0, sizeof(p->gotweapon));
+		memset(p->WeaponOwnership(), 0, sizeof(p->WeaponOwnership()));
 		p->curr_weapon = KNEE_WEAPON;
 		p->nocheat = 1;
 		p->GetActor()->spr.extra = 1;
@@ -234,10 +234,10 @@ static bool cheatWeapons(DDukePlayer* const p)
 	for (int weapon = PISTOL_WEAPON; weapon < weaponLimit; weapon++ )
 	{
 		addammo( weapon, p, gs.max_ammo_amount[weapon] );
-		p->gotweapon[weapon] = true;;
+		p->WeaponOwnership()[weapon] = true;;
 	}
 	if (isRRRA())
-		p->ammo_amount[SLINGBLADE_WEAPON] = 1;
+		p->AmmoAmounts()[SLINGBLADE_WEAPON] = 1;
 
 	return true;
 }

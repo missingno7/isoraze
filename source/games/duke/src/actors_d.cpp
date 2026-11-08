@@ -52,11 +52,11 @@ BEGIN_DUKE_NS
 
 void addweapon_d(DDukePlayer *p, int weapon, bool wswitch)
 {
-	if (p->gotweapon[weapon] == 0 )
+	if (p->WeaponOwnership()[weapon] == 0 )
 	{
-		p->gotweapon[weapon] = true;
+		p->WeaponOwnership()[weapon] = true;
 		if (weapon == SHRINKER_WEAPON)
-			p->gotweapon[GROW_WEAPON] = true;
+			p->WeaponOwnership()[GROW_WEAPON] = true;
 	}
 	if (!wswitch) return;
 

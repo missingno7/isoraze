@@ -99,28 +99,28 @@ void selectweapon_r(DDukePlayer* const p, int weap)
 				switch (p->curr_weapon)
 				{
 					case THROWSAW_WEAPON:
-						if (p->ammo_amount[BUZZSAW_WEAPON] > 0)
+						if (p->AmmoAmounts()[BUZZSAW_WEAPON] > 0)
 						{
 							j = BUZZSAW_WEAPON;
 							p->subweapon = 1 << BUZZSAW_WEAPON;
 						}
 						break;
 					case BUZZSAW_WEAPON:
-						if (p->ammo_amount[THROWSAW_WEAPON] > 0)
+						if (p->AmmoAmounts()[THROWSAW_WEAPON] > 0)
 						{
 							j = THROWSAW_WEAPON;
 							p->subweapon = 0;
 						}
 						break;
 					case POWDERKEG_WEAPON:
-						if (p->ammo_amount[BOWLING_WEAPON] > 0)
+						if (p->AmmoAmounts()[BOWLING_WEAPON] > 0)
 						{
 							j = BOWLING_WEAPON;
 							p->subweapon = 1 << BOWLING_WEAPON;
 						}
 						break;
 					case BOWLING_WEAPON:
-						if (p->ammo_amount[POWDERKEG_WEAPON] > 0)
+						if (p->AmmoAmounts()[POWDERKEG_WEAPON] > 0)
 						{
 							j = POWDERKEG_WEAPON;
 							p->subweapon = 0;
@@ -138,14 +138,14 @@ void selectweapon_r(DDukePlayer* const p, int weap)
 						p->subweapon = 0;
 						break;
 					case CROSSBOW_WEAPON:
-						if (p->ammo_amount[CHICKEN_WEAPON] > 0 && isRRRA())
+						if (p->AmmoAmounts()[CHICKEN_WEAPON] > 0 && isRRRA())
 						{
 							j = CHICKEN_WEAPON;
 							p->subweapon = 4;
 						}
 						break;
 					case CHICKEN_WEAPON:
-						if (p->ammo_amount[CROSSBOW_WEAPON] > 0)
+						if (p->AmmoAmounts()[CROSSBOW_WEAPON] > 0)
 						{
 							j = CROSSBOW_WEAPON;
 							p->subweapon = 0;
@@ -173,7 +173,7 @@ void selectweapon_r(DDukePlayer* const p, int weap)
 					if (k == -1) k = 9;
 					else if (k == 10) k = 0;
 
-					if (p->gotweapon[k] && p->ammo_amount[k] > 0)
+					if (p->WeaponOwnership()[k] && p->AmmoAmounts()[k] > 0)
 					{
 						j = k;
 						break;
@@ -191,14 +191,14 @@ void selectweapon_r(DDukePlayer* const p, int weap)
 
 			k = -1;
 
-			if (j == DYNAMITE_WEAPON && p->ammo_amount[DYNAMITE_WEAPON] == 0)
+			if (j == DYNAMITE_WEAPON && p->AmmoAmounts()[DYNAMITE_WEAPON] == 0)
 			{
 				DukeStatIterator it(STAT_ACTOR);
 				while (auto act = it.Next())
 				{
 					if (act->GetClass() == RedneckDynamiteClass && act->GetOwner() == pact)
 					{
-						p->gotweapon[DYNAMITE_WEAPON] = true;
+						p->WeaponOwnership()[DYNAMITE_WEAPON] = true;
 						j = THROWINGDYNAMITE_WEAPON;
 						break;
 					}
@@ -219,14 +219,14 @@ void selectweapon_r(DDukePlayer* const p, int weap)
 			}
 			else if (j == CROSSBOW_WEAPON && isRRRA())
 			{
-				if (p->curr_weapon == CROSSBOW_WEAPON || p->ammo_amount[CROSSBOW_WEAPON] == 0)
+				if (p->curr_weapon == CROSSBOW_WEAPON || p->AmmoAmounts()[CROSSBOW_WEAPON] == 0)
 				{
-					if (p->ammo_amount[CHICKEN_WEAPON] == 0)
+					if (p->AmmoAmounts()[CHICKEN_WEAPON] == 0)
 						return;
 					p->subweapon = 4;
 					j = CHICKEN_WEAPON;
 				}
-				else if ((p->subweapon & 4) || p->ammo_amount[CHICKEN_WEAPON] == 0)
+				else if ((p->subweapon & 4) || p->AmmoAmounts()[CHICKEN_WEAPON] == 0)
 				{
 					p->subweapon = 0;
 					j = CROSSBOW_WEAPON;
@@ -234,12 +234,12 @@ void selectweapon_r(DDukePlayer* const p, int weap)
 			}
 			else if (j == THROWSAW_WEAPON)
 			{
-				if (p->curr_weapon == THROWSAW_WEAPON || p->ammo_amount[THROWSAW_WEAPON] == 0)
+				if (p->curr_weapon == THROWSAW_WEAPON || p->AmmoAmounts()[THROWSAW_WEAPON] == 0)
 				{
 					p->subweapon = (1 << BUZZSAW_WEAPON);
 					j = BUZZSAW_WEAPON;
 				}
-				else if ((p->subweapon & (1 << BUZZSAW_WEAPON)) || p->ammo_amount[BUZZSAW_WEAPON] == 0)
+				else if ((p->subweapon & (1 << BUZZSAW_WEAPON)) || p->AmmoAmounts()[BUZZSAW_WEAPON] == 0)
 				{
 					p->subweapon = 0;
 					j = THROWSAW_WEAPON;
@@ -247,12 +247,12 @@ void selectweapon_r(DDukePlayer* const p, int weap)
 			}
 			else if (j == POWDERKEG_WEAPON)
 			{
-				if (p->curr_weapon == POWDERKEG_WEAPON || p->ammo_amount[POWDERKEG_WEAPON] == 0)
+				if (p->curr_weapon == POWDERKEG_WEAPON || p->AmmoAmounts()[POWDERKEG_WEAPON] == 0)
 				{
 					p->subweapon = (1 << BOWLING_WEAPON);
 					j = BOWLING_WEAPON;
 				}
-				else if ((p->subweapon & (1 << BOWLING_WEAPON)) || p->ammo_amount[BOWLING_WEAPON] == 0)
+				else if ((p->subweapon & (1 << BOWLING_WEAPON)) || p->AmmoAmounts()[BOWLING_WEAPON] == 0)
 				{
 					p->subweapon = 0;
 					j = POWDERKEG_WEAPON;
@@ -265,7 +265,7 @@ void selectweapon_r(DDukePlayer* const p, int weap)
 				p->cmd.ucmd.actions |= SB_HOLSTER;
 				p->oweapon_pos = p->weapon_pos = -9;
 			}
-			else if (j >= MIN_WEAPON && p->gotweapon[j] && p->curr_weapon != j) switch (j)
+			else if (j >= MIN_WEAPON && p->WeaponOwnership()[j] && p->curr_weapon != j) switch (j)
 			{
 			case KNEE_WEAPON:
 				fi.addweapon(p, j, true);
@@ -279,7 +279,7 @@ void selectweapon_r(DDukePlayer* const p, int weap)
 				break;
 
 			case PISTOL_WEAPON:
-				if (p->ammo_amount[PISTOL_WEAPON] == 0)
+				if (p->AmmoAmounts()[PISTOL_WEAPON] == 0)
 					if (p->show_empty_weapon == 0)
 					{
 						p->last_full_weapon = p->curr_weapon;
@@ -300,7 +300,7 @@ void selectweapon_r(DDukePlayer* const p, int weap)
 			case BUZZSAW_WEAPON:
 			case POWDERKEG_WEAPON:
 			case BOWLING_WEAPON:
-				if (p->ammo_amount[j] == 0 && p->show_empty_weapon == 0)
+				if (p->AmmoAmounts()[j] == 0 && p->show_empty_weapon == 0)
 				{
 					p->last_full_weapon = p->curr_weapon;
 					p->show_empty_weapon = 32;
@@ -312,7 +312,7 @@ void selectweapon_r(DDukePlayer* const p, int weap)
 			case BOAT_WEAPON:
 				if (isRRRA())
 				{
-					if (p->ammo_amount[j] == 0 && p->show_empty_weapon == 0)
+					if (p->AmmoAmounts()[j] == 0 && p->show_empty_weapon == 0)
 					{
 						p->show_empty_weapon = 32;
 					}
@@ -329,7 +329,7 @@ void selectweapon_r(DDukePlayer* const p, int weap)
 				}
 				break;
 			case DYNAMITE_WEAPON:
-				if (p->ammo_amount[DYNAMITE_WEAPON] > 0 && p->gotweapon[DYNAMITE_WEAPON])
+				if (p->AmmoAmounts()[DYNAMITE_WEAPON] > 0 && p->WeaponOwnership()[DYNAMITE_WEAPON])
 					fi.addweapon(p, DYNAMITE_WEAPON, true);
 				break;
 			}
@@ -614,10 +614,10 @@ void checkweapons_r(DDukePlayer* p)
 			if (j)
 			{
 				j->spr.Angles.Yaw = pact->spr.Angles.Yaw;
-				j->saved_ammo = p->ammo_amount[MOTORCYCLE_WEAPON];
+				j->saved_ammo = p->AmmoAmounts()[MOTORCYCLE_WEAPON];
 			}
 			p->OnMotorcycle = 0;
-			p->gotweapon[MOTORCYCLE_WEAPON] = false;
+			p->WeaponOwnership()[MOTORCYCLE_WEAPON] = false;
 			pact->spr.Angles.Pitch = nullAngle;
 			p->moto_do_bump = 0;
 			p->MotoSpeed = 0;
@@ -633,10 +633,10 @@ void checkweapons_r(DDukePlayer* p)
 			if (j)
 			{
 				j->spr.Angles.Yaw = pact->spr.Angles.Yaw;
-				j->saved_ammo = p->ammo_amount[BOAT_WEAPON];
+				j->saved_ammo = p->AmmoAmounts()[BOAT_WEAPON];
 			}
 			p->OnBoat = 0;
-			p->gotweapon[BOAT_WEAPON] = false;
+			p->WeaponOwnership()[BOAT_WEAPON] = false;
 			pact->spr.Angles.Pitch = nullAngle;
 			p->moto_do_bump = 0;
 			p->MotoSpeed = 0;
@@ -1528,7 +1528,7 @@ static void fireweapon(DDukePlayer* const p)
 		{
 		case DYNAMITE_WEAPON:
 			p->hbomb_hold_delay = 0;
-			if (p->ammo_amount[DYNAMITE_WEAPON] > 0)
+			if (p->AmmoAmounts()[DYNAMITE_WEAPON] > 0)
 				p->kickback_pic = 1;
 			break;
 		case THROWINGDYNAMITE_WEAPON:
@@ -1537,29 +1537,29 @@ static void fireweapon(DDukePlayer* const p)
 			break;
 
 		case PISTOL_WEAPON:
-			if (p->ammo_amount[PISTOL_WEAPON] > 0)
+			if (p->AmmoAmounts()[PISTOL_WEAPON] > 0)
 			{
-				p->ammo_amount[PISTOL_WEAPON]--;
+				p->AmmoAmounts()[PISTOL_WEAPON]--;
 				p->kickback_pic = 1;
 			}
 			break;
 
 		case RIFLEGUN_WEAPON:
-			if (p->ammo_amount[RIFLEGUN_WEAPON] > 0) // && p->random_club_frame == 0)
+			if (p->AmmoAmounts()[RIFLEGUN_WEAPON] > 0) // && p->random_club_frame == 0)
 				p->kickback_pic = 1;
 			break;
 
 		case SHOTGUN_WEAPON:
-			if (p->ammo_amount[SHOTGUN_WEAPON] > 0 && p->random_club_frame == 0)
+			if (p->AmmoAmounts()[SHOTGUN_WEAPON] > 0 && p->random_club_frame == 0)
 				p->kickback_pic = 1;
 			break;
 
 		case BOWLING_WEAPON:
-			if (p->ammo_amount[BOWLING_WEAPON] > 0)
+			if (p->AmmoAmounts()[BOWLING_WEAPON] > 0)
 				p->kickback_pic = 1;
 			break;
 		case POWDERKEG_WEAPON:
-			if (p->ammo_amount[POWDERKEG_WEAPON] > 0)
+			if (p->AmmoAmounts()[POWDERKEG_WEAPON] > 0)
 				p->kickback_pic = 1;
 			break;
 
@@ -1567,13 +1567,13 @@ static void fireweapon(DDukePlayer* const p)
 		case THROWSAW_WEAPON:
 			if (p->curr_weapon == BUZZSAW_WEAPON)
 			{
-				if (p->ammo_amount[BUZZSAW_WEAPON] > 0)
+				if (p->AmmoAmounts()[BUZZSAW_WEAPON] > 0)
 				{
 					p->kickback_pic = 1;
 					S_PlayActorSound(431, pact);
 				}
 			}
-			else if (p->ammo_amount[THROWSAW_WEAPON] > 0)
+			else if (p->AmmoAmounts()[THROWSAW_WEAPON] > 0)
 			{
 				p->kickback_pic = 1;
 				S_PlayActorSound(SHRINKER_FIRE, pact);
@@ -1581,12 +1581,12 @@ static void fireweapon(DDukePlayer* const p)
 			break;
 
 		case ALIENBLASTER_WEAPON:
-			if (p->ammo_amount[ALIENBLASTER_WEAPON] > 0)
+			if (p->AmmoAmounts()[ALIENBLASTER_WEAPON] > 0)
 				p->kickback_pic = 1;
 			break;
 
 		case TIT_WEAPON:
-			if (p->ammo_amount[TIT_WEAPON] > 0)
+			if (p->AmmoAmounts()[TIT_WEAPON] > 0)
 			{
 				p->kickback_pic = 1;
 				p->hbomb_hold_delay = !p->hbomb_hold_delay;
@@ -1594,7 +1594,7 @@ static void fireweapon(DDukePlayer* const p)
 			break;
 
 		case MOTORCYCLE_WEAPON:
-			if (p->ammo_amount[MOTORCYCLE_WEAPON] > 0)
+			if (p->AmmoAmounts()[MOTORCYCLE_WEAPON] > 0)
 			{
 				p->kickback_pic = 1;
 				p->hbomb_hold_delay = !p->hbomb_hold_delay;
@@ -1602,17 +1602,17 @@ static void fireweapon(DDukePlayer* const p)
 			break;
 
 		case BOAT_WEAPON:
-			if (p->ammo_amount[BOAT_WEAPON] > 0)
+			if (p->AmmoAmounts()[BOAT_WEAPON] > 0)
 				p->kickback_pic = 1;
 			break;
 
 		case CROSSBOW_WEAPON:
-			if (p->ammo_amount[CROSSBOW_WEAPON] > 0)
+			if (p->AmmoAmounts()[CROSSBOW_WEAPON] > 0)
 				p->kickback_pic = 1;
 			break;
 
 		case CHICKEN_WEAPON:
-			if (p->ammo_amount[CHICKEN_WEAPON] > 0)
+			if (p->AmmoAmounts()[CHICKEN_WEAPON] > 0)
 				p->kickback_pic = 1;
 			break;
 
@@ -1620,11 +1620,11 @@ static void fireweapon(DDukePlayer* const p)
 		case SLINGBLADE_WEAPON:
 			if (p->curr_weapon == SLINGBLADE_WEAPON)
 			{
-				if (p->ammo_amount[SLINGBLADE_WEAPON] > 0)
+				if (p->AmmoAmounts()[SLINGBLADE_WEAPON] > 0)
 					if (p->quick_kick == 0)
 						p->kickback_pic = 1;
 			}
-			else if (!isRRRA() || p->ammo_amount[KNEE_WEAPON] > 0)
+			else if (!isRRRA() || p->AmmoAmounts()[KNEE_WEAPON] > 0)
 				if (p->quick_kick == 0)
 					p->kickback_pic = 1;
 			break;
@@ -1686,9 +1686,9 @@ static void operateweapon(DDukePlayer* const p, ESyncBits actions, sectortype* p
 		{
 			double vel, zvel;
 
-			p->ammo_amount[DYNAMITE_WEAPON]--;
-			if (p->ammo_amount[CROSSBOW_WEAPON])
-				p->ammo_amount[CROSSBOW_WEAPON]--;
+			p->AmmoAmounts()[DYNAMITE_WEAPON]--;
+			if (p->AmmoAmounts()[CROSSBOW_WEAPON])
+				p->AmmoAmounts()[CROSSBOW_WEAPON]--;
 
 			if (p->on_ground && (actions & SB_CROUCH))
 			{
@@ -1733,7 +1733,7 @@ static void operateweapon(DDukePlayer* const p, ESyncBits actions, sectortype* p
 			p->last_weapon = -1;
 			p->detonate_count = 0;
 			p->detonate_time = 45;
-			if (p->ammo_amount[DYNAMITE_WEAPON] > 0)
+			if (p->AmmoAmounts()[DYNAMITE_WEAPON] > 0)
 			{
 				fi.addweapon(p, DYNAMITE_WEAPON, true);
 				p->oweapon_pos = p->weapon_pos = -9;
@@ -1758,7 +1758,7 @@ static void operateweapon(DDukePlayer* const p, ESyncBits actions, sectortype* p
 			}
 		}
 		else if (p->kickback_pic == 2)
-			if (p->ammo_amount[PISTOL_WEAPON] <= 0)
+			if (p->AmmoAmounts()[PISTOL_WEAPON] <= 0)
 			{
 				p->okickback_pic = p->kickback_pic = 0;
 				checkavailweapon(p);
@@ -1768,13 +1768,13 @@ static void operateweapon(DDukePlayer* const p, ESyncBits actions, sectortype* p
 
 		if (p->kickback_pic >= 22)
 		{
-			if (p->ammo_amount[PISTOL_WEAPON] <= 0)
+			if (p->AmmoAmounts()[PISTOL_WEAPON] <= 0)
 			{
 				p->okickback_pic = p->kickback_pic = 0;
 				checkavailweapon(p);
 				break;
 			}
-			else if ((p->ammo_amount[PISTOL_WEAPON] % 6) == 0)
+			else if ((p->AmmoAmounts()[PISTOL_WEAPON] % 6) == 0)
 			{
 				switch (p->kickback_pic)
 				{
@@ -1804,7 +1804,7 @@ static void operateweapon(DDukePlayer* const p, ESyncBits actions, sectortype* p
 
 		if (p->kickback_pic == 6)
 			if (p->shotgun_state[0] == 0)
-				if (p->ammo_amount[SHOTGUN_WEAPON] > 1)
+				if (p->AmmoAmounts()[SHOTGUN_WEAPON] > 1)
 					if (actions & SB_FIRE)
 						p->shotgun_state[1] = 1;
 
@@ -1813,7 +1813,7 @@ static void operateweapon(DDukePlayer* const p, ESyncBits actions, sectortype* p
 			for (int ii = 0; ii < 10; ii++)
 				shoot(pact, RedneckShotgunShotClass);
 
-			p->ammo_amount[SHOTGUN_WEAPON]--;
+			p->AmmoAmounts()[SHOTGUN_WEAPON]--;
 
 			S_PlayActorSound(SHOTGUN_FIRE, pact);
 
@@ -1831,7 +1831,7 @@ static void operateweapon(DDukePlayer* const p, ESyncBits actions, sectortype* p
 				for (int ii = 0; ii < 10; ii++)
 					shoot(pact, RedneckShotgunShotClass);
 
-				p->ammo_amount[SHOTGUN_WEAPON]--;
+				p->AmmoAmounts()[SHOTGUN_WEAPON]--;
 
 				S_PlayActorSound(SHOTGUN_FIRE, pact);
 
@@ -1904,7 +1904,7 @@ static void operateweapon(DDukePlayer* const p, ESyncBits actions, sectortype* p
 		{
 			if ((p->kickback_pic % 3) == 0)
 			{
-				p->ammo_amount[RIFLEGUN_WEAPON]--;
+				p->AmmoAmounts()[RIFLEGUN_WEAPON]--;
 
 				if ((p->kickback_pic % 3) == 0)
 				{
@@ -1964,7 +1964,7 @@ static void operateweapon(DDukePlayer* const p, ESyncBits actions, sectortype* p
 
 		if (p->kickback_pic == 1)
 		{
-			p->ammo_amount[THROWSAW_WEAPON]--;
+			p->AmmoAmounts()[THROWSAW_WEAPON]--;
 			shoot(pact, RedneckSawbladeClass);
 			checkavailweapon(p);
 		}
@@ -1983,7 +1983,7 @@ static void operateweapon(DDukePlayer* const p, ESyncBits actions, sectortype* p
 			shoot(pact, DukeShotSparkClass);
 			p->noise_radius = 1024;
 			madenoise(p);
-			p->ammo_amount[TIT_WEAPON]--;
+			p->AmmoAmounts()[TIT_WEAPON]--;
 			checkavailweapon(p);
 		}
 		if (p->kickback_pic == 2)
@@ -2010,8 +2010,8 @@ static void operateweapon(DDukePlayer* const p, ESyncBits actions, sectortype* p
 			shoot(pact, DukeChaingunShotClass);
 			p->noise_radius = 1024;
 			madenoise(p);
-			p->ammo_amount[MOTORCYCLE_WEAPON]--;
-			if (p->ammo_amount[MOTORCYCLE_WEAPON] <= 0)
+			p->AmmoAmounts()[MOTORCYCLE_WEAPON]--;
+			if (p->AmmoAmounts()[MOTORCYCLE_WEAPON] <= 0)
 				p->okickback_pic = p->kickback_pic = 0;
 			else
 				checkavailweapon(p);
@@ -2033,7 +2033,7 @@ static void operateweapon(DDukePlayer* const p, ESyncBits actions, sectortype* p
 		if (p->kickback_pic == 3)
 		{
 			p->MotoSpeed -= 20;
-			p->ammo_amount[BOAT_WEAPON]--;
+			p->AmmoAmounts()[BOAT_WEAPON]--;
 			shoot(pact, RedneckBoatGrenadeClass);
 		}
 		p->kickback_pic++;
@@ -2042,7 +2042,7 @@ static void operateweapon(DDukePlayer* const p, ESyncBits actions, sectortype* p
 			p->okickback_pic = p->kickback_pic = 0;
 			checkavailweapon(p);
 		}
-		if (p->ammo_amount[BOAT_WEAPON] <= 0)
+		if (p->AmmoAmounts()[BOAT_WEAPON] <= 0)
 			p->okickback_pic = p->kickback_pic = 0;
 		else
 			checkavailweapon(p);
@@ -2061,7 +2061,7 @@ static void operateweapon(DDukePlayer* const p, ESyncBits actions, sectortype* p
 		}
 		else if (p->kickback_pic == 9)
 		{
-			p->ammo_amount[ALIENBLASTER_WEAPON]--;
+			p->AmmoAmounts()[ALIENBLASTER_WEAPON]--;
 			p->visibility = 0;
 			lastvisinc = PlayClock + 32;
 			checkavailweapon(p);
@@ -2080,8 +2080,8 @@ static void operateweapon(DDukePlayer* const p, ESyncBits actions, sectortype* p
 		if (p->kickback_pic == 3)
 		{
 			double vel, zvel;
-			p->ammo_amount[POWDERKEG_WEAPON]--;
-			p->gotweapon[POWDERKEG_WEAPON] = false;
+			p->AmmoAmounts()[POWDERKEG_WEAPON]--;
+			p->WeaponOwnership()[POWDERKEG_WEAPON] = false;
 			if (p->on_ground && (actions & SB_CROUCH) && !p->OnMotorcycle)
 			{
 				vel = 15 / 16.;
@@ -2107,7 +2107,7 @@ static void operateweapon(DDukePlayer* const p, ESyncBits actions, sectortype* p
 	case BOWLING_WEAPON:
 		if (p->kickback_pic == 30)
 		{
-			p->ammo_amount[BOWLING_WEAPON]--;
+			p->AmmoAmounts()[BOWLING_WEAPON]--;
 			S_PlayActorSound(354, pact);
 			shoot(pact, RedneckBowlingBallClass);
 			p->noise_radius = 64;
@@ -2121,7 +2121,7 @@ static void operateweapon(DDukePlayer* const p, ESyncBits actions, sectortype* p
 		if (p->kickback_pic > 40)
 		{
 			p->okickback_pic = p->kickback_pic = 0;
-			p->gotweapon[BOWLING_WEAPON] = false;
+			p->WeaponOwnership()[BOWLING_WEAPON] = false;
 			checkavailweapon(p);
 		}
 		break;
@@ -2165,9 +2165,9 @@ static void operateweapon(DDukePlayer* const p, ESyncBits actions, sectortype* p
 		p->kickback_pic++;
 		if (p->kickback_pic == 4)
 		{
-			p->ammo_amount[CROSSBOW_WEAPON]--;
-			if (p->ammo_amount[DYNAMITE_WEAPON])
-				p->ammo_amount[DYNAMITE_WEAPON]--;
+			p->AmmoAmounts()[CROSSBOW_WEAPON]--;
+			if (p->AmmoAmounts()[DYNAMITE_WEAPON])
+				p->AmmoAmounts()[DYNAMITE_WEAPON]--;
 			lastvisinc = PlayClock + 32;
 			p->visibility = 0;
 			shoot(pact, RedneckDynamiteArrowClass);
@@ -2185,7 +2185,7 @@ static void operateweapon(DDukePlayer* const p, ESyncBits actions, sectortype* p
 		p->kickback_pic++;
 		if (p->kickback_pic == 4)
 		{
-			p->ammo_amount[CHICKEN_WEAPON]--;
+			p->AmmoAmounts()[CHICKEN_WEAPON]--;
 			lastvisinc = PlayClock + 32;
 			p->visibility = 0;
 			shoot(pact, RedneckChickenArrowClass);
@@ -2950,7 +2950,7 @@ void OnMotorcycle(DDukePlayer *p)
 		p->OnMotorcycle = 1;
 		p->last_full_weapon = p->curr_weapon;
 		p->curr_weapon = MOTORCYCLE_WEAPON;
-		p->gotweapon[MOTORCYCLE_WEAPON] = true;
+		p->WeaponOwnership()[MOTORCYCLE_WEAPON] = true;
 		p->vel.X = 0;
 		p->vel.Y = 0;
 		pact->spr.Angles.Pitch = nullAngle;
@@ -2981,7 +2981,7 @@ void OffMotorcycle(DDukePlayer *p)
 		if (!S_CheckActorSoundPlaying(pact,42))
 			S_PlayActorSound(42, pact);
 		p->OnMotorcycle = 0;
-		p->gotweapon[MOTORCYCLE_WEAPON] = false;
+		p->WeaponOwnership()[MOTORCYCLE_WEAPON] = false;
 		p->curr_weapon = p->last_full_weapon;
 		checkavailweapon(p);
 		pact->spr.Angles.Pitch = nullAngle;
@@ -2998,7 +2998,7 @@ void OffMotorcycle(DDukePlayer *p)
 		if (spawned)
 		{
 			spawned->spr.Angles.Yaw = pact->spr.Angles.Yaw;
-			spawned->saved_ammo = p->ammo_amount[MOTORCYCLE_WEAPON];
+			spawned->saved_ammo = p->AmmoAmounts()[MOTORCYCLE_WEAPON];
 		}
 	}
 }
@@ -3017,7 +3017,7 @@ void OnBoat(DDukePlayer *p)
 		p->OnBoat = 1;
 		p->last_full_weapon = p->curr_weapon;
 		p->curr_weapon = BOAT_WEAPON;
-		p->gotweapon[BOAT_WEAPON] = true;
+		p->WeaponOwnership()[BOAT_WEAPON] = true;
 		p->vel.X = 0;
 		p->vel.Y = 0;
 		p->GetActor()->spr.Angles.Pitch = nullAngle;
@@ -3036,7 +3036,7 @@ void OffBoat(DDukePlayer *p)
 	{
 		const auto pact = p->GetActor();
 		p->OnBoat = 0;
-		p->gotweapon[BOAT_WEAPON] = false;
+		p->WeaponOwnership()[BOAT_WEAPON] = false;
 		p->curr_weapon = p->last_full_weapon;
 		checkavailweapon(p);
 		pact->spr.Angles.Pitch = nullAngle;
@@ -3053,7 +3053,7 @@ void OffBoat(DDukePlayer *p)
 		if (spawned)
 		{
 			spawned->spr.Angles.Yaw = pact->spr.Angles.Yaw;
-			spawned->saved_ammo = p->ammo_amount[BOAT_WEAPON];
+			spawned->saved_ammo = p->AmmoAmounts()[BOAT_WEAPON];
 		}
 	}
 }

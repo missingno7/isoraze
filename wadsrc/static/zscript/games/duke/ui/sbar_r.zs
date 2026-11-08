@@ -142,7 +142,7 @@ class RedneckStatusBar : DukeCommonStatusBar
 		let wicon = ammo_sprites[weapon];
 		if (wicon.length() > 0)
 		{
-			int ammo = p.ammo_amount[weapon];
+			int ammo = p.GetAmmo(weapon);
 			bool reloadableWeapon = weapon == RRWpn.PISTOL_WEAPON || weapon == RRWpn.SHOTGUN_WEAPON;
 			if (!reloadableWeapon || (reloadableWeapon && !cl_showmagamt))
 			{
@@ -236,7 +236,7 @@ class RedneckStatusBar : DukeCommonStatusBar
 		//
 		DrawImage("AMMOBOX", (41, -2), DI_ITEM_LEFT_BOTTOM, scale:(scale, scale));
 		int wp = p.curr_weapon == RRWpn.THROWINGDYNAMITE_WEAPON? RRWpn.DYNAMITE_WEAPON : p.curr_weapon;
-		format = String.Format("%d", p.ammo_amount[wp]);
+		format = String.Format("%d", p.GetAmmo(wp));
 		DrawString(digiFont, format, (56.5, -digiFont.mFont.GetHeight() * scale - 7), DI_TEXT_ALIGN_CENTER, scale:(scale, scale));
 
 		//
@@ -307,12 +307,12 @@ class RedneckStatusBar : DukeCommonStatusBar
 			if ((gameinfo.gameType & GAMEFLAG_RRRA) && i == 4 && p.curr_weapon == RRWpn.CHICKEN_WEAPON)
 			{
 				texname = "AMMO_ICON10";
-				format = String.Format("%d", p.ammo_amount[RRWpn.CHICKEN_WEAPON]);
+				format = String.Format("%d", p.GetAmmo(RRWpn.CHICKEN_WEAPON));
 			}
 			else
 			{
 				texname = "AMMO_ICON" .. i;
-				format = String.Format("%d", p.ammo_amount[i+1]);
+				format = String.Format("%d", p.GetAmmo(i+1));
 			}
 
 			DrawImage(texname, (18 + i * 32, top - 6.5), DI_ITEM_OFFSETS, scale:(sbscale, sbscale));
@@ -376,7 +376,7 @@ class RedneckStatusBar : DukeCommonStatusBar
 		if (p.curr_weapon != RRWpn.KNEE_WEAPON)
 		{
 			int wep = (p.curr_weapon == RRWpn.THROWINGDYNAMITE_WEAPON) ? RRWpn.DYNAMITE_WEAPON : p.curr_weapon;
-			format = String.Format("%d", p.ammo_amount[wep]);
+			format = String.Format("%d", p.GetAmmo(wep));
 			DrawString(digiFont, format, (106.25, top + 15), DI_TEXT_ALIGN_CENTER, scale:(scale, scale));
 		}
 
@@ -496,7 +496,7 @@ class RedneckStatusBar : DukeCommonStatusBar
 			
 		for(int i = 0; i <= RRWpn.TIT_WEAPON; i++)
 		{
-			if (p.gotweapon[i] && weaponIcons[i] != "")
+			if (p.OwnsWeapon(i) && weaponIcons[i] != "")
 			{
 				if (p.curr_weapon == i ||
 					(p.curr_weapon == RRWpn.THROWINGDYNAMITE_WEAPON && i == RRWpn.DYNAMITE_WEAPON) ||
@@ -529,7 +529,7 @@ class RedneckStatusBar : DukeCommonStatusBar
 				stats.ammoselect = stats.ammoicons.Size();
 			}
 			stats.ammoicons.Push(ammo_sprites[ammonum]);
-			int num = p.ammo_amount[ammonum];
+			int num = p.GetAmmo(ammonum);
 			stats.ammovalues.Push(num);
 			stats.ammomaxvalues.Push(Duke.MaxAmmoAmount(ammonum));
 		}

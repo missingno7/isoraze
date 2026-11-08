@@ -74,7 +74,7 @@ function Snapshot([string]$Name) {
     $zip = [IO.Compression.ZipFile]::OpenRead((Join-Path $runRoot "projectile-$Name.dsave"))
     try {
         $reader = [IO.StreamReader]::new($zip.GetEntry('session.json').Open())
-        try { $data = $reader.ReadToEnd() | ConvertFrom-Json -AsHashtable } finally { $reader.Dispose() }
+        try { $data = (ConvertFrom-SupersetSnapshot ($reader.ReadToEnd())) } finally { $reader.Dispose() }
     } finally { $zip.Dispose() }
     $player = @($data.objects | Where-Object { $_.classtype -eq 'BloodPlayer' -and $_.Contains('actor') -and $null -ne $_.actor })[0]
     $projectiles = @($data.objects | Where-Object { $_['superset.foreign_projectile'] })

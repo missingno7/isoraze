@@ -351,7 +351,7 @@ void checksectors_d(DDukePlayer* const p)
 				if (isactivator(act) || ismasterswitch(act))
 					return;
 			}
-			operatesectors(near.hitSector, pact);
+			if (!Superset::ActivateLevelSector(near.hitSector, pact)) operatesectors(near.hitSector, pact);
 		}
 		else if ((pact->sector()->lotag & 16384) == 0)
 		{
@@ -362,7 +362,7 @@ void checksectors_d(DDukePlayer* const p)
 				{
 					if (isactivator(act) || ismasterswitch(act)) return;
 				}
-				operatesectors(pact->sector(), pact);
+				if (!Superset::ActivateLevelSector(pact->sector(), pact)) operatesectors(pact->sector(), pact);
 			}
 			else checkhitswitch(p, near.hitWall, nullptr);
 		}

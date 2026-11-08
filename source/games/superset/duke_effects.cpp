@@ -8,6 +8,7 @@
 #include "duke_projectiles.h"
 #include "duke_weapons.h"
 #include "duke_pickups.h"
+#include "level.h"
 #include "superset.h"
 #include "mashup_resources.h"
 #include "savegamehelp.h"
@@ -23,7 +24,7 @@ void MarkEffects() { GC::MarkArray(Duke3d::spriteq, 1024); }
 bool Supported(Duke3d::DDukeActor* actor)
 {
 	return actor && ((actor->supersetForeignFx && actor->IsKindOf(PClass::FindClass("DukeBloodSplat1"))) ||
-		IsBloodDukeProjectile(actor) || IsDukeProjectileEffect(actor) || IsDukeWeaponEffect(actor) || IsBloodDukePickup(actor));
+		IsBloodDukeProjectile(actor) || IsDukeProjectileEffect(actor) || IsDukeWeaponEffect(actor) || IsBloodDukePickup(actor) || IsRuntimeActor(actor) || IsRuntimeDukeEffect(actor));
 }
 Blood::DBloodActor* MissileTarget()
 {
@@ -78,7 +79,7 @@ void TickDukeEffects()
 	while (auto actor = it.Next())
 	{
 		if (!Supported(actor)) continue;
-		if (IsBloodDukePickup(actor)) continue; // Native CON runs through its own environment boundary.
+		if (IsBloodDukePickup(actor) || IsRuntimeActor(actor)) continue; // Components own their simulation phase.
 		if (!actor->sector() || actor->spr.scale.X == 0 || (actor->flags2 & SFLAG2_DIENOW)) actor->Destroy();
 		else
 		{
@@ -92,7 +93,7 @@ void TickDukeEffects()
 		}
 	}
 }
-bool DrawDukeEffect(tspritetype* sprite, double fraction)
+bool DrawDukeEffect(tspritetype* sprite, double fraction, const DVector2& view, DAngle angle)
 {
 	auto actor = dyn_cast<Duke3d::DDukeActor>(sprite->ownerActor);
 	if (!IsBloodMap() || !Supported(actor)) return false;
@@ -101,6 +102,7 @@ bool DrawDukeEffect(tspritetype* sprite, double fraction)
 		sprite->pos = actor->interpolatedpos(fraction);
 		sprite->Angles.Yaw = actor->interpolatedyaw(fraction);
 	}
+	if (IsRuntimeActor(actor)) Duke3d::applyanimations(sprite, actor, view, angle);
 	Duke3d::CallAnimate(actor, sprite);
 	return true;
 }

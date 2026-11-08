@@ -1,3 +1,19 @@
+function ConvertFrom-SupersetSnapshot([string]$Json) {
+    $data = $Json | ConvertFrom-Json -AsHashtable
+    # Compatibility aliases only in the regression reader. The engine saves
+    # one inventory; older assertions can still compare the native views.
+    foreach ($view in $data.objects) {
+        if ($view['superset.inventory'] -isnot [long]) { continue }
+        $inventory = $data.objects[$view['superset.inventory']]
+        if ($view.classtype -eq 'BloodPlayer') {
+            $view.ammocount = $inventory.blood_ammo; $view.hasweapon = $inventory.blood_weapons
+        } elseif ($view.classtype -eq 'DukePlayer') {
+            $view.ammo_count = $inventory.duke_ammo; $view.gotweapon = $inventory.duke_weapons
+        }
+    }
+    return $data
+}
+
 # Commands named save must be individual array entries. Each resulting phase
 # waits for its ordinary input-stream save to finish before starting the next.
 function Write-SupersetCheckScript([string[]]$Commands, [string]$ScriptPath) {

@@ -950,6 +950,8 @@ set (PCH_SOURCES
 	core/cheats.cpp
 	core/cheathandler.cpp
 	core/coreplayer.cpp
+	core/gameplayinventory.cpp
+	core/gameplayentity.cpp
 	core/rts.cpp
 	core/ct_chat.cpp
 	core/d_net.cpp
@@ -973,6 +975,8 @@ set (PCH_SOURCES
 	core/mashup_duke_resources.cpp
 	core/mashup_player.cpp
 	games/superset/game.cpp
+	games/superset/arsenal.cpp
+	games/superset/level.cpp
 	games/superset/player.cpp
 	games/superset/damage.cpp
 	games/superset/pickups.cpp

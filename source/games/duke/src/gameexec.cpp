@@ -496,8 +496,8 @@ void DoPlayer(bool bSet, int lVar1, int lLabelID, int lVar2, DDukeActor* sActor,
 
 	case PLAYER_AMMO_AMOUNT:
 		lTemp = GetGameVarID(lParm2, sActor, sPlayer).safeValue();
-		if (bSet) p->ammo_amount[lTemp] = lValue;
-		else SetGameVarID(lVar2, p->ammo_amount[lTemp], sActor, sPlayer);
+		if (bSet) p->AmmoAmounts()[lTemp] = lValue;
+		else SetGameVarID(lVar2, p->AmmoAmounts()[lTemp], sActor, sPlayer);
 		break;
 
 	case PLAYER_WACKEDBYACTOR:
@@ -849,8 +849,8 @@ void DoPlayer(bool bSet, int lVar1, int lLabelID, int lVar2, DDukeActor* sActor,
 		break;
 
 	case PLAYER_GOTWEAPON:
-		if (bSet) p->gotweapon[lParm2] = !!lValue;
-		else SetGameVarID(lVar2, p->gotweapon[lParm2], sActor, sPlayer);
+		if (bSet) p->WeaponOwnership()[lParm2] = !!lValue;
+		else SetGameVarID(lVar2, p->WeaponOwnership()[lParm2], sActor, sPlayer);
 		break;
 
 	case PLAYER_REFRESH_INVENTORY:
@@ -1682,7 +1682,7 @@ int ParseState::parse(void)
 			//if (g_ac->GetClass.TypeName == NAME_RedneckMinion && type == 3390 && g_ac->spr.pal == 8) typecls = RedneckFrogBallClass);
 			//if (g_ac->GetClass.TypeName == NAME_RedneckMinion && type == 3390 && g_ac->spr.pal == 19)) typecls = RedneckShitBurnClass);
 		}
-		shoot(g_ac, GetSpawnType(*insptr));
+		shoot(g_ac, ConSpawnType(*insptr));
 		insptr++;
 		break;
 	}
@@ -1784,6 +1784,7 @@ int ParseState::parse(void)
 	case concmd_addammo:
 		insptr++;
 		if (!playeraddammo(p, *insptr, *(insptr + 1))) killit_flag = 2;
+		else Superset::EntityPickedUp(g_ac, p->GetActor());
 		insptr += 2;
 		break;
 	case concmd_money:
@@ -1822,6 +1823,7 @@ int ParseState::parse(void)
 	case concmd_addweapon:
 		insptr++;
 		if (!playeraddweapon(p, *insptr, *(insptr + 1))) killit_flag = 2;
+		else Superset::EntityPickedUp(g_ac, p->GetActor());
 		insptr+=2;
 		break;
 	case concmd_debug:
@@ -2009,7 +2011,7 @@ int ParseState::parse(void)
 	case concmd_guts:
 	{
 		insptr += 2;
-		auto clstype = GetSpawnType(*(insptr - 1));
+		auto clstype = ConSpawnType(*(insptr - 1));
 		if (clstype) spawnguts(g_ac, clstype, *insptr);
 		insptr++;
 		break;

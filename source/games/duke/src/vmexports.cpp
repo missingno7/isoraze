@@ -1006,6 +1006,22 @@ DEFINE_ACTION_FUNCTION(DDukeActor, killit)
 //---------------------------------------------------------------------------
 
 DEFINE_FIELD(DDukePlayer, actor)
+DEFINE_ACTION_FUNCTION(DDukePlayer, GetAmmo)
+{
+	PARAM_SELF_PROLOGUE(DDukePlayer); PARAM_INT(index);
+	ACTION_RETURN_INT(unsigned(index) < MAX_WEAPONS ? self->AmmoAmounts()[index] : 0);
+}
+DEFINE_ACTION_FUNCTION(DDukePlayer, SetAmmo)
+{
+	PARAM_SELF_PROLOGUE(DDukePlayer); PARAM_INT(index); PARAM_INT(amount);
+	if (unsigned(index) < MAX_WEAPONS) self->AmmoAmounts()[index] = amount;
+	return 0;
+}
+DEFINE_ACTION_FUNCTION(DDukePlayer, OwnsWeapon)
+{
+	PARAM_SELF_PROLOGUE(DDukePlayer); PARAM_INT(index);
+	ACTION_RETURN_BOOL(unsigned(index) < MAX_WEAPONS && self->WeaponOwnership()[index]);
+}
 DEFINE_FIELD(DDukePlayer, gotweapon)
 DEFINE_FIELD(DDukePlayer, pals)
 DEFINE_FIELD(DDukePlayer, weapon_sway)

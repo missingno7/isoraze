@@ -54,7 +54,7 @@ static void DoFire(DDukePlayer* const p)
 
 	if (aplWeaponWorksLike(p->curr_weapon, p) != KNEE_WEAPON)
 	{
-		p->ammo_amount[p->curr_weapon]--;
+		p->AmmoAmounts()[p->curr_weapon]--;
 	}
 
 	if (aplWeaponFireSound(p->curr_weapon, p))
@@ -70,7 +70,7 @@ static void DoFire(DDukePlayer* const p)
 		shoot(pact, GetSpawnType(aplWeaponShoots(p->curr_weapon, p)));
 		if (aplWeaponFlags(p->curr_weapon, p) & WEAPON_FLAG_AMMOPERSHOT)
 		{
-			p->ammo_amount[p->curr_weapon]--;
+			p->AmmoAmounts()[p->curr_weapon]--;
 		}
 	}
 
@@ -83,9 +83,9 @@ static void DoFire(DDukePlayer* const p)
 
 	if ( //!(aplWeaponFlags(p->curr_weapon, p) & WEAPON_FLAG_CHECKATRELOAD) &&
 		aplWeaponReload(p->curr_weapon, p) > aplWeaponTotalTime(p->curr_weapon, p)
-		&& p->ammo_amount[p->curr_weapon] > 0
+		&& p->AmmoAmounts()[p->curr_weapon] > 0
 		&& (aplWeaponClip(p->curr_weapon, p))
-		&& ((p->ammo_amount[p->curr_weapon] % (aplWeaponClip(p->curr_weapon, p))) == 0)
+		&& ((p->AmmoAmounts()[p->curr_weapon] % (aplWeaponClip(p->curr_weapon, p))) == 0)
 		)
 	{
 		// do clip check...
@@ -165,7 +165,7 @@ void fireweapon_ww(DDukePlayer* const p)
 			{
 			case HANDBOMB_WEAPON:
 				p->hbomb_hold_delay = 0;
-				if (p->ammo_amount[p->curr_weapon] > 0)
+				if (p->AmmoAmounts()[p->curr_weapon] > 0)
 				{
 					p->kickback_pic = 1;
 					if (aplWeaponInitialSound(p->curr_weapon, p))
@@ -184,9 +184,9 @@ void fireweapon_ww(DDukePlayer* const p)
 				break;
 
 			case PISTOL_WEAPON:
-				if (p->ammo_amount[p->curr_weapon] > 0)
+				if (p->AmmoAmounts()[p->curr_weapon] > 0)
 				{
-					//p->ammo_amount[p->curr_weapon]--;
+					//p->AmmoAmounts()[p->curr_weapon]--;
 					p->kickback_pic = 1;
 					if (aplWeaponInitialSound(p->curr_weapon, p))
 					{
@@ -197,7 +197,7 @@ void fireweapon_ww(DDukePlayer* const p)
 
 
 			case CHAINGUN_WEAPON:
-				if (p->ammo_amount[p->curr_weapon] > 0)
+				if (p->AmmoAmounts()[p->curr_weapon] > 0)
 				{
 					p->kickback_pic = 1;
 					if (aplWeaponInitialSound(p->curr_weapon, p))
@@ -208,7 +208,7 @@ void fireweapon_ww(DDukePlayer* const p)
 				break;
 
 			case SHOTGUN_WEAPON:
-				if (p->ammo_amount[p->curr_weapon] > 0 && p->random_club_frame == 0)
+				if (p->AmmoAmounts()[p->curr_weapon] > 0 && p->random_club_frame == 0)
 				{
 					p->kickback_pic = 1;
 					if (aplWeaponInitialSound(p->curr_weapon, p))
@@ -229,7 +229,7 @@ void fireweapon_ww(DDukePlayer* const p)
 				break;
 
 			case SHRINKER_WEAPON:
-				if (p->ammo_amount[p->curr_weapon] > 0)
+				if (p->AmmoAmounts()[p->curr_weapon] > 0)
 				{
 					p->kickback_pic = 1;
 					if (aplWeaponInitialSound(p->curr_weapon, p))
@@ -240,7 +240,7 @@ void fireweapon_ww(DDukePlayer* const p)
 				break;
 
 			case GROW_WEAPON:
-				if (p->ammo_amount[p->curr_weapon] > 0)
+				if (p->AmmoAmounts()[p->curr_weapon] > 0)
 				{
 					p->kickback_pic = 1;
 					if (aplWeaponInitialSound(p->curr_weapon, p))
@@ -251,7 +251,7 @@ void fireweapon_ww(DDukePlayer* const p)
 				break;
 
 			case FREEZE_WEAPON:
-				if (p->ammo_amount[p->curr_weapon] > 0)
+				if (p->AmmoAmounts()[p->curr_weapon] > 0)
 				{
 					p->kickback_pic = 1;
 					if (aplWeaponInitialSound(p->curr_weapon, p))
@@ -261,7 +261,7 @@ void fireweapon_ww(DDukePlayer* const p)
 				}
 				break;
 			case DEVISTATOR_WEAPON:
-				if (p->ammo_amount[p->curr_weapon] > 0)
+				if (p->AmmoAmounts()[p->curr_weapon] > 0)
 				{
 					p->kickback_pic = 1;
 					p->hbomb_hold_delay = !p->hbomb_hold_delay;
@@ -273,7 +273,7 @@ void fireweapon_ww(DDukePlayer* const p)
 				break;
 
 			case RPG_WEAPON:
-				if (p->ammo_amount[RPG_WEAPON] > 0)
+				if (p->AmmoAmounts()[RPG_WEAPON] > 0)
 				{
 					p->kickback_pic = 1;
 					if (aplWeaponInitialSound(p->curr_weapon, p))
@@ -325,7 +325,7 @@ void operateweapon_ww(DDukePlayer* const p, ESyncBits actions)
 		{
 			double zvel, vel;
 
-			p->ammo_amount[p->curr_weapon]--;
+			p->AmmoAmounts()[p->curr_weapon]--;
 
 			if (p->on_ground && (actions & SB_CROUCH))
 			{
@@ -410,7 +410,7 @@ void operateweapon_ww(DDukePlayer* const p, ESyncBits actions)
 		{
 			p->okickback_pic = p->kickback_pic = 0;
 			/// WHAT THE HELL DOES THIS DO....?????????????
-			if (p->ammo_amount[TRIPBOMB_WEAPON] > 0)
+			if (p->AmmoAmounts()[TRIPBOMB_WEAPON] > 0)
 				fi.addweapon(p, TRIPBOMB_WEAPON, true);
 			else
 				checkavailweapon(p);
@@ -485,9 +485,9 @@ void operateweapon_ww(DDukePlayer* const p, ESyncBits actions)
 		{
 			if ( //!(aplWeaponFlags(p->curr_weapon, p) & WEAPON_FLAG_CHECKATRELOAD) &&
 				aplWeaponReload(p->curr_weapon, p) > aplWeaponTotalTime(p->curr_weapon, p)
-				&& p->ammo_amount[p->curr_weapon] > 0
+				&& p->AmmoAmounts()[p->curr_weapon] > 0
 				&& (aplWeaponClip(p->curr_weapon, p))
-				&& ((p->ammo_amount[p->curr_weapon] % (aplWeaponClip(p->curr_weapon, p))) == 0)
+				&& ((p->AmmoAmounts()[p->curr_weapon] % (aplWeaponClip(p->curr_weapon, p))) == 0)
 				)
 			{
 				// reload in progress...

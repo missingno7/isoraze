@@ -115,6 +115,11 @@ void TickActor(DDukeActor* self)
 			}
 		}
 		const auto p = getPlayer(pnum);
+		if (Superset::IsRuntimeActor(self))
+		{
+			self->gameplayEntity->target = PlayerArray[pnum]->GetActor();
+			GC::WriteBarrier(self->gameplayEntity, self->gameplayEntity->target.Get());
+		}
 
 		// Run sprite animations.
 		if (self->curAction->name != NAME_None)
@@ -136,7 +141,7 @@ void TickActor(DDukeActor* self)
 		}
 
 		int killit_flag = 0;
-		bool conres = execute(self, p, pdist, &killit_flag);
+		bool conres = execute(self, p, pdist, &killit_flag, Superset::RuntimeConServices(self));
 		if (!conres && (self->flags4 & SFLAG4_CONOVERRIDE))
 		{
 			self->flags4 |= SFLAG4_INRUNSTATE;
@@ -162,6 +167,7 @@ void TickActor(DDukeActor* self)
 		}
 		// moveactor gets only called for actors with a scripted runner.
 		if (conres) moveactor(self, p, pdist, killit_flag);
+		Superset::FinishDukeLifecycle(self);
 	}
 }
 
@@ -218,10 +224,10 @@ void RANDOMSCRAP(DDukeActor* origin)
 
 void addammo(int weapon, DDukePlayer* player, int amount)
 {
-	player->ammo_amount[weapon] += amount;
+	player->AmmoAmounts()[weapon] += amount;
 
-	if (player->ammo_amount[weapon] > gs.max_ammo_amount[weapon])
-		player->ammo_amount[weapon] = gs.max_ammo_amount[weapon];
+	if (player->AmmoAmounts()[weapon] > gs.max_ammo_amount[weapon])
+		player->AmmoAmounts()[weapon] = gs.max_ammo_amount[weapon];
 }
 
 //---------------------------------------------------------------------------
@@ -267,7 +273,7 @@ void checkavailweapon(DDukePlayer* player)
 		player->wantweaponfire = -1;
 
 		if (weap == player->curr_weapon) return;
-		else if (player->gotweapon[weap] && player->ammo_amount[weap] > 0)
+		else if (player->WeaponOwnership()[weap] && player->AmmoAmounts()[weap] > 0)
 		{
 			fi.addweapon(player, weap, true);
 			return;
@@ -275,9 +281,9 @@ void checkavailweapon(DDukePlayer* player)
 	}
 	weap = player->curr_weapon;
 
-	if (player->gotweapon[weap])
+	if (player->WeaponOwnership()[weap])
 	{
-		if (player->ammo_amount[weap] > 0 || (WeaponSwitch(player->pnum) & 2) == 0)
+		if (player->AmmoAmounts()[weap] > 0 || (WeaponSwitch(player->pnum) & 2) == 0)
 			return;
 	}
 
@@ -291,7 +297,7 @@ void checkavailweapon(DDukePlayer* player)
 		else weap--;
 		if (Superset::IsDukeWeaponActor(player->GetActor()) && !Superset::DukeWeaponSupported(weap)) continue;
 
-		if (weap == MIN_WEAPON || (player->gotweapon[weap] && player->ammo_amount[weap] > 0))
+		if (weap == MIN_WEAPON || (player->WeaponOwnership()[weap] && player->AmmoAmounts()[weap] > 0))
 			break;
 	}
 
@@ -1250,12 +1256,12 @@ int movesprite_ex(DDukeActor* actor, const DVector3& change, unsigned int clipty
 		if (dasectp == nullptr || (dasectp != nullptr &&
 			((actor->actorstayput != nullptr && actor->actorstayput != dasectp) ||
 				((actor->flags3 & SFLAG3_ST3CONFINED) && actor->spr.pal == 0 && dasectp->lotag != ST_3_BOSS2) ||
-				((actor->flags3 & SFLAG3_DONTENTERWATER) && dasectp->lotag == ST_1_ABOVE_WATER) ||
-				((actor->flags3 & SFLAG3_DONTENTERWATERONGROUND) && actor->vel.Z == 0 && dasectp->lotag == ST_1_ABOVE_WATER))
+				((actor->flags3 & SFLAG3_DONTENTERWATER) && Superset::ActorMedium(actor, dasectp) == ST_1_ABOVE_WATER) ||
+				((actor->flags3 & SFLAG3_DONTENTERWATERONGROUND) && actor->vel.Z == 0 && Superset::ActorMedium(actor, dasectp) == ST_1_ABOVE_WATER))
 			)
 			)
 		{
-			if (dasectp && dasectp->lotag == ST_1_ABOVE_WATER && (actor->flags3 & SFLAG3_RANDOMANGLEONWATER))
+			if (dasectp && Superset::ActorMedium(actor, dasectp) == ST_1_ABOVE_WATER && (actor->flags3 & SFLAG3_RANDOMANGLEONWATER))
 				actor->spr.Angles.Yaw = randomAngle();
 			else if ((actor->counter & 3) == 1 && !(actor->flags3 & SFLAG3_NORANDOMANGLEWHENBLOCKED))
 				actor->spr.Angles.Yaw = randomAngle();
@@ -1488,7 +1494,7 @@ void move(DDukeActor* actor, DDukePlayer* const p, double pdist)
 				}
 			}
 		}
-		if (actor->sector()->lotag != ST_1_ABOVE_WATER)
+		if (Superset::ActorMedium(actor, actor->sector()) != ST_1_ABOVE_WATER)
 		{
 			daxvel *= actor->FloatVar(NAME_landmovefactor);
 		}
@@ -3811,8 +3817,10 @@ void handle_se31(DDukeActor* actor, bool choosedir)
 void getglobalz(DDukeActor* actor)
 {
 	if (Superset::BloodDukeProjectileZ(actor)) return;
+	int medium;
+	if (Superset::RuntimeDukeEnvironment(actor, medium)) return;
 	double zr;
-	Collision hz, lz;
+	CollisionBase hz, lz;
 
 	if( actor->spr.statnum == STAT_PLAYER || actor->spr.statnum == STAT_STANDABLE || actor->spr.statnum == STAT_ZOMBIEACTOR || actor->spr.statnum == STAT_ACTOR || actor->spr.statnum == STAT_PROJECTILE)
 	{
@@ -3826,9 +3834,12 @@ void getglobalz(DDukeActor* actor)
 		actor->spr.cstat2 = cc;
 
 		actor->spr.cstat2 &= ~CSTAT2_SPRITE_NOSHADOW;
-		if( lz.type == kHitSprite && (lz.actor()->spr.cstat & CSTAT_SPRITE_ALIGNMENT_MASK) == 0 )
+		if( lz.type == kHitSprite && (lz.hitActor->spr.cstat & CSTAT_SPRITE_ALIGNMENT_MASK) == 0 )
 		{
-			if( badguy(lz.actor()) && lz.actor()->spr.pal != 1)
+			auto support = dyn_cast<DDukeActor>(lz.hitActor);
+			Superset::TargetInfo target;
+			bool enemySupport = support ? badguy(support) && support->spr.pal != 1 : Superset::RuntimeTarget(lz.hitActor, target) && target.alive;
+			if( enemySupport)
 			{
 				if( actor->spr.statnum != STAT_PROJECTILE)
 				{
@@ -3837,13 +3848,13 @@ void getglobalz(DDukeActor* actor)
 					ssp(actor, CLIPMASK0);
 				}
 			}
-			else if(lz.actor()->isPlayer() && badguy(actor) )
+			else if(support && support->isPlayer() && badguy(actor) )
 			{
 				actor->spr.cstat2 |= CSTAT2_SPRITE_NOSHADOW; // No shadows on actors
 				actor->vel.X = -16;
 				ssp(actor, CLIPMASK0);
 			}
-			else if(actor->spr.statnum == STAT_PROJECTILE && lz.actor()->isPlayer() && actor->GetOwner() == actor)
+			else if(actor->spr.statnum == STAT_PROJECTILE && support && support->isPlayer() && actor->GetOwner() == actor)
 			{
 				actor->ceilingz = actor->sector()->ceilingz;
 				actor->floorz = actor->sector()->floorz;
@@ -3869,7 +3880,7 @@ void makeitfall(DDukeActor* actor)
 
 	double grav;
 	int medium = actor->sector()->lotag;
-	bool foreign = Superset::BloodDukePickupEnvironment(actor, medium);
+	bool foreign = Superset::RuntimeDukeEnvironment(actor, medium) || Superset::BloodDukePickupEnvironment(actor, medium);
 
 	if (!foreign && floorspace(actor->sector()))
 		grav = 0;
@@ -4188,7 +4199,7 @@ void fall(DDukeActor *actor, int playernum)
 	{
 		double grav;
 		int medium = actor->sector()->lotag;
-		bool foreign = Superset::BloodDukePickupEnvironment(actor, medium);
+		bool foreign = Superset::RuntimeDukeEnvironment(actor, medium) || Superset::BloodDukePickupEnvironment(actor, medium);
 
 		int sphit = foreign ? 0 : fallspecial(actor, playernum);
 		if (!foreign && floorspace(actor->sector()))

@@ -200,7 +200,7 @@ static void resetplayerstats(DDukePlayer* const p)
 	if (p->OnMotorcycle)
 	{
 		p->OnMotorcycle = 0;
-		p->gotweapon[MOTORCYCLE_WEAPON] = false;
+		p->WeaponOwnership()[MOTORCYCLE_WEAPON] = false;
 		p->curr_weapon = isRRRA()? SLINGBLADE_WEAPON : KNEE_WEAPON;	// just in case this is made available for the other games
 	}
 	p->lotag800kill = 0;
@@ -219,7 +219,7 @@ static void resetplayerstats(DDukePlayer* const p)
 	if (p->OnBoat)
 	{
 		p->OnBoat = 0;
-		p->gotweapon[BOAT_WEAPON] = false;
+		p->WeaponOwnership()[BOAT_WEAPON] = false;
 		p->curr_weapon = isRRRA()? SLINGBLADE_WEAPON : KNEE_WEAPON;	// just in case this is made available for the other games
 	}
 	p->NotOnWater = 0;
@@ -256,17 +256,17 @@ void resetweapons(DDukePlayer* p)
 {
 	for (int weapon = PISTOL_WEAPON; weapon < MAX_WEAPONS; weapon++)
 	{
-		p->ammo_amount[weapon] = 0;
+		p->AmmoAmounts()[weapon] = 0;
 	}
 
-	memset(p->gotweapon, 0, MAX_WEAPONS);
+	memset(p->WeaponOwnership(), 0, MAX_WEAPONS);
 	p->oweapon_pos = p->weapon_pos = 6;
 	p->okickback_pic = p->kickback_pic = 5;
 	p->curr_weapon = PISTOL_WEAPON;
-	p->gotweapon[PISTOL_WEAPON] = true;
-	p->gotweapon[KNEE_WEAPON] = true;
-	p->ammo_amount[PISTOL_WEAPON] = min<int16_t>(gs.max_ammo_amount[PISTOL_WEAPON], 48);
-	p->gotweapon[HANDREMOTE_WEAPON] = true;
+	p->WeaponOwnership()[PISTOL_WEAPON] = true;
+	p->WeaponOwnership()[KNEE_WEAPON] = true;
+	p->AmmoAmounts()[PISTOL_WEAPON] = min<int16_t>(gs.max_ammo_amount[PISTOL_WEAPON], 48);
+	p->WeaponOwnership()[HANDREMOTE_WEAPON] = true;
 	p->last_weapon = -1;
 
 	p->show_empty_weapon= 0;
@@ -282,9 +282,9 @@ void resetweapons(DDukePlayer* p)
 	if (isRRRA())
 	{
 		chickenphase = 0;
-		p->ammo_amount[KNEE_WEAPON] = 1;
-		p->gotweapon[SLINGBLADE_WEAPON] = true;
-		p->ammo_amount[SLINGBLADE_WEAPON] = 1;
+		p->AmmoAmounts()[KNEE_WEAPON] = 1;
+		p->WeaponOwnership()[SLINGBLADE_WEAPON] = true;
+		p->AmmoAmounts()[SLINGBLADE_WEAPON] = 1;
 	}
 	OnEvent(EVENT_RESETWEAPONS, p->pnum, nullptr, -1);
 }
@@ -405,7 +405,7 @@ void resetprestat(DDukePlayer* const p, int g)
 
 	if(p->curr_weapon == HANDREMOTE_WEAPON)
 	{
-		p->ammo_amount[HANDBOMB_WEAPON]++;
+		p->AmmoAmounts()[HANDBOMB_WEAPON]++;
 		p->curr_weapon = HANDBOMB_WEAPON;
 	}
 
@@ -496,8 +496,8 @@ void resetpspritevars(int g, const DVector3& startpos, const DAngle startang)
 			{
 				for (j = 0; j < MAX_WEAPONS; j++)
 				{
-					ptsbar->ammo_amount[j] = p->ammo_amount[j];
-					ptsbar->gotweapon[j] = p->gotweapon[j];
+					ptsbar->ammo_amount[j] = p->AmmoAmounts()[j];
+					ptsbar->gotweapon[j] = p->WeaponOwnership()[j];
 				}
 
 				ptsbar->shield_amount = p->shield_amount;
@@ -523,8 +523,8 @@ void resetpspritevars(int g, const DVector3& startpos, const DAngle startang)
 			{
 				for (j = 0; j < MAX_WEAPONS; j++)
 				{
-					p->ammo_amount[j] = ptsbar->ammo_amount[j];
-					p->gotweapon[j] = ptsbar->gotweapon[j];
+					p->AmmoAmounts()[j] = ptsbar->ammo_amount[j];
+					p->WeaponOwnership()[j] = ptsbar->gotweapon[j];
 				}
 				p->shield_amount = ptsbar->shield_amount;
 				p->curr_weapon = ptsbar->curr_weapon;
@@ -793,22 +793,22 @@ void donewgame(MapRecord* map, int sk)
 				if (aplWeaponWorksLike(i, p) == PISTOL_WEAPON)
 				{
 					p->curr_weapon = i;
-					p->gotweapon[i] = true;
-					p->ammo_amount[i] = 48;
+					p->WeaponOwnership()[i] = true;
+					p->AmmoAmounts()[i] = 48;
 				}
 				else if (aplWeaponWorksLike(i, p) == KNEE_WEAPON || aplWeaponWorksLike(i, p) == HANDREMOTE_WEAPON)
 				{
-					p->gotweapon[i] = true;
+					p->WeaponOwnership()[i] = true;
 				}
 			}
 		}
 		else
 		{
 			p->curr_weapon = PISTOL_WEAPON;
-			p->gotweapon[PISTOL_WEAPON] = true;
-			p->gotweapon[KNEE_WEAPON] = true;
-			p->ammo_amount[PISTOL_WEAPON] = 48;
-			p->gotweapon[HANDREMOTE_WEAPON] = true;
+			p->WeaponOwnership()[PISTOL_WEAPON] = true;
+			p->WeaponOwnership()[KNEE_WEAPON] = true;
+			p->AmmoAmounts()[PISTOL_WEAPON] = 48;
+			p->WeaponOwnership()[HANDREMOTE_WEAPON] = true;
 			p->last_weapon = -1;
 		}
 
@@ -1168,8 +1168,8 @@ void enterlevel(MapRecord *mi, int gamemode)
 		if (clearweapon)
 		{
 			resetweapons(p);
-			p->gotweapon[PISTOL_WEAPON] = false;
-			p->ammo_amount[PISTOL_WEAPON] = 0;
+			p->WeaponOwnership()[PISTOL_WEAPON] = false;
+			p->AmmoAmounts()[PISTOL_WEAPON] = 0;
 			p->curr_weapon = KNEE_WEAPON;
 			p->kickback_pic = 0;
 			p->okickback_pic = p->kickback_pic = 0;

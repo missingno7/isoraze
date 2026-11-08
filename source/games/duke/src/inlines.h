@@ -6,6 +6,7 @@
 #include "texinfo.h"
 #include "funct.h"
 #include "mapinfo.h"
+#include "games/superset/level.h"
 
 // all inline functions.
 BEGIN_DUKE_NS
@@ -263,13 +264,14 @@ inline void addtokills(DDukeActor* actor)
 {
 	if (actor->flags1 & SFLAG_KILLCOUNT)
 	{
-		Level.addKillCount(1);
+		if (!Superset::IsRuntimeActor(actor)) Level.addKillCount(1);
 		actor->spr.cstat2 |= CSTAT2_SPRITE_COUNTKILL;
 	}
 }
 
 inline void addkill(DDukeActor* actor)
 {
+	if (Superset::RequestDukeDeath(actor)) return;
 	if ((actor->flags1 & SFLAG_KILLCOUNT) && (actor->spr.cstat2 & CSTAT2_SPRITE_COUNTKILL))
 	{
 		Level.addKill(myconnectindex);

@@ -2211,12 +2211,12 @@ void trPlayerCtrlEraseStuff(int value, DBloodPlayer* pPlayer)
 		WeaponLower(pPlayer);
 
 		for (int i = 0; i < 14; i++) {
-			pPlayer->hasWeapon[i] = false;
+			pPlayer->WeaponOwnership()[i] = false;
 			// also erase ammo
-			if (i < 12) pPlayer->ammoCount[i] = 0;
+			if (i < 12) pPlayer->AmmoAmounts()[i] = 0;
 		}
 
-		pPlayer->hasWeapon[kWeapPitchFork] = true;
+		pPlayer->WeaponOwnership()[kWeapPitchFork] = true;
 		pPlayer->curWeapon = kWeapNone;
 		pPlayer->nextWeapon = kWeapPitchFork;
 
@@ -2272,9 +2272,9 @@ void trPlayerCtrlGiveStuff(int data2, int weapon, int data4, DBloodPlayer* pPlay
 		{
 		case kWeapProximity: // remote bomb 
 		case kWeapRemote: // prox bomb
-			pPlayer->hasWeapon[weapon] = true;
+			pPlayer->WeaponOwnership()[weapon] = true;
 			weapon--;
-			pPlayer->ammoCount[weapon] = ClipHigh(pPlayer->ammoCount[weapon] + ((data2 == 2) ? data4 : 1), gAmmoInfo[weapon].max);
+			pPlayer->AmmoAmounts()[weapon] = ClipHigh(pPlayer->AmmoAmounts()[weapon] + ((data2 == 2) ? data4 : 1), gAmmoInfo[weapon].max);
 			weapon++;
 			break;
 		default:
@@ -2286,19 +2286,19 @@ void trPlayerCtrlGiveStuff(int data2, int weapon, int data4, DBloodPlayer* pPlay
 				int nAmmoType = pWeaponData->ammoType;
 				switch (data2) {
 				case 1:
-					pPlayer->hasWeapon[weapon] = true;
-					if (pPlayer->ammoCount[nAmmoType] >= pWeaponData->count) break;
-					pPlayer->ammoCount[nAmmoType] = ClipHigh(pPlayer->ammoCount[nAmmoType] + pWeaponData->count, gAmmoInfo[nAmmoType].max);
+					pPlayer->WeaponOwnership()[weapon] = true;
+					if (pPlayer->AmmoAmounts()[nAmmoType] >= pWeaponData->count) break;
+					pPlayer->AmmoAmounts()[nAmmoType] = ClipHigh(pPlayer->AmmoAmounts()[nAmmoType] + pWeaponData->count, gAmmoInfo[nAmmoType].max);
 					break;
 				case 2:
-					pPlayer->ammoCount[nAmmoType] = ClipHigh(pPlayer->ammoCount[nAmmoType] + data4, gAmmoInfo[nAmmoType].max);
+					pPlayer->AmmoAmounts()[nAmmoType] = ClipHigh(pPlayer->AmmoAmounts()[nAmmoType] + data4, gAmmoInfo[nAmmoType].max);
 					break;
 				}
 				break;
 			}
 			break;
 		}
-		if (pPlayer->hasWeapon[weapon] && data4 == 0) // switch on it
+		if (pPlayer->WeaponOwnership()[weapon] && data4 == 0) // switch on it
 		{
 			pPlayer->nextWeapon = kWeapNone;
 
@@ -4336,7 +4336,7 @@ bool condCheckPlayer(DBloodActor* aCond, int cmpOp, bool PUSH)
 		return true;
 	case 1: return condCmp((gGameOptions.nGameType != 3) ? 0 : pPlayer->teamId + 1, arg1, arg2, cmpOp); // compare team
 	case 2: return (arg1 > 0 && arg1 < 8 && pPlayer->hasKey[arg1 - 1]);
-	case 3: return (arg1 > 0 && arg1 < 15 && pPlayer->hasWeapon[arg1 - 1]);
+	case 3: return (arg1 > 0 && arg1 < 15 && pPlayer->WeaponOwnership()[arg1 - 1]);
 	case 4: return condCmp(pPlayer->curWeapon, arg1, arg2, cmpOp);
 	case 5: return (arg1 > 0 && arg1 < 6 && condCmp(pPlayer->packSlots[arg1 - 1].curAmount, arg2, arg3, cmpOp));
 	case 6: return (arg1 > 0 && arg1 < 6 && pPlayer->packSlots[arg1 - 1].isActive);

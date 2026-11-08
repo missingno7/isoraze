@@ -213,14 +213,14 @@ CCMD(superset_flame_check)
 			target->spr.extra = probeHealth = 200;
 		}
 		probeShots = probeHits = 0;
-		probeAmmo = blood->ammoCount[6];
+		probeAmmo = blood->AmmoAmounts()[6];
 		probeActive = true;
 		Printf("Superset flame setup: %s (weapon=%d fuel=%d).\n", target && blood->curWeapon == Blood::kWeapSpraycan ? "PASS" : "FAIL", blood->curWeapon, probeAmmo);
 		return;
 	}
 	if (!stricmp(argv[1], "fired"))
 	{
-		int spent = probeAmmo - blood->ammoCount[6];
+		int spent = probeAmmo - blood->AmmoAmounts()[6];
 		bool input = probeShots > 0 && spent == probeShots * 4;
 		bool hits = target && probeHits > 0 && target->supersetBurnTime > 0 && target->supersetBurnSource == body && target->GetHitOwner() == body;
 		bool impulse = target && target->vel.isZero() && target->spr.Angles.Yaw == nullAngle;

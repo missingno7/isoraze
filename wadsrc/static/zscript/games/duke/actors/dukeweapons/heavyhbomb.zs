@@ -182,7 +182,7 @@ class DukePipeBomb : DukeActor
 		// Duke
 		if (xx < 788 / 16. && self.counter > 7 && self.vel.X == 0)
 			if (Raze.cansee(self.pos.plusZ(-8), self.sector, p.actor.pos.plusZ(p.actor.viewzoffset), p.cursector))
-				if (p.ammo_amount[weapon1] < gs.max_ammo_amount[weapon1])
+				if (p.GetAmmo(weapon1) < gs.max_ammo_amount[weapon1])
 				{
 					if (ud.coop >= 1 && Owner == self)
 					{
@@ -193,7 +193,7 @@ class DukePipeBomb : DukeActor
 					if (weapon2 >= 0) p.addammo(weapon2, 1);
 					p.actor.PlayActorSound("PLAYER_GET");
 
-					if (p.gotweapon[weapon1] == 0 || Owner == p.actor)
+					if (p.OwnsWeapon(weapon1) == 0 || Owner == p.actor)
 						p.addweapon(weapon1, true);
 
 					if (!Owner || !Owner.isPlayer())

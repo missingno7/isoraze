@@ -11,6 +11,9 @@
 #include "vm.h"
 #include "c_dispatch.h"
 #include "gamestate.h"
+#include "arsenal.h"
+#include "level.h"
+#include "enemies.h"
 
 namespace Superset
 {
@@ -86,8 +89,8 @@ void ClearDukeWeaponLoadout(Duke3d::DDukePlayer* duke)
 {
 	for (int weapon = 0; weapon < Duke3d::MAX_WEAPONS; ++weapon)
 	{
-		duke->ammo_amount[weapon] = 0;
-		duke->gotweapon[weapon] = weapon == Duke3d::KNEE_WEAPON;
+		duke->AmmoAmounts()[weapon] = 0;
+		duke->WeaponOwnership()[weapon] = weapon == Duke3d::KNEE_WEAPON;
 	}
 	duke->curr_weapon = Duke3d::KNEE_WEAPON;
 	duke->kickback_pic = duke->okickback_pic = 0;
@@ -114,6 +117,11 @@ bool IsBloodDirectAimTarget(DCoreActor* actor)
 void ForEachBloodAimTarget(int group, const std::function<void(const DukeAimCandidate&)>& visitor)
 {
 	if (group != 0 && group != 2) return;
+	if (group == 2) ForEachRuntimeTarget([&](const TargetInfo& target)
+	{
+		if (!dyn_cast<Blood::DBloodActor>(target.actor))
+			visitor({target.actor, true, false, target.alive, false, false, target.aim.Z - target.actor->spr.pos.Z});
+	});
 	auto source = Blood::getPlayer(myconnectindex);
 	Blood::BloodStatIterator it(Blood::kStatDude);
 	while (auto actor = it.Next())
@@ -132,6 +140,8 @@ Blood::PlayerWeaponServices* BloodMapWeaponServices(Blood::DBloodPlayer* blood)
 {
 	if (!IsBloodMap() || numplayers != 1) return nullptr;
 	auto duke = Duke3d::SecondaryDukePlayer(blood->pnum);
+	BindInventory(blood, blood, duke);
+	PrepareArsenalInput(blood, blood, duke);
 	bool wanted = !BloodWeaponsRequested();
 	CaptureStartingWeaponFamily(duke);
 	bool current = duke->supersetWeaponMode == 0;
@@ -161,8 +171,9 @@ Blood::PlayerWeaponServices* BloodMapWeaponServices(Blood::DBloodPlayer* blood)
 			blood->cmd.ucmd.setNewWeapon(0);
 		}
 	}
+	if (current) PrepareBloodMapDukePlayer(blood);
+	ApplyArsenalSelection(blood, blood, duke);
 	if (!current) return nullptr;
-	PrepareBloodMapDukePlayer(blood);
 	return &weaponServices;
 }
 
@@ -170,6 +181,7 @@ Duke3d::DDukePlayer* PrepareBloodMapDukePlayer(Blood::DBloodPlayer* blood)
 {
 	if (!IsBloodMap() || numplayers != 1) return nullptr;
 	auto duke = Duke3d::SecondaryDukePlayer(blood->pnum);
+	BindInventory(blood, blood, duke);
 	CaptureStartingWeaponFamily(duke);
 	if (!duke->GetActor())
 	{
@@ -204,7 +216,7 @@ int BloodMapForeignWeaponAmmo(Blood::DBloodPlayer* blood)
 	if (!IsBloodMap()) return -2;
 	auto duke = Duke3d::SecondaryDukePlayer(blood->pnum);
 	if (duke->supersetWeaponMode != 0 || !duke->GetActor()) return -2;
-	return duke->curr_weapon == Duke3d::KNEE_WEAPON ? -1 : duke->ammo_amount[duke->curr_weapon];
+	return duke->curr_weapon == Duke3d::KNEE_WEAPON ? -1 : duke->AmmoAmounts()[duke->curr_weapon];
 }
 void ClearBloodMapDukeWeapons()
 {
@@ -226,6 +238,7 @@ void ResetBloodMapDukeWeapons()
 		auto player = Duke3d::SecondaryDukePlayer(i);
 		if (!player) continue;
 		player->supersetWeaponMode = -1;
+		player->sharedInventory = nullptr;
 		player->supersetForeignWeaponsInitialized = false;
 		player->supersetForeignStartWithWeapons = false;
 	}
@@ -268,7 +281,7 @@ DEFINE_ACTION_FUNCTION(DDukeActor, AimHitscan)
 DEFINE_ACTION_FUNCTION(DDukeActor, HitscanAimOffset)
 {
 	PARAM_SELF_PROLOGUE(Duke3d::DDukeActor); PARAM_OBJECT(target, DCoreActor);
-	if (auto blood = dyn_cast<Blood::DBloodActor>(target); IsDukeWeaponActor(self) && blood && blood->IsDudeActor())
+	if (auto blood = dyn_cast<Blood::DBloodActor>(target); Superset::IsActive() && blood && blood->IsDudeActor())
 		ACTION_RETURN_FLOAT(blood->spr.scale.Y * Blood::getDudeInfo(blood->spr.type)->aimHeight);
 	auto duke = dyn_cast<Duke3d::DDukeActor>(target);
 	ACTION_RETURN_FLOAT(duke ? duke->spr.scale.X * int(TexMan.GetGameTexture(duke->spr.spritetexture())->GetDisplayHeight()) * .5 + duke->FloatVar(FName("sparkoffset")) : 0);
@@ -278,7 +291,15 @@ DEFINE_ACTION_FUNCTION(DDukeActor, TraceSharedHitscan)
 	PARAM_SELF_PROLOGUE(Duke3d::DDukeActor);
 	PARAM_FLOAT(x); PARAM_FLOAT(y); PARAM_FLOAT(z);
 	PARAM_FLOAT(dx); PARAM_FLOAT(dy); PARAM_FLOAT(dz); PARAM_POINTER(hit, HitInfoBase);
-	auto source = WeaponSource(self); if (!source) ACTION_RETURN_BOOL(false);
+	auto source = WeaponSource(self);
+	if (!source)
+	{
+		if (!RuntimeConServices(self)) ACTION_RETURN_BOOL(false);
+		THitInfo<DCoreActor> result {};
+		hitscan({x,y,z}, self->sector(), {dx,dy,dz}, result, CLIPMASK1);
+		*hit = result;
+		ACTION_RETURN_BOOL(true);
+	}
 	Blood::VectorScan(source, 0, z - source->spr.pos.Z, {dx, dy, dz}, 0, 1);
 	*hit = Blood::gHitInfo;
 	ACTION_RETURN_BOOL(true);
@@ -286,11 +307,14 @@ DEFINE_ACTION_FUNCTION(DDukeActor, TraceSharedHitscan)
 DEFINE_ACTION_FUNCTION(DDukeActor, SharedHitscanContact)
 {
 	PARAM_SELF_PROLOGUE(Duke3d::DDukeActor); PARAM_POINTER(hit, HitInfoBase); PARAM_OBJECT(spark, Duke3d::DDukeActor);
-	auto source = WeaponSource(self); if (!source) ACTION_RETURN_BOOL(false);
+	auto nativeSource = WeaponSource(self);
+	DCoreActor* source = nativeSource ? static_cast<DCoreActor*>(nativeSource) : self;
+	bool foreign = nativeSource || RuntimeConServices(self);
+	if (!foreign && !dyn_cast<Blood::DBloodActor>(hit->hitActor)) ACTION_RETURN_BOOL(false);
 	if (hit->hitWall && hit->hitWall->hasX() && hit->hitWall->xw().triggerVector)
-		Blood::trTriggerWall(hit->hitWall, Blood::kCmdWallImpact, source);
+		Blood::trTriggerWall(hit->hitWall, Blood::kCmdWallImpact, BloodState(source));
 	if (auto target = dyn_cast<Blood::DBloodActor>(hit->hitActor); target && target->hasX() && target->xspr.Vector)
-		Blood::trTriggerSprite(target, Blood::kCmdSpriteImpact, source);
+		Blood::trTriggerSprite(target, Blood::kCmdSpriteImpact, BloodState(source));
 	if (hit->hitActor) ApplyDukeHealthHit(hit->hitActor, spark, source);
 	spark->Destroy();
 	ACTION_RETURN_BOOL(true);
@@ -306,7 +330,7 @@ CCMD(superset_duke_weapon_check)
 	{
 		for (int weapon : {Duke3d::PISTOL_WEAPON, Duke3d::SHOTGUN_WEAPON, Duke3d::CHAINGUN_WEAPON})
 		{
-			duke->gotweapon[weapon] = true; duke->ammo_amount[weapon] = Duke3d::gs.max_ammo_amount[weapon];
+			duke->WeaponOwnership()[weapon] = true; duke->AmmoAmounts()[weapon] = Duke3d::gs.max_ammo_amount[weapon];
 		}
 	}
 	if (argv.argc() > 1 && !stricmp(argv[1], "target"))
@@ -331,7 +355,7 @@ CCMD(superset_duke_weapon_check)
 		while (auto target = it.Next()) if (target->spr.intowner == 31036) { Blood::evKillActor(target); Blood::seqKill(target); target->Destroy(); }
 	}
 	Printf("Superset Duke weapon state: mode=%d weapon=%d ammo=%d frame=%d body=%d source=%d primary=%s.\n",
-		duke->supersetWeaponMode, duke->curr_weapon, duke->ammo_amount[duke->curr_weapon], duke->kickback_pic,
+		duke->supersetWeaponMode, duke->curr_weapon, duke->AmmoAmounts()[duke->curr_weapon], duke->kickback_pic,
 		actor != nullptr, actor && WeaponSource(actor) == blood->GetActor(), PlayerArray[myconnectindex]->GetClass()->TypeName.GetChars());
 }
 }

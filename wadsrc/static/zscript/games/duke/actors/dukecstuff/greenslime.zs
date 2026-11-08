@@ -115,7 +115,7 @@ class DukeGreenSlime : DukeActor
 			self.angle = pactor.angle;
 
 			if ((p.PlayerInput(Duke.SB_FIRE) || (p.quick_kick > 0)) && pactor.extra > 0)
-				if (p.quick_kick > 0 || (p.curr_weapon != DukeWpn.HANDREMOTE_WEAPON && p.curr_weapon != DukeWpn.HANDBOMB_WEAPON && p.curr_weapon != DukeWpn.TRIPBOMB_WEAPON && p.ammo_amount[p.curr_weapon] >= 0))
+				if (p.quick_kick > 0 || (p.curr_weapon != DukeWpn.HANDREMOTE_WEAPON && p.curr_weapon != DukeWpn.HANDBOMB_WEAPON && p.curr_weapon != DukeWpn.TRIPBOMB_WEAPON && p.GetAmmo(p.curr_weapon) >= 0))
 				{
 					for (int x = 0; x < 8; x++)
 					{

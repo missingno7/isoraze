@@ -40,7 +40,7 @@ class RedneckEmptyBike : DukeActor
 		{
 			p.actor.pos.XY = self.pos.XY;
 			p.SetTargetAngle(self.angle, true);
-			p.ammo_amount[RRWpn.MOTORCYCLE_WEAPON] = self.saved_ammo;
+			p.SetAmmo(RRWpn.MOTORCYCLE_WEAPON, self.saved_ammo);
 			self.Destroy();
 			p.StartMotorcycle();
 		}
@@ -87,7 +87,7 @@ class RedneckEmptyBoat : DukeActor
 		{
 			p.actor.pos.XY = self.pos.XY;
 			p.SetTargetAngle(self.angle, true);
-			p.ammo_amount[RRWpn.BOAT_WEAPON] = self.saved_ammo;
+			p.SetAmmo(RRWpn.BOAT_WEAPON, self.saved_ammo);
 			self.Destroy();
 			p.StartBoat();
 		}

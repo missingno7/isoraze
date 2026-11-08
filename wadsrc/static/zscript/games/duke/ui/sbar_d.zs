@@ -184,7 +184,7 @@ class DukeStatusBar : DukeCommonStatusBar
 		let wicon = ammo_sprites[weapon];
 		if (wicon.length() > 0)
 		{
-			int ammo = p.ammo_amount[weapon];
+			int ammo = p.GetAmmo(weapon);
 			if (weapon != DukeWpn.PISTOL_WEAPON || (weapon == DukeWpn.PISTOL_WEAPON && !cl_showmagamt))
 			{
 				format = String.Format("%d", ammo);
@@ -270,7 +270,7 @@ class DukeStatusBar : DukeCommonStatusBar
 		//
 		DrawImage("AMMOBOX", (37, -2), DI_ITEM_LEFT_BOTTOM, scale:(scale, scale));
 		int wp = (p.curr_weapon == DukeWpn.HANDREMOTE_WEAPON) ? DukeWpn.HANDBOMB_WEAPON : p.curr_weapon;
-		format = String.Format("%d", p.ammo_amount[wp]);
+		format = String.Format("%d", p.GetAmmo(wp));
 		DrawString(digiFont, format, (52, -digiFont.mFont.GetHeight() * scale - 3), DI_TEXT_ALIGN_CENTER, Font.CR_UNTRANSLATED, scale:(scale, scale));
 
 		//
@@ -385,7 +385,7 @@ class DukeStatusBar : DukeCommonStatusBar
 	int ShadeForWeapon(DukePlayer p, int weapon, int optweapon = -1)
 	{
 		// Headache-inducing math at play here.
-		return (((!p.ammo_amount[weapon]) | (!p.gotweapon[weapon])) * 9) + 12 - 18 * ((p.curr_weapon == weapon) || (optweapon != -1 && p.curr_weapon == optweapon));
+		return (((!p.GetAmmo(weapon)) | (!p.OwnsWeapon(weapon))) * 9) + 12 - 18 * ((p.curr_weapon == weapon) || (optweapon != -1 && p.curr_weapon == optweapon));
 	}
 
 
@@ -393,18 +393,18 @@ class DukeStatusBar : DukeCommonStatusBar
 	{
 		int cw = p.curr_weapon;
 
-		DrawWeaponNum(2, x, y, p.ammo_amount[DukeWpn.PISTOL_WEAPON], Duke.MaxAmmoAmount(DukeWpn.PISTOL_WEAPON), 12 - 20 * (cw == DukeWpn.PISTOL_WEAPON), 3);
-		DrawWeaponNum(3, x, y + 6, p.ammo_amount[DukeWpn.SHOTGUN_WEAPON], Duke.MaxAmmoAmount(DukeWpn.SHOTGUN_WEAPON), ShadeForWeapon(p, DukeWpn.SHOTGUN_WEAPON), 3);
-		DrawWeaponNum(4, x, y + 12, p.ammo_amount[DukeWpn.CHAINGUN_WEAPON], Duke.MaxAmmoAmount(DukeWpn.CHAINGUN_WEAPON), ShadeForWeapon(p, DukeWpn.CHAINGUN_WEAPON), 3);
-		DrawWeaponNum(5, x + 39, y, p.ammo_amount[DukeWpn.RPG_WEAPON], Duke.MaxAmmoAmount(DukeWpn.RPG_WEAPON), ShadeForWeapon(p, DukeWpn.RPG_WEAPON), 2);
-		DrawWeaponNum(6, x + 39, y + 6, p.ammo_amount[DukeWpn.HANDBOMB_WEAPON], Duke.MaxAmmoAmount(DukeWpn.HANDBOMB_WEAPON), ShadeForWeapon(p, DukeWpn.HANDBOMB_WEAPON, DukeWpn.HANDREMOTE_WEAPON), 2);
-		if (p.subweapon & (1 << DukeWpn.GROW_WEAPON)) // original code says: if(!p.ammo_amount[SHRINKER_WEAPON] || cw == GROW_WEAPON)
-			DrawWeaponNum(7, x + 39, y + 12, p.ammo_amount[DukeWpn.GROW_WEAPON], Duke.MaxAmmoAmount(DukeWpn.GROW_WEAPON), ShadeForWeapon(p, DukeWpn.GROW_WEAPON), 2);
+		DrawWeaponNum(2, x, y, p.GetAmmo(DukeWpn.PISTOL_WEAPON), Duke.MaxAmmoAmount(DukeWpn.PISTOL_WEAPON), 12 - 20 * (cw == DukeWpn.PISTOL_WEAPON), 3);
+		DrawWeaponNum(3, x, y + 6, p.GetAmmo(DukeWpn.SHOTGUN_WEAPON), Duke.MaxAmmoAmount(DukeWpn.SHOTGUN_WEAPON), ShadeForWeapon(p, DukeWpn.SHOTGUN_WEAPON), 3);
+		DrawWeaponNum(4, x, y + 12, p.GetAmmo(DukeWpn.CHAINGUN_WEAPON), Duke.MaxAmmoAmount(DukeWpn.CHAINGUN_WEAPON), ShadeForWeapon(p, DukeWpn.CHAINGUN_WEAPON), 3);
+		DrawWeaponNum(5, x + 39, y, p.GetAmmo(DukeWpn.RPG_WEAPON), Duke.MaxAmmoAmount(DukeWpn.RPG_WEAPON), ShadeForWeapon(p, DukeWpn.RPG_WEAPON), 2);
+		DrawWeaponNum(6, x + 39, y + 6, p.GetAmmo(DukeWpn.HANDBOMB_WEAPON), Duke.MaxAmmoAmount(DukeWpn.HANDBOMB_WEAPON), ShadeForWeapon(p, DukeWpn.HANDBOMB_WEAPON, DukeWpn.HANDREMOTE_WEAPON), 2);
+		if (p.subweapon & (1 << DukeWpn.GROW_WEAPON)) // original code says: if(!p.GetAmmo(SHRINKER_WEAPON) || cw == GROW_WEAPON)
+			DrawWeaponNum(7, x + 39, y + 12, p.GetAmmo(DukeWpn.GROW_WEAPON), Duke.MaxAmmoAmount(DukeWpn.GROW_WEAPON), ShadeForWeapon(p, DukeWpn.GROW_WEAPON), 2);
 		else
-			DrawWeaponNum(7, x + 39, y + 12, p.ammo_amount[DukeWpn.SHRINKER_WEAPON], Duke.MaxAmmoAmount(DukeWpn.SHRINKER_WEAPON), ShadeForWeapon(p, DukeWpn.SHRINKER_WEAPON), 2);
-		DrawWeaponNum(8, x + 70, y, p.ammo_amount[DukeWpn.DEVISTATOR_WEAPON], Duke.MaxAmmoAmount(DukeWpn.DEVISTATOR_WEAPON), ShadeForWeapon(p, DukeWpn.DEVISTATOR_WEAPON), 2);
-		DrawWeaponNum(9, x + 70, y + 6, p.ammo_amount[DukeWpn.TRIPBOMB_WEAPON], Duke.MaxAmmoAmount(DukeWpn.TRIPBOMB_WEAPON), ShadeForWeapon(p, DukeWpn.TRIPBOMB_WEAPON), 2);
-		DrawWeaponNum(0, x + 70, y + 12, p.ammo_amount[DukeWpn.FREEZE_WEAPON], Duke.MaxAmmoAmount(DukeWpn.FREEZE_WEAPON), ShadeForWeapon(p, DukeWpn.FREEZE_WEAPON), 2);
+			DrawWeaponNum(7, x + 39, y + 12, p.GetAmmo(DukeWpn.SHRINKER_WEAPON), Duke.MaxAmmoAmount(DukeWpn.SHRINKER_WEAPON), ShadeForWeapon(p, DukeWpn.SHRINKER_WEAPON), 2);
+		DrawWeaponNum(8, x + 70, y, p.GetAmmo(DukeWpn.DEVISTATOR_WEAPON), Duke.MaxAmmoAmount(DukeWpn.DEVISTATOR_WEAPON), ShadeForWeapon(p, DukeWpn.DEVISTATOR_WEAPON), 2);
+		DrawWeaponNum(9, x + 70, y + 6, p.GetAmmo(DukeWpn.TRIPBOMB_WEAPON), Duke.MaxAmmoAmount(DukeWpn.TRIPBOMB_WEAPON), ShadeForWeapon(p, DukeWpn.TRIPBOMB_WEAPON), 2);
+		DrawWeaponNum(0, x + 70, y + 12, p.GetAmmo(DukeWpn.FREEZE_WEAPON), Duke.MaxAmmoAmount(DukeWpn.FREEZE_WEAPON), ShadeForWeapon(p, DukeWpn.FREEZE_WEAPON), 2);
 	}
 
 	//==========================================================================
@@ -453,7 +453,7 @@ class DukeStatusBar : DukeCommonStatusBar
 		if (p.curr_weapon != DukeWpn.KNEE_WEAPON)
 		{
 			int wep = (p.curr_weapon == DukeWpn.HANDREMOTE_WEAPON)? DukeWpn.HANDBOMB_WEAPON : p.curr_weapon;
-			format = String.Format("%d", p.ammo_amount[wep]);
+			format = String.Format("%d", p.GetAmmo(wep));
 			DrawString(digiFont, format, (207, top + 17), DI_TEXT_ALIGN_CENTER);
 		}
 
@@ -548,7 +548,7 @@ class DukeStatusBar : DukeCommonStatusBar
 		
 		for(int i = 0; i <= maxweap; i++)
 		{
-			if (p.gotweapon[i] && weaponIcons[i] != "") 
+			if (p.OwnsWeapon(i) && weaponIcons[i] != "")
 			{
 				if (p.curr_weapon == i || 
 					(p.curr_weapon == DukeWpn.HANDREMOTE_WEAPON && i == DukeWpn.HANDBOMB_WEAPON) ||
@@ -573,7 +573,7 @@ class DukeStatusBar : DukeCommonStatusBar
 				stats.ammoselect = stats.ammoicons.Size();
 			}
 			stats.ammoicons.Push(ammo_sprites[ammonum]);
-			int num = p.ammo_amount[ammonum];
+			int num = p.GetAmmo(ammonum);
 			stats.ammovalues.Push(num);
 			stats.ammomaxvalues.Push(Duke.MaxAmmoAmount(ammonum));
 		}
