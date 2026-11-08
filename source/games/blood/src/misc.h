@@ -55,6 +55,7 @@ void WeaponInit(void);
 void WeaponDraw(DBloodPlayer* pPlayer, int shade, double xpos, double ypos, int palnum, DAngle angle);
 void WeaponRaise(DBloodPlayer* pPlayer);
 void WeaponLower(DBloodPlayer* pPlayer);
+bool WeaponCanStow(DBloodPlayer* pPlayer);
 int WeaponUpgrade(DBloodPlayer* pPlayer, int newWeapon);
 void WeaponProcess(DBloodPlayer* pPlayer);
 void WeaponUpdateState(DBloodPlayer* pPlayer);

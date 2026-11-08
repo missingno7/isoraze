@@ -10,6 +10,7 @@ namespace Superset
 void Configure(int mapGameFlags);
 bool IsActive();
 bool CalebSelected();
+bool BloodWeaponsRequested();
 bool HasBloodMovement(DCorePlayer* player);
 bool PrepareBloodMovement(DCorePlayer* player);
 bool TickBloodMovement(DCorePlayer* player);

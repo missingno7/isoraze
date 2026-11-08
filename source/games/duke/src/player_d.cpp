@@ -393,15 +393,9 @@ void tickaccessswitch_d(DDukePlayer* p)
 	}
 }
 
-int doincrements_d(DDukePlayer* p)
+void tickweaponinteraction_d(DDukePlayer* p, bool dukeVoice)
 {
 	auto pact = p->GetActor();
-
-	p->player_par++;
-
-	if (p->invdisptime > 0)
-		p->invdisptime--;
-
 	if (p->tipincs > 0)
 	{
 		p->otipincs = p->tipincs;
@@ -415,7 +409,7 @@ int doincrements_d(DDukePlayer* p)
 		if (p->last_pissed_time == (26 * 219))
 		{
 			S_PlayActorSound(FLUSH_TOILET, pact);
-			if (p->pnum == screenpeek || ud.coop == 1)
+			if (dukeVoice && (p->pnum == screenpeek || ud.coop == 1))
 				S_PlayActorSound(DUKE_PISSRELIEF, pact);
 		}
 
@@ -425,6 +419,25 @@ int doincrements_d(DDukePlayer* p)
 			p->oweapon_pos = p->weapon_pos = 10;
 		}
 	}
+}
+
+static void TickQuickKick(DDukePlayer* p)
+{
+	if (p->quick_kick > 0 && p->GetActor()->spr.pal != 1)
+	{
+		p->last_quick_kick = p->quick_kick + 1;
+		p->quick_kick--;
+		if (p->quick_kick == 8) shoot(p->GetActor(), DukeMeleeAttackClass);
+	}
+	else if (p->last_quick_kick > 0) p->last_quick_kick--;
+}
+
+int doincrements_d(DDukePlayer* p)
+{
+	auto pact = p->GetActor();
+	p->player_par++;
+	if (p->invdisptime > 0) p->invdisptime--;
+	tickweaponinteraction_d(p, true);
 
 	if (p->crack_time > 0)
 	{
@@ -481,15 +494,7 @@ int doincrements_d(DDukePlayer* p)
 		}
 	}
 
-	if (p->quick_kick > 0 && pact->spr.pal != 1)
-	{
-		p->last_quick_kick = p->quick_kick + 1;
-		p->quick_kick--;
-		if (p->quick_kick == 8)
-			shoot(pact, DukeMeleeAttackClass);
-	}
-	else if (p->last_quick_kick > 0)
-		p->last_quick_kick--;
+	TickQuickKick(p);
 
 	tickaccessswitch_d(p);
 
@@ -1542,6 +1547,48 @@ static void processweapon(DDukePlayer* const p, ESyncBits actions)
 //
 //---------------------------------------------------------------------------
 
+void tickweapons_d(DDukePlayer* p, bool nativePlayer)
+{
+	auto& actions = p->cmd.ucmd.actions;
+	if (p->show_empty_weapon > 0)
+	{
+		p->show_empty_weapon--;
+		if (p->show_empty_weapon == 0 && (WeaponSwitch(p->pnum) & 2))
+		{
+			if (p->last_full_weapon == GROW_WEAPON) p->subweapon |= (1 << GROW_WEAPON);
+			else if (p->last_full_weapon == SHRINKER_WEAPON) p->subweapon &= ~(1 << GROW_WEAPON);
+			fi.addweapon(p, p->last_full_weapon, true);
+			return;
+		}
+	}
+	if (!Mashup::IsCombatPlayer(p)) dokneeattack(p);
+	if (nativePlayer)
+	{
+		if (fi.doincrements(p)) return;
+	}
+	else
+	{
+		// The foreign character owns its body, inventory timers and idle voice.
+		// Only the native weapon's quick-kick timing is advanced here.
+		TickQuickKick(p);
+		p->knuckle_incs = 0;
+	}
+	if (p->weapon_pos != 0)
+	{
+		if (p->weapon_pos == -9)
+		{
+			if (p->last_weapon >= 0)
+			{
+				p->oweapon_pos = p->weapon_pos = 10;
+				p->last_weapon = -1;
+			}
+			else if (p->holster_weapon == 0) p->oweapon_pos = p->weapon_pos = 10;
+		}
+		else p->weapon_pos--;
+	}
+	processweapon(p, actions);
+}
+
 void processinput_d(DDukePlayer* const p)
 {
 	int k, doubvel;
@@ -1942,45 +1989,7 @@ HORIZONLY:
 	p->doPitchInput();
 
 	p->checkhardlanding();
-
-	//Shooting code/changes
-
-	if (p->show_empty_weapon > 0)
-	{
-		p->show_empty_weapon--;
-		if (p->show_empty_weapon == 0 && (WeaponSwitch(p->pnum) & 2))
-		{
-			if (p->last_full_weapon == GROW_WEAPON)
-				p->subweapon |= (1 << GROW_WEAPON);
-			else if (p->last_full_weapon == SHRINKER_WEAPON)
-				p->subweapon &= ~(1 << GROW_WEAPON);
-			fi.addweapon(p, p->last_full_weapon, true);
-			return;
-		}
-	}
-
-	if (!Mashup::IsCombatPlayer(p)) dokneeattack(p);
-
-	if (fi.doincrements(p)) return;
-
-	if (p->weapon_pos != 0)
-	{
-		if (p->weapon_pos == -9)
-		{
-			if (p->last_weapon >= 0)
-			{
-				p->oweapon_pos = p->weapon_pos = 10;
-				// if(p->curr_weapon == KNEE_WEAPON) p->kickback_pic = 1;
-				p->last_weapon = -1;
-			}
-			else if (p->holster_weapon == 0)
-				p->oweapon_pos = p->weapon_pos = 10;
-		}
-		else p->weapon_pos--;
-	}
-
-	// HACKS
-	processweapon(p, actions);
+	tickweapons_d(p, true);
 }
 
 END_DUKE_NS

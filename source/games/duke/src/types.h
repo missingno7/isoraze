@@ -252,6 +252,8 @@ public:
 	TObjPtr<DCorePlayer*> bloodCombat;
 	bool bloodMovement;
 	int bloodPublishedHealth;
+	int supersetWeaponMode = -1; // Applied mode: -1 uninitialized, 0 Duke, 1 Blood.
+	int supersetStowedBloodWeapon = 1;
 	DVector3 vel;
 	DVector2 bobpos;
 	DVector2 fric;

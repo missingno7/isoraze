@@ -51,6 +51,59 @@ BEGIN_DUKE_NS
 //
 //---------------------------------------------------------------------------
 
+static void QuickKickInput(DDukePlayer* p)
+{
+	if (!!(p->cmd.ucmd.actions & SB_QUICK_KICK) && p->quick_kick == 0 && (p->curr_weapon != KNEE_WEAPON || p->kickback_pic == 0))
+	{
+		SetGameVarID(g_iReturnVarID, 0, nullptr, p->pnum);
+		OnEvent(EVENT_QUICKKICK, p->pnum, nullptr, -1);
+		if (GetGameVarID(g_iReturnVarID, nullptr, p->pnum).value() == 0)
+		{
+			p->quick_kick = 14;
+			if (!p->quick_kick_msg && p->pnum == screenpeek) FTA(QUOTE_MIGHTY_FOOT, p);
+			p->quick_kick_msg = true;
+		}
+	}
+}
+
+static void WeaponChoiceInput(DDukePlayer* p)
+{
+	int weap = p->cmd.ucmd.getNewWeapon();
+	if (weap > 1 && p->kickback_pic > 0) p->wantweaponfire = weap - 1;
+	fi.selectweapon(p, weap);
+	if (!!(p->cmd.ucmd.actions & SB_HOLSTER) && p->curr_weapon > KNEE_WEAPON)
+	{
+		if (p->holster_weapon == 0 && p->weapon_pos == 0)
+		{
+			p->holster_weapon = 1;
+			p->weapon_pos = -1;
+			FTA(QUOTE_WEAPON_LOWERED, p);
+		}
+		else if (p->holster_weapon == 1 && p->weapon_pos == -9)
+		{
+			p->holster_weapon = 0;
+			p->weapon_pos = 10;
+			FTA(QUOTE_WEAPON_RAISED, p);
+		}
+	}
+}
+
+void hud_weapon_input(DDukePlayer* p)
+{
+	// Character controllers can reuse weapon input without also consuming the
+	// other game's inventory hotkeys, view or movement input.
+	p->backupweapon();
+	p->aim_mode = !(p->cmd.ucmd.actions & SB_AIMMODE);
+	QuickKickInput(p);
+	if (!(p->cmd.ucmd.actions & SB_QUICK_KICK)) p->quick_kick_msg = false;
+	if (!(p->cmd.ucmd.actions & (SB_WEAPONMASK_BITS | SB_HOLSTER))) p->interface_toggle_flag = 0;
+	else if (!p->interface_toggle_flag)
+	{
+		p->interface_toggle_flag = 1;
+		if (!paused && p->GetActor()->spr.extra > 0) WeaponChoiceInput(p);
+	}
+}
+
 void hud_input(DDukePlayer* const p)
 {
 	int i, k;
@@ -93,17 +146,7 @@ void hud_input(DDukePlayer* const p)
 	}
 	else
 	{
-		if (!!(p->cmd.ucmd.actions & SB_QUICK_KICK) && p->quick_kick == 0 && (p->curr_weapon != KNEE_WEAPON || p->kickback_pic == 0))
-		{
-			SetGameVarID(g_iReturnVarID, 0, nullptr, p->pnum);
-			OnEvent(EVENT_QUICKKICK, p->pnum, nullptr, -1);
-			if (GetGameVarID(g_iReturnVarID, nullptr, p->pnum).value() == 0)
-			{
-				p->quick_kick = 14;
-				if (!p->quick_kick_msg && p->pnum == screenpeek) FTA(QUOTE_MIGHTY_FOOT, p);
-				p->quick_kick_msg = true;
-			}
-		}
+		QuickKickInput(p);
 	}
 	if (!(p->cmd.ucmd.actions & SB_QUICK_KICK)) p->quick_kick_msg = false;
 
@@ -242,31 +285,8 @@ void hud_input(DDukePlayer* const p)
 			if (dainv >= 1 && dainv < 8) FTA(invquotes[dainv - 1], p);
 		}
 
-		int weap = p->cmd.ucmd.getNewWeapon();
-		if (weap > 1 && p->kickback_pic > 0)
-			p->wantweaponfire = weap - 1;
-
-		// Here we have to be extra careful that the weapons do not get mixed up, so let's keep the code for Duke and RR completely separate.
-		fi.selectweapon(p, weap);
-
-		if (!!(p->cmd.ucmd.actions & SB_HOLSTER))
-		{
-			if (p->curr_weapon > KNEE_WEAPON)
-			{
-				if (p->holster_weapon == 0 && p->weapon_pos == 0)
-				{
-					p->holster_weapon = 1;
-					p->weapon_pos = -1;
-					FTA(QUOTE_WEAPON_LOWERED, p);
-				}
-				else if (p->holster_weapon == 1 && p->weapon_pos == -9)
-				{
-					p->holster_weapon = 0;
-					p->weapon_pos = 10;
-					FTA(QUOTE_WEAPON_RAISED, p);
-				}
-			}
-		}
+		// The dispatcher retains the native Duke/RR selection implementations.
+		WeaponChoiceInput(p);
 
 		if (p->itemUsed(ICON_HOLODUKE) && (isRR() || p->newOwner == nullptr))
 		{

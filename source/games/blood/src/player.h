@@ -107,6 +107,7 @@ struct MovementWorldServices
 
 struct PlayerWorldServices : MovementWorldServices
 {
+	virtual bool UseBloodWeapons() const { return true; }
 	virtual void UseAction(DBloodPlayer* player) = 0;
 	virtual void CollectPickups(DBloodPlayer* player) = 0;
 	virtual bool CanPickUp(DBloodActor* item) const = 0;

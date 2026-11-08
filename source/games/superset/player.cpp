@@ -129,6 +129,7 @@ class DukePlayerWorld final : public Blood::PlayerWorldServices
 {
 public:
 	bool useRequested = false;
+	bool UseBloodWeapons() const override { return Mashup::IsCombatPlayer(Duke3d::getPlayer(myconnectindex)); }
 	bool NoClip() const override { return Duke3d::ud.clipping != 0; }
 	bool IsUnderwater(sectortype* sector) const override { return sector->lotag == ST_2_UNDERWATER; }
 	int SurfaceType(CollisionBase& hit) const override
@@ -203,7 +204,7 @@ void ApplyCalebImpulse(DCorePlayer* player, const DVector2& impulse)
 
 void CollectBloodPickups(DCorePlayer* player)
 {
-	if (!IsActive() || !Mashup::IsCombatPlayer(player)) return;
+	if (!IsActive()) return;
 	auto blood = NativePlayer(player);
 	if (!blood || blood->GetActor()->xspr.health == 0) return;
 	DukePlayerWorld world;
@@ -300,6 +301,12 @@ bool TickBloodMovement(DCorePlayer* player)
 	else duke->cmd.ucmd.actions &= ~SB_OPEN;
 	Publish(duke, blood);
 	Duke3d::tickaccessswitch_d(duke);
+	Duke3d::tickweaponinteraction_d(duke, false);
+	if (!Mashup::IsCombatPlayer(duke) && state->xspr.health > 0)
+	{
+		Duke3d::hud_weapon_input(duke);
+		Duke3d::tickweapons_d(duke, false);
+	}
 	if (probe.active)
 	{
 		probe.jumpInput |= !!(blood->cmd.ucmd.actions & SB_JUMP);

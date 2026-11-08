@@ -590,6 +590,18 @@ t_WeaponModes weaponModes[] = {
 	{ 0, -1 },
 };
 
+bool WeaponCanStow(DBloodPlayer* player)
+{
+	if (player->weaponTimer > 0 || player->qavLoop || checkLitSprayOrTNT(player)) return false;
+	if (!player->curWeapon) return true;
+	// These native idle assets distinguish a completed action from an
+	// intermediate reload/raise stage whose timer happens to have reached zero.
+	for (int idle : {kQAVFORKIDLE, kQAVLITEIDLE, kQAVCANIDLE, kQAVSHOTI1, kQAVSHOTI2, kQAVSHOTI3,
+		kQAV2SHOTI, kQAVTOMIDLE, kQAV2TOMIDLE})
+		if (player->weaponQav == qavGetCorrectID(idle)) return true;
+	return false;
+}
+
 void WeaponRaise(DBloodPlayer* pPlayer)
 {
 	assert(pPlayer != NULL);

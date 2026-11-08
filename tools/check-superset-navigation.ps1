@@ -6,9 +6,11 @@ param(
     [string]$PythonPath = 'python',
     [string]$ExePath = (Join-Path $PSScriptRoot '../build-mashup/Release/raze.exe'),
     [ValidateSet('duke', 'caleb')][string[]]$Players = @('duke', 'caleb'),
+    [ValidateSet('auto', 'blood', 'duke')][string]$WeaponFamily = 'auto',
     [string]$OutputDirectory = (Join-Path $PSScriptRoot '../build-mashup/checks')
 )
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'superset-check-common.ps1')
 $ExePath = (Resolve-Path -LiteralPath $ExePath).Path
 $DukeGrp = (Resolve-Path -LiteralPath $DukeGrp).Path
 $BloodDirectory = (Resolve-Path -LiteralPath $BloodDirectory).Path
@@ -32,19 +34,21 @@ i_pauseinbackground=false
 vid_vsync=false
 cl_nostartscreens=true
 '@ | Set-Content -LiteralPath $config
+    # Console waits and normal input packets can run on different sides of a
+    # catch-up batch. Hold Use through that queue; native map logic debounces it.
     $checks = @(
         'wait 90',
-        'superset_navigation pose 0', 'wait 4', '+Open', 'wait 2', '-Open', 'wait 30',
+        'superset_navigation pose 0', 'wait 4', '+Open', 'wait 30', '-Open', 'wait 30',
         '+Move_Forward', 'wait 30', '-Move_Forward', 'wait 4',
         'superset_navigation check door 2 128 0 none',
-        'superset_navigation pose 3', 'wait 4', '+Open', 'wait 2', '-Open', 'wait 30',
+        'superset_navigation pose 3', 'wait 4', '+Open', 'wait 30', '-Open', 'wait 30',
         'superset_navigation check lift 3 96 0 ground',
         'superset_navigation pose 5', 'wait 4', 'superset_navigation check teleport 6 128 0 none',
         'superset_navigation pose 2', 'wait 30', 'superset_navigation check cooldown 2 128 0 cooldown',
         'superset_navigation pose 5', 'wait 4', 'superset_navigation check repeat 6 128 0 none',
-        'superset_navigation pose 9', 'wait 4', '+Open', 'wait 2', '-Open', 'wait 24',
+        'superset_navigation pose 9', 'wait 4', '+Open', 'wait 30', '-Open', 'wait 24',
         'superset_navigation check locked 9 128 0 locked',
-        'superset_navigation key', '+Open', 'wait 2', '-Open', 'wait 80',
+        'superset_navigation key', '+Open', 'wait 30', '-Open', 'wait 80',
         'superset_navigation check access 9 128 0 key',
         'superset_navigation pose 11', 'wait 4', 'superset_navigation check exitclock 11 128 0 clock',
         'superset_navigation pose 9', 'wait 4',
@@ -57,7 +61,7 @@ cl_nostartscreens=true
         'superset_navigation check surface 7 128 0 none',
         'screenshot', 'wait 5', 'quit'
     )
-    $checks -join '; ' | Set-Content -LiteralPath $script
+    Write-SupersetCheckScript -Commands $checks -ScriptPath $script
     $start = [Diagnostics.ProcessStartInfo]::new()
     $start.FileName = $ExePath
     $start.WorkingDirectory = Split-Path -Parent $ExePath
@@ -65,7 +69,7 @@ cl_nostartscreens=true
     $start.CreateNoWindow = $true
     $start.WindowStyle = [Diagnostics.ProcessWindowStyle]::Hidden
     foreach ($arg in @('-iwad', $DukeGrp, '-superset', '-blooddata', $BloodDirectory,
-        '-superset-player', $player, '-noautoload', '-noautoexec', '-nologo', '-nosound', '-nomusic',
+        '-superset-player', $player, '-superset-weapons', $WeaponFamily, '-noautoload', '-noautoexec', '-nologo', '-nosound', '-nomusic',
         '-width', '800', '-height', '600', '-config', $config, '-savedir', $caseRoot, '-shotdir', $caseRoot,
         '-file', $mapPath, '-map', 'navigation.map', '+logfile', $log, '+iso_debug', '0', '+exec', $script)) {
         $start.ArgumentList.Add($arg)

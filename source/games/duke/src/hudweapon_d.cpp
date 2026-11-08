@@ -36,6 +36,7 @@ source as it is released.
 #include "global.h"
 #include "dukeactor.h"
 #include "buildtiles.h"
+#include "games/superset/superset.h"
 
 BEGIN_DUKE_NS 
 
@@ -295,7 +296,9 @@ void displayweapon_d(DDukePlayer* const p, double interpfrac)
 		}
 	}
 
-	if (pact->spr.scale.X < 0.625)
+	// Blood SEQ repeats describe different artwork, not Duke's shrink state.
+	// Foreign-player shrinking needs its own effect state when implemented.
+	if (!Superset::HasBloodMovement(p) && pact->spr.scale.X < 0.625)
 	{
 		//shrunken..
 		animateshrunken(p, offsets.X, offsets.Y + gun_pos, shade, o, interpfrac);

@@ -13,7 +13,7 @@ param(
     [string]$DukeTransitionMap,
     [string[]]$DukeMaps = @('E1L1', 'E2L1', 'E3L1', 'E4L1'),
     [string]$OutputDirectory = (Join-Path $PSScriptRoot '../build-mashup/checks'),
-    [ValidateRange(10, 60)][int]$TimeoutSeconds = 45
+    [ValidateRange(10, 120)][int]$TimeoutSeconds = 45
 )
 
 $ErrorActionPreference = 'Stop'
@@ -81,7 +81,9 @@ cl_resumesavegame=true
     $fxClear = if ($fxActive) { 'superset_fx_check clear' } else { 'echo Native effects retained' }
     $fxSaved = if ($fxActive) { 'superset_fx_check saved' } else { 'echo Native effects retained' }
     $movementCheck = if ($Superset -and $SupersetPlayer -eq 'caleb' -and $case.Name.StartsWith('duke-')) {
-        'superset_movement_check start; +Jump; wait 2; -Jump; +Move_Forward; wait 4; -Move_Forward; wait 30; +Crouch; wait 6; -Crouch; wait 12; superset_movement_check'
+        # Hold inputs across queued/catch-up packets. Crouched travel keeps the
+        # rooftop probe local while still exercising native horizontal movement.
+        'superset_movement_check start; +Jump; wait 30; -Jump; wait 40; +Crouch; wait 30; +Move_Forward; wait 30; -Move_Forward; -Crouch; wait 30; superset_movement_check'
     } else { 'echo Native movement retained' }
     $frontendCheck = if ($Superset -and $case.Name.StartsWith('duke-')) { 'printinterface; superset_check' } else { 'printinterface' }
     $alterPrototype = if ($Superset -and $case.Name.StartsWith('duke-')) {

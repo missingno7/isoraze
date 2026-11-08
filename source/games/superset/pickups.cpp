@@ -82,9 +82,9 @@ CCMD(superset_spawn_pickup)
 		return;
 	}
 	auto player = PlayerArray[myconnectindex];
-	if (!Mashup::IsCombatPlayer(player))
+	if (!Mashup::GetBloodPlayer(player->pnum))
 	{
-		Printf("Enable the Blood weapon/inventory mode first (+mashup_combat 1 for Duke).\n");
+		Printf("The player inventory is not initialized yet.\n");
 		return;
 	}
 	if (SpawnAhead(player, type)) Printf("Spawned Blood %s.\n", argv[1]);

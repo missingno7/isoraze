@@ -53,12 +53,15 @@ Use `-iwad` for Duke data and `-blooddata` for the isolated Blood bank:
 The default player remains Duke. Add `-superset-player caleb` to select native
 Blood movement, camera inertia, jumping/crouching and the native pitchfork.
 Blood shotgun/Tommy gun, spray-can primary fire and selected native pickups are
-available through the
-explicit spawn commands described below; Duke pickups are not replaced yet.
-`-superset-player duke` retains Duke movement; the optional `+mashup_combat 1`
-Blood weapon/inventory mode is also available with Duke. The HUD and map mechanisms
-still use the Duke adapter. Only Duke map data is accepted by this first map
-adapter; Blood-map loading and independent loadout/enemy selections remain work
+available through the explicit spawn commands described below; Duke pickups
+are not replaced yet.
+`-superset-player duke` retains Duke movement. Add `-superset-weapons blood`
+or `-superset-weapons duke` to choose a weapon family independently of the
+character. `-superset-weapons auto` uses the character's default (Caleb/Blood,
+Duke/Duke); legacy `+mashup_combat 1` still requests Blood weapons in auto mode.
+The HUD and map mechanisms still use the Duke adapter. Only Duke map data is
+accepted by this first map
+adapter; Blood-map loading, a unified weapon list and enemy selections remain work
 for later milestones. The current Caleb adapter supports single-player.
 
 The frontend owns `Superset` configuration/autoexec/autoload sections, save and
@@ -113,8 +116,8 @@ This is an incremental native adapter, not the final shared actor/AI model.
 
 No scale compensation is applied: initial idle eye height is 56.6875 world units
 and horizontal radius is 12. Native Blood SEQ state and the selected controller
-are serialized with the session. Save schema is 2; rules revision is now 8
-after integrating freezing, Cold responses and resumable Blood sequences. Earlier
+are serialized with the session. Save schema is 2; rules revision is now 9
+after integrating freezing, resumable Blood sequences and independent weapon families. Earlier
 Superset bootstrap saves are intentionally incompatible with this experimental
 schema. The legacy native game save signatures remain separate.
 
@@ -326,10 +329,11 @@ Blood's existing seven damage categories supply the initial response vocabulary:
 
 These categories come from `actDamageDude`, the per-enemy `damageVal` table,
 player immunity and armor dispatch. They are not weapon/enemy pair rules.
-Heat damage does not itself request ignition; knockback, burning, freezing and
-shrinking remain separate work. Duke freezer/shrinker and nonphysical receiver
-mappings have not been settled by this increment. The first Duke receiver
-explicitly accepts Physical and rejects other shared categories.
+Heat damage does not itself request ignition. Knockback, burning, freezing and
+shrinking are separate concerns. The shared Duke receiver currently accepts
+Physical and Heat; other categories need native response adapters. Blood keeps
+its seven native responses and adds an independent Cold factor. Freezing's
+explicit defeat handling is described below; shared shrinking remains pending.
 
 Native Blood tines deal `17 << 3` Q4 units to a non-player (8.5 points), and
 `17 << 4` to a player. The bridge previously truncated every non-player hit to
@@ -451,8 +455,13 @@ damage amounts. They do not consume Duke ammunition. Flesh impacts use native
 Blood sound/FX; full material effects and autoaim against Duke actors remain
 integration work. Manual aiming works through the native hitscan path.
 
-Caleb enables this inventory automatically. Duke can use the same Blood weapons
-and pickups with `+mashup_combat 1` under `-superset`. This toggle still enables
+Caleb enables this weapon family automatically. Either character can use it
+with `-superset-weapons blood` or the runtime `superset_weapons blood` command.
+`superset_weapons duke` selects the native Duke inventory, including for Caleb;
+`superset_weapons auto` restores the character default. The archived
+`superset_weapon_profile` setting uses 0/1/2 for auto/Blood/Duke. Blood pickups
+remain collectible with either family active. Legacy `+mashup_combat 1` still enables
+Blood weapons when the family setting is auto. This toggle still enables
 only the pitchfork in the older `-bloodduke` experiment. Blood armor is consumed
 by Caleb's native damage receiver; the optional Duke movement/combat profile
 stores it but still uses Duke's incoming damage/shield receiver. That unfinished
@@ -559,8 +568,8 @@ damage turn, shotgun blood and hit gibs. They do not add impulse as a side effec
 of burn damage. Burning does not yet switch Duke enemies to a specialized
 burning AI/death animation. Fire versus frozen actors, extinguishing policy,
 and special actor exceptions still require explicit rules. Existing native
-CON responses to special states remain authoritative in this adapter; this
-increment does not establish a shared freezing/thawing model.
+CON responses to special states remain authoritative in this adapter. The shared
+Blood freezing/thawing receiver is described in the later freezing section.
 
 Burn duration, visual cadence and source identity serialize on the native world
 actor, with GC tracking. Attribution uses the physical player rather than the
@@ -691,6 +700,82 @@ The related regressions also passed:
   margin with the previous 60-second limit. The prior run passed its assertions
   but reached that limit just before exit.
 
+## Independent character and weapon families
+
+The character continues to own movement, size, health and incoming damage while
+the selected weapon family owns selection and attack timing. Caleb reuses Duke's
+native weapon input, selection, quick kick and firing routines without running
+Duke movement or inventory controls. Caleb's normal Blood armor and native
+damage receiver remain active. Map access/tip interactions keep their Duke
+timers and can temporarily prevent firing as in the original map simulation.
+
+Changing family retains both inventories, ammunition and the last Blood weapon.
+It releases attack buttons and lets the current native shot/reload/throw finish
+before handing off. Supported Blood weapons must reach a native idle QAV;
+timer zero alone can mean an intermediate reload stage. Duke weapon timing
+similarly remains native. Returning to Blood raises the stowed weapon through
+native selection/ammo checks. Existing projectiles and effects keep their owner
+when the emitting family is no longer selected.
+
+Rules revision 9 saves the requested family and each player's applied family,
+stowed weapon, both inventories and pending native action. A save taken during
+handoff resumes that action without refunding/repeating it. Older Superset rule
+revisions are intentionally rejected. Ordinary Blood and Duke save formats keep
+their previous signatures and behavior.
+
+This is two selectable native weapon inventories, not yet a single list of all
+weapons. Blood's supported set remains pitchfork, shotgun, Tommy gun and spray
+primary. Native Duke weapons are selectable, but their special interactions need
+individual validation; pistol and freezer have actual-input coverage for Caleb.
+For example, tripbomb planting directly changes Duke's body/vertical velocity;
+that dedicated interaction still needs a Blood-controller hook.
+Selecting Duke weapons does not activate Duke inventory controls/jetpack for
+Caleb. Blood sprite repeats are not interpreted as Duke's shrunken HUD state;
+the normal Duke weapon is drawn without changing Caleb's physical dimensions.
+Shrinking, player freezing, other Blood weapons and the reverse map
+adapter remain pending. Duke pickups retain Duke inventory ownership; automatic
+cross-game pickup conversion and the common armor policy remain open decisions.
+
+```powershell
+./tools/check-superset-weapons.ps1 -DukeGrp 'D:/dos/duke3D/duke3d.grp' -BloodDirectory 'D:/prog/isoraze/build-isoraze/run/blood-data' -PythonPath python -EnableSound
+```
+
+The fixture checks both characters, Blood pickups while Duke weapons are active,
+independent pistol/shell ammo, a handoff requested during shotgun alternate fire,
+stowed selection, fresh-map/load/GC restoration and replay of the pending action.
+Caleb additionally exercises movement/size and Blood health/armor with Duke guns.
+Save phases await completion through the ordinary input stream. Input pulses
+around saves also allow the native input pipeline to settle before firing.
+
+Verified on 2026-11-08: Release build and both character profiles passed
+(`weapons-20261108T051330934`), including Caleb's Blood incoming-damage receiver
+with Duke weapons selected. After correcting the foreign sprite-repeat HUD gate,
+Caleb passed again (`weapons-20261108T051700118`); its screenshot shows the native
+Duke pistol and the separate Blood armor readout. Both profiles passed actual
+freezer input, native ammo, frozen AI/SEQ, shatter, thaw and save/GC
+(`freeze-20261108T051514271`). Original Duke episode starts and Blood E1M1,
+including actual flare/spray ammo and missile persistence, passed
+(`runtime-20261108T051746355`). These are focused fixtures, not a full campaign
+or arbitrary-mod compatibility claim.
+
+Navigation passed for both characters using Duke weapons
+(`navigation-20261108T052329860`) and Caleb using Blood weapons
+(`navigation-20261108T052418233`). All eleven map assertions remain in place:
+doors, lift, access lock/key consumption, repeated transport/cooldown, exit
+clock, water transitions and restored map state. The fixture holds Use across
+the queued input window instead of relying on two-tick console pulses, and
+waits for the checkpoint save to complete before altering/loading the scene.
+Both native Blood inventory profiles also passed pickup amounts/caps,
+shotgun/Tommy primary and alternate fire, independent ammunition and saved items
+(`inventory-20261108T052441953`).
+The stock-map controller regression passed E1L1, save/load, incoming damage,
+both death/restart paths, FX expiry and a fresh E1L2 load
+(`runtime-20261108T052906437`). Its movement pulses now hold across queued input,
+with crouched horizontal travel to keep the roof probe local; movement, native
+eye/radius, single-collider and clock assertions are unchanged. Caleb's complete
+weapon-family fixture passed with the same input pacing
+(`weapons-20261108T053010365`).
+
 ## Shared freezing and Cold damage
 
 The first foreign freezing receiver supports the native Blood axe zombie and
@@ -751,10 +836,9 @@ question remains open; this default is not a settled crossover balance rule.
 ./tools/check-superset-freeze.ps1 -DukeGrp 'D:/dos/duke3D/duke3d.grp' -BloodDirectory 'D:/prog/isoraze/build-isoraze/run/blood-data' -PythonPath python -EnableSound
 ```
 
-The fixture exercises Duke's freezer through actual input and native ammo.
-Caleb's case explicitly launches native Duke freezer projectiles through
-`ShootThis`; Caleb cannot yet select Duke's weapon inventory. His shatter test
-uses actual pitchfork input; Duke's uses his native pistol. Snapshots and a
+The fixture exercises Duke's freezer through actual input and native ammo for
+both characters. Caleb switches to his Blood weapon family and uses actual
+pitchfork input for shattering; Duke uses his native pistol. Snapshots and a
 native physics observation check one collider, source/GC ownership, unchanged
 AI/SEQ during a vulnerable hold, frozen-body gravity, timed thaw with resumed native brain, native ice
 fragments and exactly one kill. Separate diagnostic calls check Cold resistance,
@@ -762,7 +846,7 @@ Q4 precision, independent freeze capability and native burning transformation
 with a deferred SEQ first frame. These component checks do not prove arbitrary
 maps, mods or other actor families.
 
-Both enemy and freezing fixtures now split their scripts at ordinary saves.
+Enemy, freezing, weapon, inventory and navigation fixtures split their scripts at ordinary saves.
 `superset_save_wait` continues only after the normal input-stream save completes,
 preventing a later load/map command from replacing a request or changing the
 world before its snapshot. A fixed tick delay had produced missing saves,

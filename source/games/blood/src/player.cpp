@@ -1520,7 +1520,7 @@ void ProcessInput(DBloodPlayer* pPlayer, PlayerWorldServices* world)
 		pPlayer->restTime = 0;
 	else if (pPlayer->restTime >= 0)
 		pPlayer->restTime += 4;
-	WeaponProcess(pPlayer);
+	if (!world || world->UseBloodWeapons()) WeaponProcess(pPlayer);
 	if (actor->xspr.health == 0)
 	{
 		// force synchronised input upon death.
@@ -1748,7 +1748,7 @@ void ProcessInput(DBloodPlayer* pPlayer, PlayerWorldServices* world)
 		if (pPlayer->packSlots[0].curAmount > 0)
 			packUseItem(pPlayer, 0);
 	}
-	if (pInput->actions & SB_HOLSTER)
+	if ((!world || world->UseBloodWeapons()) && (pInput->actions & SB_HOLSTER))
 	{
 		pInput->actions &= ~SB_HOLSTER;
 		if (pPlayer->curWeapon)

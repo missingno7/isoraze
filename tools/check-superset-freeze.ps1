@@ -54,15 +54,8 @@ cl_nostartscreens=true
 '@ | Set-Content -LiteralPath $config
     $commands = @('wait 90', 'superset_navigation pose 2', 'wait 4', 'superset_spawn_enemy zombie', 'wait 4',
         'superset_enemy_check guard', 'save freeze-start "Unfrozen native zombie"', 'wait 2')
-    if ($player -eq 'duke') {
-        $commands += @('give weapons', 'slot 10', 'wait 60', 'save freeze-armed "Native freezer ready"', 'wait 2',
-            '+Fire', 'wait 30', '-Fire', 'wait 8')
-    } else {
-        # Caleb cannot yet select Duke's weapon inventory. Exercise the native
-        # Duke ShootThis/projectile path explicitly, not fictitious freezer input.
-        foreach ($shot in 1..6) { $commands += @('superset_freeze_check launch', 'wait 6') }
-        $commands += 'wait 8'
-    }
+    $commands += @('superset_weapons duke', 'wait 30', 'give weapons', 'slot 10', 'wait 60',
+        'save freeze-armed "Native freezer ready"', 'wait 2', '+Fire', 'wait 30', '-Fire', 'wait 8')
     # Stock FREEZERHURTOWNER is enabled. Isolate the AI-pause observation from
     # lingering native ricochets and hits queued during the preparation guard.
     $commands += @('superset_freeze_check quiet', 'superset_freeze_check vulnerable', 'save freeze-frozen "Native projectiles froze Blood zombie"', 'wait 2', 'screenshot',
@@ -72,7 +65,7 @@ cl_nostartscreens=true
         'map navigation.map', 'wait 60', 'load freeze-frozen', 'wait 4', 'gc full', 'superset_enemy_check guard',
         'save freeze-restored "Restored frozen native zombie"', 'wait 2', 'screenshot')
     if ($player -eq 'duke') { $commands += @('slot 2', 'wait 60') }
-    else { $commands += @('+Move_Forward', 'wait 30', '-Move_Forward', 'wait 4') }
+    else { $commands += @('superset_weapons blood', 'wait 30', '+Move_Forward', 'wait 30', '-Move_Forward', 'wait 4') }
     $commands += @('+Fire', 'wait 30', '-Fire', 'wait 4', 'save freeze-shattered "Actual weapon shatter"', 'wait 2', 'screenshot',
         # The native heavy-hit knockdown can still have 360 clocks remaining
         # after thaw. Allow that sequence and standing up before expecting melee.
@@ -124,10 +117,9 @@ cl_nostartscreens=true
         !(Select-String -LiteralPath $log -SimpleMatch 'Superset frozen gravity: PASS')) {
         throw "$player frozen object did not retain native gravity while its SEQ remained paused; inspect $log"
     }
-    if ($player -eq 'duke') {
-        $armed = Snapshot $caseRoot armed
-        if ($frozen.Player.curr_weapon -ne 9 -or $frozen.Player.ammo_count[9] -ge $armed.Player.ammo_count[9]) { throw 'Native Duke freezer input/ammo not established.' }
-    }
+    $armed = Snapshot $caseRoot armed
+    if ($frozen.Player.curr_weapon -ne 9 -or $frozen.Player.ammo_count[9] -ge $armed.Player.ammo_count[9] -or
+        $frozen.Player['superset.weapon_mode'] -ne 0) { throw 'Native Duke freezer input/ammo not established.' }
     $shattered = Snapshot $caseRoot shattered
     if ($shattered.Body -or @($shattered.Data.objects | Where-Object { $_['superset.enemy_controller'] }).Count -or
         $shattered.Data.statistics.levels[-1].killcount -ne 1 -or

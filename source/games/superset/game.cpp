@@ -19,6 +19,7 @@
 
 namespace Duke3d { ::GameInterface* CreateInterface(); }
 EXTERN_CVAR(Bool, mashup_combat)
+CVAR(Int, superset_weapon_profile, 0, CVAR_ARCHIVE) // 0: character default, 1: Blood, 2: Duke.
 
 namespace Superset
 {
@@ -28,7 +29,7 @@ bool active = false;
 bool calebPlayer = false;
 FString bloodDataPath;
 constexpr int SaveSchema = 2;
-constexpr int RulesRevision = 8;
+constexpr int RulesRevision = 9;
 constexpr const char* SaveSignature = GAMENAME ".Superset";
 
 FString FingerprintPrimaryArchive()
@@ -73,6 +74,8 @@ public:
 	void app_init() override
 	{
 		world->app_init();
+		if (const char* weapons = Args->CheckValue("-superset-weapons"))
+			superset_weapon_profile = !stricmp(weapons, "blood") ? 1 : !stricmp(weapons, "duke") ? 2 : 0;
 		Printf("Superset frontend: independent identity/configuration/saves; Duke map adapter.\n");
 		Printf("Superset controller: %s. Mixed inventory and full damage normalization remain pending.\n",
 			CalebSelected() ? "Caleb (native Blood movement)" : "Duke (native Duke movement)");
@@ -110,17 +113,19 @@ public:
 
 	void SerializeGameState(FSerializer& arc) override
 	{
-		// Keep this optional experiment reproducible across a save/load. The
-		// controller and inventory selections will replace it as they land.
+		// Character and requested weapon family are independent saved choices.
+		// The player also saves its applied family while an action delays handoff.
 		if (arc.BeginObject("superset.gamestate"))
 		{
 			bool pitchforkPrototype = mashup_combat;
 			int controller = calebPlayer ? 1 : 0;
-			arc("pitchfork_prototype", pitchforkPrototype)("player_controller", controller).EndObject();
+			int weapons = clamp(int(superset_weapon_profile), 0, 2);
+			arc("pitchfork_prototype", pitchforkPrototype)("player_controller", controller)("weapon_profile", weapons).EndObject();
 			if (arc.isReading())
 			{
 				mashup_combat = pitchforkPrototype;
 				calebPlayer = controller == 1;
+				superset_weapon_profile = clamp(weapons, 0, 2);
 			}
 		}
 		world->SerializeGameState(arc);
@@ -208,11 +213,32 @@ void Configure(int mapGameFlags)
 	if (character && stricmp(character, "duke") && stricmp(character, "caleb"))
 		I_FatalError("Superset: -superset-player must be duke or caleb.");
 	calebPlayer = character && !stricmp(character, "caleb");
+	const char* weapons = Args->CheckValue("-superset-weapons");
+	if (Args->CheckParm("-superset-weapons") && (!weapons || (stricmp(weapons, "auto") && stricmp(weapons, "blood") && stricmp(weapons, "duke"))))
+		I_FatalError("Superset: -superset-weapons must be auto, blood or duke.");
 }
 
 bool IsActive() { return active; }
 bool CalebSelected() { return active && calebPlayer; }
+bool BloodWeaponsRequested()
+{
+	int profile = clamp(int(superset_weapon_profile), 0, 2);
+	return active && (profile == 1 || (profile == 0 && (calebPlayer || mashup_combat)));
+}
 ::GameInterface* CreateInterface() { return new CombinedGameInterface; }
+
+CCMD(superset_weapons)
+{
+	if (!IsActive()) return;
+	if (argv.argc() == 2)
+	{
+		if (!stricmp(argv[1], "auto")) superset_weapon_profile = 0;
+		else if (!stricmp(argv[1], "blood")) superset_weapon_profile = 1;
+		else if (!stricmp(argv[1], "duke")) superset_weapon_profile = 2;
+		else { Printf("superset_weapons auto|blood|duke\n"); return; }
+	}
+	Printf("Superset weapon family requested: %s.\n", BloodWeaponsRequested() ? "Blood" : "Duke");
+}
 
 CCMD(superset_check)
 {

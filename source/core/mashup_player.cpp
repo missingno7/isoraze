@@ -72,6 +72,51 @@ void SyncPose(Duke3d::DDukePlayer* duke, Blood::DBloodPlayer* blood)
 	blood->isUnderwater = body->sector()->lotag == ST_2_UNDERWATER;
 	blood->pDudeInfo = &Blood::dudeInfo[Blood::kDudePlayer1 + blood->pnum - Blood::kDudeBase];
 }
+
+void PrepareWeaponFamily(Duke3d::DDukePlayer* duke, Blood::DBloodPlayer* blood)
+{
+	if (!Superset::IsActive()) return;
+	bool wanted = Superset::BloodWeaponsRequested();
+	if (duke->supersetWeaponMode < 0) duke->supersetWeaponMode = wanted;
+	bool current = duke->supersetWeaponMode != 0;
+	if (current && blood->curWeapon) duke->supersetStowedBloodWeapon = blood->curWeapon;
+	if (current == wanted) return;
+	bool ready = current ? Blood::WeaponCanStow(blood) :
+		!duke->kickback_pic && !duke->rapid_fire_hold && !duke->quick_kick && !duke->knee_incs;
+	if (ready && duke->GetActor()->spr.extra > 0 && !duke->newOwner && !Duke3d::ud.cameraactor)
+	{
+		if (current)
+		{
+			blood->newWeapon = blood->nextWeapon = Blood::kWeapNone;
+			if (blood->curWeapon) Blood::WeaponLower(blood);
+			duke->last_weapon = -1;
+			duke->holster_weapon = 0;
+			duke->weapon_pos = duke->oweapon_pos = 10;
+		}
+		else
+		{
+			// A stowed lower animation has no pending attack. Let native
+			// WeaponProcess validate ammo and raise the selected Blood weapon.
+			blood->weaponQav = Blood::kQAVNone;
+			blood->weaponTimer = blood->qavTimer = 0;
+			blood->qavLoop = false;
+			if (!blood->newWeapon) blood->newWeapon = duke->supersetStowedBloodWeapon;
+		}
+		duke->supersetWeaponMode = wanted;
+		duke->interface_toggle_flag = 0;
+		return;
+	}
+	// Finish the native shot/reload/throw after releasing its buttons. Neither
+	// inventory is reset, and no new attack starts while the request is pending.
+	duke->cmd.ucmd.actions &= ~(SB_FIRE | SB_ALTFIRE | SB_HOLSTER | SB_QUICK_KICK);
+	duke->cmd.ucmd.setNewWeapon(0);
+}
+
+void DrawBloodArmor(Blood::DBloodPlayer* blood)
+{
+	FString line = FStringf("Armor: Body %d  Fire %d  Spirit %d", blood->armor[0] >> 4, blood->armor[1] >> 4, blood->armor[2] >> 4);
+	DrawText(twod, SmallFont, CR_WHITE, 6, 158, line.GetChars(), DTA_VirtualWidth, 320, DTA_VirtualHeight, 200, DTA_KeepRatio, true, TAG_DONE);
+}
 }
 
 CCMD(mashup_combat_input_check)
@@ -217,7 +262,10 @@ CCMD(superset_weapon_input_check)
 
 bool CombatEnabled()
 {
-	return (mashup_combat || Superset::CalebSelected()) && HasBloodResources() && isDuke() && !isRR() && numplayers == 1;
+	if (!HasBloodResources() || !isDuke() || isRR() || numplayers != 1) return false;
+	if (!Superset::IsActive()) return mashup_combat;
+	auto duke = dyn_cast<Duke3d::DDukePlayer>(PlayerArray[myconnectindex]);
+	return duke && duke->bloodCombat && duke->supersetWeaponMode >= 0 ? duke->supersetWeaponMode != 0 : Superset::BloodWeaponsRequested();
 }
 
 bool IsCombatPlayer(DCorePlayer* player)
@@ -242,8 +290,11 @@ void ResetCombatPlayers()
 {
 	if (!isDuke()) return;
 	for (auto player : PlayerArray)
-		if (auto duke = dyn_cast<Duke3d::DDukePlayer>(player); duke && duke->bloodCombat)
+		if (auto duke = dyn_cast<Duke3d::DDukePlayer>(player))
 		{
+			duke->supersetWeaponMode = -1;
+			duke->supersetStowedBloodWeapon = Blood::kWeapPitchFork;
+			if (!duke->bloodCombat) continue;
 			if (auto blood = Secondary(duke)) Blood::seqKill(blood->GetActor());
 			duke->bloodCombat->Destroy();
 			duke->bloodCombat = nullptr;
@@ -276,8 +327,9 @@ void PrepareCombat(DCorePlayer* player)
 	blood->GetActor()->supersetWorldActor = duke->GetActor();
 	GC::WriteBarrier(blood->GetActor(), duke->GetActor());
 	if (!Superset::PrepareBloodMovement(duke)) SyncPose(duke, blood);
-	if (!CombatEnabled()) return;
+	PrepareWeaponFamily(duke, blood);
 	blood->cmd = duke->cmd;
+	if (!CombatEnabled()) return;
 	if (duke->newOwner || Duke3d::ud.cameraactor) blood->cmd.ucmd.actions &= ~(SB_FIRE | SB_ALTFIRE);
 	if (inputProbeActive)
 	{
@@ -296,6 +348,7 @@ void PrepareCombat(DCorePlayer* player)
 	duke->quick_kick = duke->last_quick_kick = duke->knee_incs = 0;
 	duke->kickback_pic = duke->okickback_pic = 0;
 	duke->cmd.ucmd.actions &= ~(SB_QUICK_KICK | SB_HOLSTER);
+	duke->cmd.ucmd.setNewWeapon(0); // Only the selected family consumes slot input.
 }
 
 void RefreshBloodPlayerStates()
@@ -308,24 +361,31 @@ void RefreshBloodPlayerStates()
 
 void TickCombat(DCorePlayer* player)
 {
-	if (!IsCombatPlayer(player)) return;
 	if (Superset::HasBloodMovement(player))
 	{
 		Superset::FinishBloodMovement(player);
 		return;
 	}
+	if (!IsCombatPlayer(player) && !Superset::IsActive()) return;
 	auto duke = static_cast<Duke3d::DDukePlayer*>(player);
 	auto blood = Secondary(duke);
+	if (!blood) return;
 	SyncPose(duke, blood);
 	Superset::CollectBloodPickups(player);
+	if (!IsCombatPlayer(player)) return;
 	Blood::WeaponProcess(blood);
 	if ((blood->cmd.ucmd.actions & SB_HOLSTER) && blood->curWeapon) Blood::WeaponLower(blood);
 }
 
 bool DrawCombat(DCorePlayer* player, double interpolation)
 {
-	if (!IsCombatPlayer(player)) return false;
 	auto duke = static_cast<Duke3d::DDukePlayer*>(player);
+	if (!IsCombatPlayer(player))
+	{
+		if (Superset::HasBloodMovement(player) && duke->GetActor()->spr.extra > 0 && !duke->over_shoulder_on && !duke->newOwner && !Duke3d::ud.cameraactor)
+			DrawBloodArmor(Secondary(duke));
+		return false;
+	}
 	if (duke->over_shoulder_on || duke->newOwner || Duke3d::ud.cameraactor || duke->GetActor()->spr.extra <= 0) return true;
 	auto blood = Secondary(duke);
 	Blood::WeaponDraw(blood, duke->GetActor()->spr.shade, 160, 200, 0, nullAngle);
@@ -338,8 +398,7 @@ bool DrawCombat(DCorePlayer* player, double interpolation)
 		DrawText(twod, SmallFont, CR_WHITE, 6, 150, line.GetChars(), DTA_VirtualWidth, 320, DTA_VirtualHeight, 200, DTA_KeepRatio, true, TAG_DONE);
 		if (Superset::HasBloodMovement(player))
 		{
-			line.Format("Armor: Body %d  Fire %d  Spirit %d", blood->armor[0] >> 4, blood->armor[1] >> 4, blood->armor[2] >> 4);
-			DrawText(twod, SmallFont, CR_WHITE, 6, 158, line.GetChars(), DTA_VirtualWidth, 320, DTA_VirtualHeight, 200, DTA_KeepRatio, true, TAG_DONE);
+			DrawBloodArmor(blood);
 		}
 	}
 	return true;

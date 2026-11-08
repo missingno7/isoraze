@@ -11,6 +11,7 @@ param(
     [string]$OutputDirectory = (Join-Path $PSScriptRoot '../build-mashup/checks')
 )
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'superset-check-common.ps1')
 $ExePath = (Resolve-Path -LiteralPath $ExePath).Path
 $DukeGrp = (Resolve-Path -LiteralPath $DukeGrp).Path
 $BloodDirectory = (Resolve-Path -LiteralPath $BloodDirectory).Path
@@ -63,7 +64,7 @@ cl_nostartscreens=true
         if ($_ -like 'superset_inventory_check place *') { 'superset_navigation pose 2'; 'wait 4' }
         $_
     }
-    $commands -join '; ' | Set-Content -LiteralPath $script
+    Write-SupersetCheckScript -Commands $commands -ScriptPath $script
     $start = [Diagnostics.ProcessStartInfo]::new()
     $start.FileName = $ExePath
     $start.WorkingDirectory = Split-Path -Parent $ExePath
