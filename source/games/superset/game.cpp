@@ -19,7 +19,15 @@
 #include <memory>
 #include <utility>
 
-namespace Duke3d { ::GameInterface* CreateInterface(); void InitAnimationTables(); void RegisterClasses(); }
+namespace Duke3d
+{
+::GameInterface* CreateInterface();
+void InitAnimationTables();
+void RegisterClasses();
+void InitSecondaryDukeProgram(const char*);
+void SerializeSecondaryDukeProgram(FSerializer&);
+const char* SecondaryDukeProgramFingerprint();
+}
 namespace Blood { ::GameInterface* CreateInterface(); }
 EXTERN_CVAR(Bool, mashup_combat)
 CUSTOM_CVAR(Int, superset_weapon_profile, 0, CVAR_ARCHIVE) // 0: character default, 1: Blood, 2: Duke.
@@ -41,7 +49,7 @@ bool calebPlayer = false;
 bool bloodMap = false;
 FString bloodDataPath, dukeDataPath;
 constexpr int SaveSchema = 2;
-constexpr int RulesRevision = 11;
+constexpr int RulesRevision = 12;
 constexpr const char* SaveSignature = GAMENAME ".Superset";
 
 FString FingerprintPrimaryArchive()
@@ -91,8 +99,9 @@ public:
 			superset_weapon_profile = !stricmp(weapons, "blood") ? 1 : !stricmp(weapons, "duke") ? 2 : 0;
 		if (bloodMap)
 		{
-			// Bind native actor class identities without starting Duke's world or CON.
+			// Bind native actor classes and their private program without starting Duke's world.
 			Duke3d::RegisterClasses();
+			Duke3d::InitSecondaryDukeProgram(Args->CheckValue("-dukecon"));
 			if (!BloodWeaponsRequested())
 			{
 				Printf("Superset: saved Duke weapon selection needs the reverse combat adapter; using native Blood weapons.\n");
@@ -114,7 +123,13 @@ public:
 			FString secondary = bloodMap ? Mashup::DukeResourceFingerprint() : Mashup::BloodResourceFingerprint();
 			arc("rules_revision", rules)("map_rules", mapRules)("map_adapter_version", adapter)
 				(bloodMap ? "blood_archive_md5" : "duke_archive_md5", primaryFingerprint)
-				(bloodMap ? "duke_bank_md5" : "blood_bank_md5", secondary).EndObject();
+				(bloodMap ? "duke_bank_md5" : "blood_bank_md5", secondary);
+			if (bloodMap)
+			{
+				FString program = Duke3d::SecondaryDukeProgramFingerprint();
+				arc("duke_program_md5", program);
+			}
+			arc.EndObject();
 		}
 	}
 
@@ -127,11 +142,17 @@ public:
 			FString mapRules, primary, secondary;
 			arc("rules_revision", rules)("map_rules", mapRules)("map_adapter_version", adapter)
 				(bloodMap ? "blood_archive_md5" : "duke_archive_md5", primary)
-				(bloodMap ? "duke_bank_md5" : "blood_bank_md5", secondary).EndObject();
+				(bloodMap ? "duke_bank_md5" : "blood_bank_md5", secondary);
 			matches = rules == RulesRevision && mapRules.Compare(bloodMap ? "blood" : "duke") == 0 &&
 				adapter == world->GetSaveSig().currentsavever &&
 				primaryFingerprint.IsNotEmpty() && primary == primaryFingerprint &&
 				secondary.IsNotEmpty() && secondary.Compare(bloodMap ? Mashup::DukeResourceFingerprint() : Mashup::BloodResourceFingerprint()) == 0;
+			if (bloodMap)
+			{
+				FString program; arc("duke_program_md5", program);
+				matches &= program.IsNotEmpty() && program.Compare(Duke3d::SecondaryDukeProgramFingerprint()) == 0;
+			}
+			arc.EndObject();
 		}
 		if (!matches && !formenu)
 			Printf("Superset: save requires a matching rules revision, map adapter and Duke/Blood content.\n");
@@ -156,7 +177,11 @@ public:
 			}
 		}
 		world->SerializeGameState(arc);
-		if (bloodMap) SerializeDukeEffects(arc);
+		if (bloodMap)
+		{
+			SerializeDukeEffects(arc);
+			Duke3d::SerializeSecondaryDukeProgram(arc);
+		}
 		else SerializeBloodControllerState(arc);
 	}
 

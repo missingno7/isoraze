@@ -5,6 +5,7 @@
 #include "gamecvars.h"
 #include "razemenu.h"
 #include "gamecontrol.h"
+#include "gamecontext.h"
 #include "gamevar.h"
 #include "global.h"
 #include "funct.h"

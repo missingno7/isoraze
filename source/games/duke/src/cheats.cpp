@@ -53,7 +53,7 @@ const char *GameInterface::CheckCheatMode()
 {
 	if (sv_cheats && (ud.player_skill == 4 || (isRR() && ud.player_skill > 3) || (isRRRA() && getPlayer(myconnectindex)->nocheat)))
 	{
-		return quoteMgr.GetQuote(QUOTE_CHEATS_DISABLED);
+		return DukeQuotes().GetQuote(QUOTE_CHEATS_DISABLED);
 	}
 	return nullptr;
 }
@@ -84,7 +84,7 @@ static const char *cheatGod(DDukePlayer* const p, int state)
 		act->spr.lotag = 0;
 		act->spr.pal = p->palookup;
 
-		return quoteMgr.GetQuote(QUOTE_CHEAT_GODMODE_ON);
+		return DukeQuotes().GetQuote(QUOTE_CHEAT_GODMODE_ON);
 	}
 	else
 	{
@@ -92,7 +92,7 @@ static const char *cheatGod(DDukePlayer* const p, int state)
 		act->spr.extra = gs.max_player_health;
 		act->hitextra = -1;
 		p->last_extra = gs.max_player_health;
-		return quoteMgr.GetQuote(QUOTE_CHEAT_GODMODE_OFF);
+		return DukeQuotes().GetQuote(QUOTE_CHEAT_GODMODE_OFF);
 	}
 }
 
@@ -112,7 +112,7 @@ static const char* cheatUnlock(DDukePlayer* const p)
 		}
 	}
 	operateforcefields(pact, -1);
-	return quoteMgr.GetQuote(QUOTE_CHEAT_UNLOCK);
+	return DukeQuotes().GetQuote(QUOTE_CHEAT_UNLOCK);
 }
 
 static const char *cheatKfc(DDukePlayer* const p)
@@ -126,7 +126,7 @@ static const char *cheatKfc(DDukePlayer* const p)
 			spr->spr.scale *= 4;
 		}
 	}
-	return quoteMgr.GetQuote(QUOTE_CHEAT_KFC);
+	return DukeQuotes().GetQuote(QUOTE_CHEAT_KFC);
 }
 
 static const char * cheatMonsters()
@@ -157,7 +157,7 @@ const char* GameInterface::GenericCheat(int player, int cheat)
 
 	case CHT_NOCLIP:
 		ud.clipping = 1 - ud.clipping;
-		return quoteMgr.GetQuote(ud.clipping ? QUOTE_CHEAT_NOCLIP : QUOTE_CHEAT_CLIP);
+		return DukeQuotes().GetQuote(ud.clipping ? QUOTE_CHEAT_NOCLIP : QUOTE_CHEAT_CLIP);
 
 	case CHT_UNLOCK:
 		return cheatUnlock(p);
@@ -168,11 +168,11 @@ const char* GameInterface::GenericCheat(int player, int cheat)
 
 	case CHT_HYPER:
 		p->steroids_amount = 399;
-		return quoteMgr.GetQuote(QUOTE_CHEAT_STEROIDS);
+		return DukeQuotes().GetQuote(QUOTE_CHEAT_STEROIDS);
 
 	case CHT_KILL:
 		quickkill(p);
-		return quoteMgr.GetQuote(QUOTE_CHEAT_KILL);
+		return DukeQuotes().GetQuote(QUOTE_CHEAT_KILL);
 
 	case CHT_MONSTERS:
 		return cheatMonsters();
@@ -180,12 +180,12 @@ const char* GameInterface::GenericCheat(int player, int cheat)
 	case CHT_BIKE:
 		OnMotorcycle(p);
 		p->ammo_amount[MOTORCYCLE_WEAPON] = gs.max_ammo_amount[MOTORCYCLE_WEAPON];
-		return quoteMgr.GetQuote(QUOTE_ON_BIKE);
+		return DukeQuotes().GetQuote(QUOTE_ON_BIKE);
 
 	case CHT_BOAT:
 		OnBoat(p);
 		p->ammo_amount[BOAT_WEAPON] = gs.max_ammo_amount[BOAT_WEAPON];
-		return quoteMgr.GetQuote(QUOTE_ON_BOAT);
+		return DukeQuotes().GetQuote(QUOTE_ON_BOAT);
 
 	case CHT_TONY:
 		enemysizecheat = 2;
@@ -201,7 +201,7 @@ const char* GameInterface::GenericCheat(int player, int cheat)
 		p->curr_weapon = KNEE_WEAPON;
 		p->nocheat = 1;
 		p->GetActor()->spr.extra = 1;
-		return quoteMgr.GetQuote(QUOTE_YERFUCKED);
+		return DukeQuotes().GetQuote(QUOTE_YERFUCKED);
 
 	case CHT_AARON:
 		p->DrugMode = !p->DrugMode;
@@ -209,15 +209,15 @@ const char* GameInterface::GenericCheat(int player, int cheat)
 
 	case CHT_NOCHEAT:
 		p->nocheat = 1;
-		return quoteMgr.GetQuote(QUOTE_NOCHEATS);
+		return DukeQuotes().GetQuote(QUOTE_NOCHEATS);
 
 	case CHT_DRINK:
 		p->drink_amt = p->drink_amt ? 0 : 90;
-		return quoteMgr.GetQuote(p->drink_amt ? QUOTE_INSTADRUNK : QUOTE_INSTASOBER);
+		return DukeQuotes().GetQuote(p->drink_amt ? QUOTE_INSTADRUNK : QUOTE_INSTASOBER);
 
 	case CHT_SEASICK:
 		p->sea_sick_stat = !p->sea_sick_stat;
-		return quoteMgr.GetQuote(p->sea_sick_stat ? QUOTE_BOATMODEON : QUOTE_BOATMODEOFF);
+		return DukeQuotes().GetQuote(p->sea_sick_stat ? QUOTE_BOATMODEON : QUOTE_BOATMODEOFF);
 
 	case CHT_KFC:
 		return cheatKfc(p);

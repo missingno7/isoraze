@@ -67,11 +67,12 @@ reverse combat, a unified weapon list and independent enemy selection remain wor
 The frontend owns `Superset` configuration/autoexec/autoload sections, save and
 demo directories, and the independent `Raze.Superset` save signature/schema. Its content manifest
 records the rules revision, map family/adapter version, primary archive digest
-and secondary resource bank digest. Loading checks this metadata before
+and secondary resource bank digest, plus the private Duke program digest in
+Blood maps. Loading checks this metadata before
 selecting a map or restoring actors. Installation paths do not enter the digests.
 Full primary-mod dependency tracking is still pending; the current manifest
 fingerprints the primary archive and secondary bank, not every loose primary
-override, CON mod or additional Blood ART/SFX dependency. The selected character
+override, primary CON mod or additional Blood ART/SFX dependency. The selected character
 and weapon family are saved with the session.
 
 Legacy game flags describe the current map adapter for existing native
@@ -119,8 +120,8 @@ places one on a nearby wall for inspection. It remains a real `DukeActor`
 alongside Blood actors, using Duke art and source palette colors. The original
 decal growth algorithm stops at counter 364. The native Duke sprite queue owns
 insertion/eviction; the Blood adapter supplies that component's GC, save and map
-lifetime. Its current uncompiled-CON default capacity is 64. Secondary CON
-settings are not yet applied in this adapter.
+lifetime. Queue capacity now comes from the private native Duke CON program
+(64 in the tested stock Plutonium archive).
 
 Only explicitly supported, nonblocking foreign effects are ticked/rendered.
 Blood's sprite renderer checks actor family before entering its typed actor
@@ -141,7 +142,7 @@ The bank retains Duke lookup/base-palette data and decodes the native colors,
 including opaque index 0 and transparent index 255. Normal/underwater view roles
 are mapped explicitly; other Blood view palettes are not assumed to mean the
 same Duke effect. Complete indexed shading, fullbright masks, voxels, sounds,
-overrides and CON execution remain integration work for secondary Duke content.
+overrides and world-dependent CON execution remain integration work for secondary Duke content.
 
 Existing Duke-world adapters use `IsDukeMap()` at their environment boundaries.
 Frontend identity alone must not intercept native Blood missiles, clear its
@@ -151,8 +152,8 @@ the separate secondary-Blood serializer used in Duke maps is not run again.
 Shared gameplay becomes map-independent as the reverse collision/damage and
 controller services are added; these gates identify the still one-way adapters.
 
-Rules revision 10 records `map_rules=blood`, Blood's native save adapter version,
-`blood_archive_md5` and `duke_bank_md5`. The latter fingerprints the secondary
+Rules revision 12 records `map_rules=blood`, Blood's native save adapter version,
+`blood_archive_md5`, `duke_bank_md5` and `duke_program_md5`. The bank digest fingerprints the secondary
 archive and engine alias definitions without installation paths. The manifest
 rejects the opposite map family, altered secondary content and missing metadata
 before actor restoration. Full primary Blood ART/SFX/mod dependency tracking
@@ -177,6 +178,78 @@ weapons, other projectile families and enemies need further identity/collision s
 before they can safely interact with arbitrary native Blood actors. Their CON
 and map queries also need appropriate environment handlers. Merely invoking a
 second full simulation or changing global game flags would not provide that.
+
+## Private native Duke CON program in Blood maps
+
+The reverse adapter now invokes Raze's existing full Duke CON compiler against
+the private Duke archive. Stock `game.con`, `defs.con` and `user.con` produce the
+native bytecode, actor/action/move/AI tables, startup settings and game variables.
+The Blood world retains its original flags and primary player array. Native
+Duke C++ rule checks use a module context; original Duke/RR frontends continue
+using their existing game flags. There is no temporary global flag switch.
+
+Compiler declarations for maps, volumes, clusters, skills, music, quotes and
+sounds go to private Duke stores. They do not replace Blood's map catalog,
+quotes, UI crosshair messages or sound registry. Startup verifies the primary
+flags, players, catalog counts, skills, quotes and sound count across compilation.
+Duke sound declarations are retained; secondary sample playback is still pending.
+The existing private resource check covers primary palette/tile/filesystem
+isolation separately.
+
+Eight native `DukePlayer` objects hold the program's per-player variables and
+future weapon state. They remain separate from Blood's players, with no actor
+body or second movement/world loop. This avoids casting a native `BloodPlayer`
+as a `DukePlayer` when the CON variable system accesses player state. The
+component owns GC roots and saves the private players and native game variables.
+Per-player/actor variable metadata stores an index in the same union as a global
+actor reference; GC must mark only actual references, never those indices.
+
+Optional `-dukecon D:/mods/example/root.con` selects a secondary root. Includes
+resolve in that directory first and then in the private Duke GRP. This does not
+mount the mod or archive in Blood's filesystem. The save manifest fingerprints
+every resolved source's logical name and contents. Identical content can move
+between directories; changed includes are rejected before restoration.
+Additional ART, samples and other mod dependencies still need manifest support.
+
+This is a compiler/state foundation, not arbitrary CON mod gameplay support.
+Atomic/Plutonium-style `gamestartup` is required (30 entries; the 31-entry World
+Tour variant parses but is unverified). Earlier startup formats are rejected.
+Duke actor-class finalization, world queries, map events, HUD, sound playback
+and the reverse weapon controller still need environment adapters. The private
+program's actor health headers are retained; native Duke finalization normally
+copies these into class defaults and clears them in bytecode. ZScript's existing
+`isDuke()` family predicates are compile-time checks of the primary map flags;
+the new C++ context does not make these predicates component-aware.
+Automatic CON event dispatch is deferred until those boundaries exist. The
+diagnostic fixture explicitly runs a world-independent native VM event only.
+Secondary program/player state is currently initialized once at startup and
+restored by saves; native Duke new-game reset/event sequencing still needs to
+be connected when the reverse controller is installed.
+Quote definitions rebuild from CON; native quote serialization is a no-op, so
+mutable runtime quote persistence is not yet supported.
+
+```powershell
+./tools/check-superset-duke-program.ps1 -DukeGrp D:/dos/duke3D/duke3d.grp -BloodRff D:/prog/isoraze/build-isoraze/run/blood-data/BLOOD.RFF -EnableSound
+```
+
+The fixture compares stock bytecode after native header/health normalization
+and startup values against an ordinary Duke process. It compiles a root with
+local and GRP includes, executes native global/per-player CON arithmetic,
+checks independent player slots, mutates state, restores across a fresh Blood
+map and GC, and reloads in a fresh process from a relocated CON directory.
+Changing an included file must reject the save before restoring the private
+state or map record; the engine follows its normal failed-load console handling.
+Rules revision 12 rejects earlier experimental saves; ordinary game signatures
+are unchanged. Weapon/enemy selection in Blood maps is still gated.
+
+Verified on 2026-11-08: Release build and the complete native-program fixture
+passed (`duke-program-20261108T090657430`). The existing reverse laser fixture
+passed (`duke-projectiles-20261108T090731214`), as did the complete Blood-map
+fixture (`blood-map-20261108T090808986`). Ordinary Duke E1L1 and Blood E1M1
+runtime/save checks passed, including native Blood flare/spray input, ammo and
+missile reload (`runtime-20261108T090854605`).
+Mixed Blood-enemy pursuit/melee, weapon/death reactions, save/GC and cleanup
+passed for both Caleb and Duke (`enemies-20261108T090953397`).
 
 ## Native Duke laser projectiles in Blood maps
 
@@ -239,8 +312,8 @@ attacks run after the native Blood actor phase, so the frontend commits Blood's
 deferred actor transfers/removals again at the end of that component phase.
 Native death state must be complete before a frame can be saved or collected.
 
-Rules revision 11 includes this component and rejects earlier experimental
-revisions. Duke weapons/inventory, enemy controllers, secondary CON execution,
+Rules revision 12 includes this component and rejects earlier experimental
+revisions. Duke weapons/inventory, enemy controllers, world-dependent secondary CON execution,
 Duke sounds, other projectile families, special body effects and broader
 cross-game attacker identities in Blood maps remain unfinished.
 
@@ -310,8 +383,8 @@ This is an incremental native adapter, not the final shared actor/AI model.
 
 No scale compensation is applied: initial idle eye height is 56.6875 world units
 and horizontal radius is 12. Native Blood SEQ state and the selected controller
-are serialized with the session. Save schema is 2; rules revision is now 10
-after adding the reverse map adapter and foreign Duke actor state. Earlier
+are serialized with the session. Save schema is 2; rules revision is now 12
+after adding private Duke CON state to the reverse map adapter. Earlier
 Superset bootstrap saves are intentionally incompatible with this experimental
 schema. The legacy native game save signatures remain separate.
 

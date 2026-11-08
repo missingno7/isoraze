@@ -107,7 +107,7 @@ void FTA(int q, DDukePlayer* p)
 	if (p->ftq != q || (PlayClock - p->ftt > TICRATE && q != QUOTE_DEAD))
 	{
 		p->ftq = q;
-		auto qu = quoteMgr.GetQuote(q);
+		auto qu = DukeQuotes().GetQuote(q);
 		if (p->pnum == screenpeek && qu[0] != '\0')
 		{
 #if 0

@@ -12,6 +12,7 @@ BEGIN_DUKE_NS
 
 inline DDukePlayer* getPlayer(int index)
 {
+	if (HasSecondaryDukeContext()) return SecondaryDukePlayer(index);
 	return static_cast<DDukePlayer*>(PlayerArray[index]);
 }
 

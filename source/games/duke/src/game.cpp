@@ -273,13 +273,13 @@ static void setupbackdrop()
 		defineSky("NAMSKY2", 3, nullptr, 0, 1, 140);
 	}
 
-	if (isWW2GI() && (g_gameType & GAMEFLAG_ADDON))
+	if (isWW2GI() && (DukeGameFlags() & GAMEFLAG_ADDON))
 	{
 		defineSky("PLATOONSKY", 3, nullptr, 0, 1, 140);
 	}
 
 	// this sky isn't actually placed wrong - it's just so poorly designed that it needs to be shifted down to hide its shortcomings as good as possible.
-	if (isDuke() && (g_gameType & GAMEFLAG_DUKEDC))
+	if (isDuke() && (DukeGameFlags() & GAMEFLAG_DUKEDC))
 	{
 		defineSky("DUKEDCSKY", 3, nullptr, 0, 1, -40);
 	}
@@ -434,7 +434,7 @@ void GameInterface::app_init()
 	ud.cameraactor = nullptr;
 
 	if (fileSystem.FileExists("DUKESW.BIN"))
-		g_gameType |= GAMEFLAG_SHAREWARE;
+		AddDukeGameFlags(GAMEFLAG_SHAREWARE);
 
 	numplayers = 1;
 	playerswhenstarted = ud.multimode;

@@ -283,7 +283,7 @@ void checkavailweapon(DDukePlayer* player)
 	for (i = 0; i <= max; i++)
 	{
 		weap = ud.wchoice[player->pnum][i];
-		if ((g_gameType & GAMEFLAG_SHAREWARE) && weap > 6) continue;
+		if ((DukeGameFlags() & GAMEFLAG_SHAREWARE) && weap > 6) continue;
 
 		if (weap == 0) weap = max;
 		else weap--;

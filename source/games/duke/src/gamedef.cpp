@@ -252,7 +252,7 @@ enum
 
 void ConCompiler::ReportError(int error)
 {
-	const char* fn = fileSystem.GetFileFullName(currentsourcefile);
+	const char* fn = ConSourceName(currentsourcefile);
 	switch (error)
 	{
 	case ERROR_ISAKEYWORD:
@@ -642,7 +642,7 @@ int ConCompiler::transword(void)
 
 	textptr += l;
 
-	const char* fn = fileSystem.GetFileFullName(currentsourcefile);
+	const char* fn = ConSourceName(currentsourcefile);
 	if (parsebuf[0] == '{' && parsebuf[1] != 0)
 		Printf(TEXTCOLOR_RED "  * ERROR!(%s, line %d) Expecting a SPACE or CR between '{' and '%s'.\n", fn, line_number, parsebuf + 1);
 	else if (parsebuf[0] == '}' && parsebuf[1] != 0)
@@ -713,7 +713,7 @@ int ConCompiler::transnum(int type)
 			textptr += l;
 			auto el = translatelabeltype(type);
 			auto gl = translatelabeltype(labels[i].type);
-			const char* fn = fileSystem.GetFileFullName(currentsourcefile);
+			const char* fn = ConSourceName(currentsourcefile);
 			Printf(TEXTCOLOR_YELLOW "  * WARNING.(%s, line %d) %s: Expected a '%s' label but found a '%s' label instead.\n", fn, line_number, labels[i].GetChars(), el.GetChars(), gl.GetChars());
 			return -1;  // valid label name, but wrong type
 		}
@@ -748,7 +748,7 @@ int ConCompiler::transnum(int type)
 
 	if (type != LABEL_DEFINE && value != 0)
 	{
-		const char* fn = fileSystem.GetFileFullName(currentsourcefile);
+		const char* fn = ConSourceName(currentsourcefile);
 		Printf(TEXTCOLOR_YELLOW "  * WARNING.(%s, line %d) Expected an identifier, got a numeric literal %d.\n", fn, line_number, (int)value);
 	}
 
@@ -822,7 +822,7 @@ int ConCompiler::CountCaseStatements()
 
 int ConCompiler::parsecommand()
 {
-	const char* fn = fileSystem.GetFileFullName(currentsourcefile);
+	const char* fn = ConSourceName(currentsourcefile);
 	int i, j, k;
 	int tempscrptr;
 	uint8_t done, temp_ifelse_check;// , tw;
@@ -1012,7 +1012,7 @@ int ConCompiler::parsecommand()
 		popscriptvalue();
 		transnum(LABEL_DEFINE); // Volume Number (0/4)
 		k = popscriptvalue() - 1;
-		if (k < 0) specialmusic.Clear();
+		if (k < 0) ConSpecialMusic().Clear();
 
 		i = 0;
 		// get the file name...
@@ -1041,7 +1041,7 @@ int ConCompiler::parsecommand()
 			}
 			else
 			{
-				specialmusic.Push(parsebuffer.Data());
+				ConSpecialMusic().Push(parsebuffer.Data());
 			}
 			textptr += j;
 			i++;
@@ -1069,8 +1069,8 @@ int ConCompiler::parsecommand()
 		}
 		parsebuffer.Push(0);
 
-		auto fni = fileSystem.FindFile(parsebuffer.Data());
-		if (fni < 0)
+		auto fni = FindConSource(parsebuffer.Data());
+		if (fni == -1)
 		{
 			errorcount++;
 			Printf(TEXTCOLOR_RED "  * ERROR!(%s, line %d) Could not find '%s'.\n", fn, line_number, parsebuffer.Data());
@@ -1087,7 +1087,7 @@ int ConCompiler::parsecommand()
 		temp_ifelse_check = checking_ifelse;
 		checking_ifelse = 0;
 		auto origtptr = textptr;
-		auto textstring = GetStringFromLump(fni);
+		auto textstring = ReadConSource(fni);
 		textptr = textstring.GetChars();
 
 		do
@@ -1690,8 +1690,8 @@ int ConCompiler::parsecommand()
 		}
 		parsebuffer.Push(0);
 		// We need both a volume and a cluster for this new episode.
-		auto vol = MustFindVolume(j);
-		auto clust = MustFindCluster(j + 1);
+		auto vol = ConVolume(j);
+		auto clust = ConCluster(j + 1);
 		FString s = FStringTable::MakeMacro(parsebuffer.Data(), i);;
 		s.StripRight();
 		vol->name = clust->name = s;
@@ -1726,7 +1726,7 @@ int ConCompiler::parsecommand()
 		parsebuffer.Push(0);
 		FString s = FStringTable::MakeMacro(parsebuffer.Data(), i);
 		s.StripRight();
-		gSkillNames[j] = s;
+		ConSkillName(j, s);
 		return 0;
 	}
 	case concmd_definelevelname:
@@ -1746,12 +1746,11 @@ int ConCompiler::parsecommand()
 			textptr++, i++;
 		}
 		parsebuffer.Push(0);
-		auto map = FindMapByIndexOnly(j + 1, k + 1);
-		if (!map) map = AllocateMap();
+		auto map = ConMap(j + 1, k + 1, true);
 		map->SetFileName(parsebuffer.Data());
 		if (k == 0)
 		{
-			auto vol = MustFindVolume(j);
+			auto vol = ConVolume(j);
 			vol->startmap = map->labelName;
 		}
 
@@ -1768,7 +1767,7 @@ int ConCompiler::parsecommand()
 			(((*(textptr + 0) - '0') * 10 + (*(textptr + 1) - '0')) * 60) +
 			(((*(textptr + 3) - '0') * 10 + (*(textptr + 4) - '0')));
 
-		SetLevelNum(map, makelevelnum(j + 1, k + 1));
+		ConLevelNumber(map, makelevelnum(j + 1, k + 1));
 
 		map->cluster = j + 1;
 
@@ -1808,7 +1807,7 @@ int ConCompiler::parsecommand()
 			textptr++, i++;
 		}
 		parsebuffer.Push(0);
-		quoteMgr.InitializeQuote(k, parsebuffer.Data(), true);
+		DukeQuotes().InitializeQuote(k, parsebuffer.Data(), true);
 		return 0;
 	case concmd_definesound:
 	{
@@ -1836,7 +1835,7 @@ int ConCompiler::parsecommand()
 		int m = popscriptvalue();
 		transnum(LABEL_DEFINE);
 		int vo = popscriptvalue();
-		S_DefineSound(k, parsebuffer.Data(), ps, pe, pr, m, vo, 1.f);
+		DefineConSound(k, parsebuffer.Data(), ps, pe, pr, m, vo, 1.f);
 		return 0;
 	}
 
@@ -1933,15 +1932,17 @@ int ConCompiler::parsecommand()
 			if (keyword() != -1) break;
 		}
 		int pget = 0;
+		if (HasSecondaryDukeContext() && pcount != 30 && pcount != 31)
+			I_FatalError("Superset: secondary Duke CON currently requires Atomic/Plutonium gamestartup (30 or 31 entries).");
 
 		if (!isRR())
 		{
-			if (pcount == 30) g_gameType |= GAMEFLAG_PLUTOPAK;
-			else if (pcount == 31) g_gameType |= GAMEFLAG_PLUTOPAK | GAMEFLAG_WORLDTOUR;
-			else if (pcount == 22) g_gameType |= GAMEFLAG_SHAREWARE;
+			if (pcount == 30) AddDukeGameFlags(GAMEFLAG_PLUTOPAK);
+			else if (pcount == 31) AddDukeGameFlags(GAMEFLAG_PLUTOPAK | GAMEFLAG_WORLDTOUR);
+			else if (pcount == 22) AddDukeGameFlags(GAMEFLAG_SHAREWARE);
 			else if (pcount != 26) I_FatalError("Invalid CONs. Cannot detect version. gamestartup has %d entries", pcount);
 		}
-		gameinfo.gametype = g_gameType;
+		if (!HasSecondaryDukeContext()) gameinfo.gametype = DukeGameFlags();
 
 		popscriptvalue();
 		auto parseone = [&]() { return params[pget++]; };
@@ -3099,13 +3100,13 @@ int ConCompiler::parsecommand()
 
 void ConCompiler::compilecon(const char *filenam)
 {
-	currentsourcefile = fileSystem.FindFile(filenam);
-	if (currentsourcefile < 0)
+	currentsourcefile = FindConSource(filenam);
+	if (currentsourcefile == -1)
 	{
 		I_FatalError("%s: Missing con file(s).", filenam);
 	}
 	Printf("Compiling: '%s'.\n", filenam);
-	auto textstring = GetStringFromLump(currentsourcefile);
+	auto textstring = ReadConSource(currentsourcefile);
 	textptr = textstring.GetChars();
 
 	line_number = 1;
@@ -3121,7 +3122,8 @@ void ConCompiler::compilecon(const char *filenam)
 
 
 	// Install the crosshair toggle messages in the CVAR.
-	cl_crosshair->SetToggleMessages(quoteMgr.GetRawQuote(QUOTE_CROSSHAIR_OFF), quoteMgr.GetRawQuote(QUOTE_CROSSHAIR_OFF-1));
+	if (!HasSecondaryDukeContext())
+		cl_crosshair->SetToggleMessages(DukeQuotes().GetRawQuote(QUOTE_CROSSHAIR_OFF), DukeQuotes().GetRawQuote(QUOTE_CROSSHAIR_OFF-1));
 }
 
 //==========================================================================
@@ -3132,6 +3134,7 @@ void ConCompiler::compilecon(const char *filenam)
 
 static const char* ConFile(void)
 {
+	if (HasSecondaryDukeContext()) return SecondaryConRoot();
 	if (userConfig.DefaultCon.IsNotEmpty()) return userConfig.DefaultCon.GetChars();
 
 	// WW2GI anf NAM special con names got introduced by EDuke32.
@@ -3141,13 +3144,13 @@ static const char* ConFile(void)
 		if (fileSystem.FindFile("ww2gi.con") >= 0) return "ww2gi.con";
 	}
 
-	if (g_gameType & GAMEFLAG_NAM)
+	if (DukeGameFlags() & GAMEFLAG_NAM)
 	{
 		if (fileSystem.FindFile("nam.con") >= 0) return "nam.con";
 		if (fileSystem.FindFile("napalm.con") >= 0) return "napalm.con";
 	}
 
-	if (g_gameType & GAMEFLAG_NAPALM)
+	if (DukeGameFlags() & GAMEFLAG_NAPALM)
 	{
 		if (fileSystem.FindFile("napalm.con") >= 0) return "napalm.con";
 		if (fileSystem.FindFile("nam.con") >= 0) return "nam.con";
@@ -3155,14 +3158,14 @@ static const char* ConFile(void)
 
 #if 0
 	// This got introduced by EDuke 2.0.
-	if (g_gameType & GAMEFLAG_DUKE)
+	if (DukeGameFlags() & GAMEFLAG_DUKE)
 	{
 		if (fileSystem.FindFile("eduke.con") >= 0) return "eduke.con";
 	}
 #endif
 
 	// This will load for all games using CON.
-	if (g_gameType & GAMEFLAG_DUKECOMPAT)
+	if (DukeGameFlags() & GAMEFLAG_DUKECOMPAT)
 	{
 		if (fileSystem.FindFile("raze.con") >= 0) return "raze.con";
 	}
@@ -3181,7 +3184,7 @@ void ConCompiler::setmusic()
 {
 	for (auto& tm : tempMusic)
 	{
-		auto map = FindMapByIndexOnly(tm.volnum, tm.levlnum);
+		auto map = ConMap(tm.volnum, tm.levlnum);
 		if (map) map->music = tm.music;
 	}
 	tempMusic.Clear();
@@ -3227,20 +3230,20 @@ void loadcons()
 	ScriptCode.Push(0);
 	ConCompiler comp;
 
-	if (fileSystem.FileExists("engine/engine.con"))
+	if (!HasSecondaryDukeContext() && fileSystem.FileExists("engine/engine.con"))
 	{
 		comp.compilecon("engine/engine.con");
 	}
 
 	comp.compilecon(ConFile()); //Tokenize
 
-	if (userConfig.AddCons) for (FString& m : *userConfig.AddCons.get())
+	if (!HasSecondaryDukeContext() && userConfig.AddCons) for (FString& m : *userConfig.AddCons.get())
 	{
 		comp.compilecon(m.GetChars());
 	}
 	ScriptCode.ShrinkToFit();
 	labels.ShrinkToFit();
-	userConfig.AddCons.reset();
+	if (!HasSecondaryDukeContext()) userConfig.AddCons.reset();
 	setscriptvalue(0, scriptpos());
 
 	if (comp.getErrorCount())
@@ -3260,9 +3263,12 @@ void loadcons()
 
 	// These can only be retrieved AFTER loading the scripts.
 	FinalizeGameVars();
-	S_WorldTourMappingsForOldSounds(); // create a sound mapping for World Tour.
-	soundEngine->HashSounds();
-	S_CacheAllSounds();
+	if (!HasSecondaryDukeContext())
+	{
+		S_WorldTourMappingsForOldSounds(); // create a sound mapping for World Tour.
+		soundEngine->HashSounds();
+		S_CacheAllSounds();
+	}
 	comp.setmusic();
 
 	// RR must link the last map of E1 to the first map of E2.
@@ -3287,7 +3293,7 @@ void loadcons()
 	gs.stickybomb_lifetime_var = GetGameVar("STICKYBOMB_LIFETIME_VAR", NAM_GRENADE_LIFETIME_VAR, nullptr, 0).value();
 
 
-	if (isWorldTour())
+	if (isWorldTour() && !HasSecondaryDukeContext())
 	{
 		// fix broken secret exit in WT's super secret map. 
 		// This cannot be done from an RMAPINFO definition because the conditions are too specific and must not override custom maps.
