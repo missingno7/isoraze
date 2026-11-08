@@ -18,7 +18,7 @@
 #include <memory>
 #include <utility>
 
-namespace Duke3d { ::GameInterface* CreateInterface(); void InitAnimationTables(); }
+namespace Duke3d { ::GameInterface* CreateInterface(); void InitAnimationTables(); void RegisterClasses(); }
 namespace Blood { ::GameInterface* CreateInterface(); }
 EXTERN_CVAR(Bool, mashup_combat)
 CUSTOM_CVAR(Int, superset_weapon_profile, 0, CVAR_ARCHIVE) // 0: character default, 1: Blood, 2: Duke.
@@ -90,6 +90,8 @@ public:
 			superset_weapon_profile = !stricmp(weapons, "blood") ? 1 : !stricmp(weapons, "duke") ? 2 : 0;
 		if (bloodMap)
 		{
+			// Bind native actor class identities without starting Duke's world or CON.
+			Duke3d::RegisterClasses();
 			if (!BloodWeaponsRequested())
 			{
 				Printf("Superset: saved Duke weapon selection needs the reverse combat adapter; using native Blood weapons.\n");

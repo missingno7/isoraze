@@ -25,6 +25,14 @@ bool NativeBloodDamageKind(DamageKind kind, int& nativeKind);
 Damage BloodTineDamage(bool playerTarget);
 Damage BloodVectorDamage(int vectorType, bool playerTarget);
 
+// Health only: no implicit impulse, ignition, freezing or shrinking. True means
+// the receiver handled the request, including native immunity/rejection.
+// Native Blood currently accepts its seven categories and Blood/environmental
+// sources. Cold and sources without a Blood identity need explicit adapters.
+bool ApplyHealthDamage(DCoreActor* target, Damage damage, DCoreActor* source);
+bool ReadDukeHitDamage(Duke3d::DDukeActor* hitter, Damage& damage);
+bool ApplyDukeHealthHit(DCoreActor* target, Duke3d::DDukeActor* hitter, DCoreActor* source);
+
 // Duke receivers handle Physical and Heat through the native onHit path.
 // Unsupported categories return false instead of acquiring invented reactions.
 bool PrepareDukeHit(Duke3d::DDukeActor* hitter, Damage damage, bool impulse = true);

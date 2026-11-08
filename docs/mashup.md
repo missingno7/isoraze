@@ -431,7 +431,8 @@ player immunity and armor dispatch. They are not weapon/enemy pair rules.
 Heat damage does not itself request ignition. Knockback, burning, freezing and
 shrinking are separate concerns. The shared Duke receiver currently accepts
 Physical and Heat; other categories need native response adapters. Blood keeps
-its seven native responses and adds an independent Cold factor. Freezing's
+its seven native responses; the Duke-world axe-zombie adapter also adds an
+independent Cold factor. Freezing's
 explicit defeat handling is described below; shared shrinking remains pending.
 
 Native Blood tines deal `17 << 3` Q4 units to a non-player (8.5 points), and
@@ -473,6 +474,75 @@ runtime/save/load regressions. Artifacts under `build-mashup/checks/`:
 - `runtime-20261108T005246925`: ordinary Duke and Blood.
 - `runtime-20261108T005332809`: legacy pitchfork mode, including dead-hit cleanup.
 - `runtime-20261108T005520410`: Caleb E2L1, final damage/default-state checks.
+
+## Common health entry point in both map families
+
+`Superset::ApplyHealthDamage(CoreActor*, Damage, CoreActor*)` selects the
+target's current receiver. Native Blood players, dudes and damageable things
+use `actDamageSprite` in Blood maps. The existing Caleb controller, Blood enemy
+facades and Duke native hit handlers remain the receivers in Duke maps. Flame
+impact/burning and mixed enemy/player hit paths now use this common boundary.
+No second game loop or global game-flag changes are involved.
+
+The script equivalents extend `CoreActor`:
+
+```c
+target.ApplySharedHealthDamage(SD_Physical, 136, source); // 8.5 health points
+target.ApplySharedDukeHealthHit(hitter, source);           // explicit attribution
+```
+
+`ReadDukeHitDamage` converts an existing shared payload or a recognized Duke
+attack's integer `extra` value to Q4 health. Shot sparks, melee and lasers map
+to Physical; explosive actors map to Blast. Freeze/shrink/grow attacks remain
+outside this ordinary hit conversion. Callers still own collision, self-hit,
+friendly-fire and attack-specific modifiers before submitting an accepted hit;
+this health API does not run an entire projectile contact handler.
+
+Blood's native tables, armor, player immunities, AI pain/targeting, death
+sequences, triggers and kill credit remain authoritative. No attack/enemy pair
+table is introduced. The API does not request impulse, ignition, freezing or
+shrinking. Native response extensions remain meaningful: Tesla damage can set
+Blood's stun flag and Heat can transform vulnerable low-health enemies into
+burning forms. Those are retained native handlers, not a claim that all original
+behavior is reproduced by resistance parameters alone.
+
+`true` means a supported receiver handled the request, including native
+invulnerability or immunity; it does not promise health loss. The current input
+range matches the existing Duke payload adapter, 0 through 32767 health points
+(524272 Q4 units), before receiver-specific scaling. Invalid amounts,
+categories, deleted objects and unsupported receivers return `false`. Zero
+native Blood damage does not enter AI or cause a Tesla reaction. Native Blood
+currently accepts its seven damage categories and native Blood/environmental
+sources. Cold responses on arbitrary native Blood actors, and attribution or
+retaliation against a foreign actor without a Blood identity, require further
+adapters and return `false`. Existing Cold/freezing support for the Duke-world
+axe-zombie facade remains available. These limits keep pending crossover rules
+explicit; Duke weapons/projectiles in Blood maps are still not enabled.
+
+`superset_health_check` invokes both public VM entry points against live native
+Blood actors. It checks Duke physical hit conversion, fractional health, seven
+category responses, native Tesla stun, separate ignition/impulse, blocked and
+invalid requests, Blast mapping, Caleb armor, damageable things and native death
+with player kill credit. Its seed/saved phases verify native Q4 health and AI
+target restoration through a fresh map, save/load and full GC. Test deaths use
+Blood's deferred removal queue, including any native drops or gibs.
+
+The reverse-map harness runs these checks alongside native flare combat,
+native events and isolated Duke effect ticking. Original-game and Duke-world
+combat regressions are required when this common boundary changes.
+
+Verified on 2026-11-08 with the Release build and audio enabled:
+
+- `blood-map-20261108T071252885`: both public VM entry points, native damage
+  responses, Q4 save/GC, death credit and the full reverse-map fixture.
+- `enemies-20261108T070938675`: Caleb and Duke pursuit/melee, native weapon
+  damage, burning transformation, deaths and cleanup.
+- `freeze-20261108T071055647`: both characters, native freezer projectiles,
+  independent Cold/fire responses, shatter/thaw and save/GC.
+- `runtime-20261108T071337954`: ordinary Duke E1L1 and Blood E1M1, including
+  native flare/spray input, ammunition, missile persistence and reload.
+- `runtime-20261108T071445345`: Caleb E1L1, fresh E1L2, incoming damage,
+  ordinary/blast death and restart, movement and shared hit/save checks.
 
 ## Incoming Caleb damage and shared Blood effects
 
@@ -1078,9 +1148,10 @@ compensation does not address collision, projectile origins or interaction reach
    crushers and other mechanism variants. Keep one collider and authoritative pose/health;
    the current native controller-state actor and Duke world identity are an
    incremental adapter, not the final shared actor model.
-2. Generalize actor identity, targeting, ownership and damage in both directions.
-   Use shared fractional health units and retain native AI/weapon behavior.
-   Keep native same-game resistances and death/trigger callbacks meaningful.
+2. Extend the common health receiver with foreign attacker identity, targeting,
+   ownership and remaining response categories in both directions. Retain
+   shared fractional units, native AI/weapon behavior, same-game resistances
+   and death/trigger callbacks.
 3. Expand shared status effects with per-actor reactions: burning on Duke and
    axe-zombie targets and freezing on axe zombies are present; add shrinking, electrical and
    other damage interactions. Coordinate animation/AI callbacks and save state.

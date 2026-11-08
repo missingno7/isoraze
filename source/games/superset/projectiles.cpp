@@ -56,7 +56,7 @@ void FlameImpact(Blood::DBloodActor* flame, DCoreActor* target)
 	int clocks = (4 + clamp(int(superset_blood_difficulty), 0, 4)) * Units::ClocksPerStep;
 	Ignite(target, source, clocks);
 	if (auto duke = dyn_cast<Duke3d::DDukeActor>(target); duke && Duke3d::badguy(duke))
-		ApplyDukeHealthDamage(duke, {8, DamageKind::Heat}, source);
+		ApplyHealthDamage(duke, {8, DamageKind::Heat}, source);
 }
 }
 
@@ -164,7 +164,7 @@ void TickStatusEffects()
 		}
 		// Blood's ordinary burning tick: four clocks and eight Q4 health units.
 		actor->supersetBurnTime = max(0, actor->supersetBurnTime - int(Units::ClocksPerStep));
-		ApplyDukeHealthDamage(actor, {8, DamageKind::Heat}, actor->supersetBurnSource);
+		ApplyHealthDamage(actor, {8, DamageKind::Heat}, actor->supersetBurnSource);
 		actor->supersetBurnFxTime -= Units::ClocksPerStep;
 		if (actor->supersetBurnFxTime <= 0)
 		{

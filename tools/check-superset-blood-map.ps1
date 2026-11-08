@@ -28,11 +28,12 @@ vid_vsync=false
 cl_nostartscreens=true
 '@ | Set-Content -LiteralPath $config
 $commands = @('wait 90', 'superset_check', 'superset_duke_resource_check', 'mashup_runtime_check',
-    'superset_duke_effect_check native', 'superset_spawn_duke_effect splat', 'wait 8', 'superset_duke_effect_check',
+    'superset_duke_effect_check native', 'superset_health_check', 'superset_health_check seed',
+    'superset_spawn_duke_effect splat', 'wait 8', 'superset_duke_effect_check',
     'superset_fx_check seed', 'save bloodmap-start "Native Blood and Duke actors"', 'wait 4', 'screenshot',
     'wait 20', 'superset_duke_effect_check', 'save bloodmap-held "Original Duke tick alongside native Blood"', 'wait 4',
-    'superset_duke_effect_check clear', 'superset_fx_check clear', 'map E1M2', 'wait 60', 'superset_check', 'superset_duke_resource_check',
-    'load bloodmap-start', 'wait 4', 'gc full', 'superset_duke_effect_check', 'superset_fx_check saved',
+    'superset_duke_effect_check clear', 'superset_fx_check clear', 'superset_health_check clear', 'map E1M2', 'wait 60', 'superset_check', 'superset_duke_resource_check',
+    'load bloodmap-start', 'wait 4', 'gc full', 'superset_health_check saved', 'superset_health_check', 'superset_duke_effect_check', 'superset_fx_check saved',
     'save bloodmap-restored "Foreign actor and native events restored after fresh map"', 'wait 4', 'screenshot',
     'wait 400', 'superset_duke_effect_check', 'superset_fx_check expired', 'save bloodmap-aged "Native decal growth stopped at original limit"', 'wait 4',
     'give weapons', 'slot 2', 'wait 60', 'superset_duke_effect_check target', 'save bloodmap-flarebefore "Native Blood flare ready"', 'wait 30',
@@ -118,13 +119,19 @@ foreach ($name in @('queued', 'queue-restored')) {
 if ($states.cleared.Effects.Count) { throw "Foreign actor cleanup failed; inspect $log" }
 $expected = @('Superset check: identity/config=PASS, content manifest=PASS, save isolation=PASS, shared units=PASS.',
     'Superset Duke resource check: isolation/colors/aliases/private files=PASS.',
-    'Superset native Blood thing check: PASS (TNT barrel health/hitscan blocking).', 'Superset FX saved check: PASS.', 'Superset FX expired check: PASS.')
+    'Superset native Blood thing check: PASS (TNT barrel health/hitscan blocking).', 'Superset FX saved check: PASS.', 'Superset FX expired check: PASS.',
+    'Superset shared Blood health save check: PASS.',
+    'Superset shared Blood health check: Duke hit/VM=PASS, Q4=PASS, categories/resistance=PASS, electric=PASS, separate effects=PASS, blocked=PASS, rejection=PASS, blast mapping=PASS, armor=PASS, things=PASS, native death/credit=PASS.')
 foreach ($line in $expected) {
     if (!(Select-String -LiteralPath $log -SimpleMatch $line)) { throw "Missing check '$line'; inspect $log" }
+}
+if (@(Select-String -LiteralPath $log -SimpleMatch $expected[-1]).Count -ne 2 -or
+    (Select-String -LiteralPath $log -Pattern 'Superset shared Blood health.*FAIL')) {
+    throw "Shared health checks failed before/after restoration; inspect $log"
 }
 if (!(Select-String -LiteralPath $log -SimpleMatch 'Superset native Blood player check: PASS') -or
     (Select-String -LiteralPath $log -SimpleMatch 'Superset Duke effect check: FAIL') -or
     @(Select-String -LiteralPath $log -SimpleMatch 'Mashup runtime check: Duke=PASS, Blood=PASS, core=PASS, sector state=PASS, sector save=PASS, removal=PASS, cleanup=PASS.').Count -ne 2 -or
     !(Select-String -LiteralPath $config -SimpleMatch '[Superset.')) { throw "Runtime isolation/configuration checks failed; inspect $log" }
-Write-Output 'Blood map: PASS (native Blood player, missiles, object blocking/events; native Duke actor ticks/art, queue, save/GC and cleanup)'
+Write-Output 'Blood map: PASS (shared health/VM, native Blood combat/events; Duke actor ticks/art, queue, save/GC and cleanup)'
 Write-Output "Artifacts: $runRoot"

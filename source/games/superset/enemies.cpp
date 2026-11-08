@@ -108,7 +108,7 @@ bool DamageEnemy(Duke3d::DDukeActor* body, Damage damage, DCoreActor* source)
 	else
 	{
 		if (!NativeBloodDamageKind(damage.kind, kind)) return false;
-		NativeDamage(body, kind, int(damage.amount), source);
+		if (damage.amount) NativeDamage(body, kind, int(damage.amount), source);
 	}
 	return true;
 }
@@ -215,14 +215,12 @@ void BloodEnemyHit(Duke3d::DDukeActor* body, Duke3d::DDukeActor* hitter)
 		}
 		return;
 	}
-	DamageKind kind;
-	if (hitter->supersetHitDamage >= 0) kind = DamageKind(hitter->supersetHitKind);
-	else if (!DukeDamageKind(static_cast<PClassActor*>(hitter->GetClass()), kind)) return;
-	if ((kind == DamageKind::Physical || kind == DamageKind::Blast) && Shatter(body, hitter->GetOwner())) return;
-	auto amount = hitter->supersetHitDamage >= 0 ? hitter->supersetHitDamage : Units::FromDukeHealth(max(0, int(hitter->spr.extra)));
-	DamageEnemy(body, {amount, kind}, hitter->GetOwner());
+	Damage damage;
+	if (!ReadDukeHitDamage(hitter, damage)) return;
+	if ((damage.kind == DamageKind::Physical || damage.kind == DamageKind::Blast) && Shatter(body, hitter->GetOwner())) return;
+	ApplyHealthDamage(body, damage, hitter->GetOwner());
 	if (hitter->supersetHitDamage < 0 && !hitter->supersetDamageOnly)
-		if (auto state = BloodState(body)) state->vel += hitter->spr.Angles.Yaw.ToVector() * Units::HealthPoints(amount) * .25;
+		if (auto state = BloodState(body)) state->vel += hitter->spr.Angles.Yaw.ToVector() * Units::HealthPoints(damage.amount) * .25;
 }
 
 void TickBloodEnemies()

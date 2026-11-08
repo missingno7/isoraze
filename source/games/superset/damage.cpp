@@ -9,6 +9,7 @@
 #include "enemies.h"
 #include "mashup_player.h"
 #include "c_dispatch.h"
+#include "vm.h"
 
 namespace Duke3d { void TickActor(DDukeActor*); }
 
@@ -54,6 +55,78 @@ Damage BloodVectorDamage(int vectorType, bool playerTarget)
 	// Native actFireVector uses Q4 points and halves tine damage to non-players.
 	damage.amount = Units::FromBloodHealth(vector.dmg << (vectorType == Blood::kVectorTine && !playerTarget ? 3 : 4));
 	return damage;
+}
+
+bool ApplyHealthDamage(DCoreActor* target, Damage damage, DCoreActor* source)
+{
+	if (!IsActive() || !target || (target->ObjectFlags & OF_EuthanizeMe) ||
+		(source && (source->ObjectFlags & OF_EuthanizeMe)) ||
+		// Match the existing Duke hit payload range; do not feed arbitrary int64
+		// amounts into native signed-int resistance, armor and death arithmetic.
+		damage.amount < 0 || damage.amount > Units::FromDukeHealth(INT16_MAX) ||
+		unsigned(damage.kind) > unsigned(DamageKind::Cold)) return false;
+	if (IsBloodMap())
+	{
+		auto native = dyn_cast<Blood::DBloodActor>(target);
+		auto nativeSource = dyn_cast<Blood::DBloodActor>(source);
+		int kind;
+		if (!native || !native->hasX() || !NativeBloodDamageKind(damage.kind, kind) ||
+			(source && !nativeSource)) return false;
+		if (native->spr.statnum == Blood::kStatDude)
+		{
+			if (!native->IsDudeActor()) return false;
+		}
+		else if (native->spr.statnum != Blood::kStatThing ||
+			native->spr.type < Blood::kThingBase || native->spr.type >= Blood::kThingMax) return false;
+		// A zero request must not retarget AI or acquire Tesla/heat reactions.
+		if (damage.amount) Blood::actDamageSprite(nativeSource, native, Blood::DAMAGE_TYPE(kind), int(damage.amount));
+		return true;
+	}
+	if (HasBloodEnemy(target)) return ApplyBloodEnemyDamage(target, damage, source);
+	auto duke = dyn_cast<Duke3d::DDukeActor>(target);
+	if (!IsDukeMap() || !duke) return false;
+	if (duke->isPlayer())
+	{
+		auto player = Duke3d::getPlayer(duke->PlayerIndex());
+		if (HasBloodMovement(player)) return ApplyCalebDamage(player, damage, source);
+	}
+	return ApplyDukeHealthDamage(duke, damage, source);
+}
+
+bool ReadDukeHitDamage(Duke3d::DDukeActor* hitter, Damage& damage)
+{
+	if (!IsActive() || !hitter || (hitter->ObjectFlags & OF_EuthanizeMe)) return false;
+	if (hitter->supersetHitDamage >= 0)
+	{
+		damage = { hitter->supersetHitDamage, DamageKind(hitter->supersetHitKind) };
+		return damage.amount <= INT_MAX && unsigned(damage.kind) <= unsigned(DamageKind::Cold);
+	}
+	if (!DukeDamageKind(static_cast<PClassActor*>(hitter->GetClass()), damage.kind)) return false;
+	damage.amount = Units::FromDukeHealth(max(0, int(hitter->spr.extra)));
+	return true;
+}
+
+bool ApplyDukeHealthHit(DCoreActor* target, Duke3d::DDukeActor* hitter, DCoreActor* source)
+{
+	Damage damage;
+	return ReadDukeHitDamage(hitter, damage) && ApplyHealthDamage(target, damage, source);
+}
+
+DEFINE_ACTION_FUNCTION(DCoreActor, ApplySharedHealthDamage)
+{
+	PARAM_SELF_PROLOGUE(DCoreActor);
+	PARAM_INT(kind);
+	PARAM_INT(q4Amount);
+	PARAM_OBJECT(source, DCoreActor);
+	ACTION_RETURN_BOOL(ApplyHealthDamage(self, { q4Amount, DamageKind(kind) }, source));
+}
+
+DEFINE_ACTION_FUNCTION(DCoreActor, ApplySharedDukeHealthHit)
+{
+	PARAM_SELF_PROLOGUE(DCoreActor);
+	PARAM_OBJECT(hitter, Duke3d::DDukeActor);
+	PARAM_OBJECT(source, DCoreActor);
+	ACTION_RETURN_BOOL(ApplyDukeHealthHit(self, hitter, source));
 }
 
 bool PrepareDukeHit(Duke3d::DDukeActor* hitter, Damage damage, bool impulse)
@@ -148,13 +221,11 @@ bool ReceiveCalebHit(Duke3d::DDukeActor* target, Duke3d::DDukeActor* hitter)
 	if (!target->isPlayer()) return false;
 	auto player = Duke3d::getPlayer(target->PlayerIndex());
 	if (!HasBloodMovement(player)) return false;
-	DamageKind kind;
-	if (hitter->supersetHitDamage >= 0) kind = DamageKind(hitter->supersetHitKind);
-	else if (!DukeDamageKind(static_cast<PClassActor*>(hitter->GetClass()), kind)) return false;
+	Damage damage;
+	if (!ReadDukeHitDamage(hitter, damage)) return false;
 	if (Duke3d::ud.god) return true;
-	auto amount = hitter->supersetHitDamage >= 0 ? hitter->supersetHitDamage : Units::FromDukeHealth(max(0, int(hitter->spr.extra)));
-	if (!ApplyCalebDamage(player, {amount, kind}, hitter->GetOwner())) return false;
-	if (!hitter->supersetDamageOnly) DukeImpulse(player, hitter->spr.Angles.Yaw, amount, hitter);
+	if (!ApplyHealthDamage(target, damage, hitter->GetOwner())) return false;
+	if (!hitter->supersetDamageOnly) DukeImpulse(player, hitter->spr.Angles.Yaw, damage.amount, hitter);
 	return true;
 }
 
@@ -172,6 +243,150 @@ bool ConsumeCalebHit(Duke3d::DDukeActor* target)
 	ApplyCalebDamage(player, {amount, kind}, target->GetHitOwner());
 	DukeImpulse(player, target->hitang, amount, target->attackerDefaults());
 	return true;
+}
+
+// Exercises the public VM boundary against live native Blood receivers. These
+// fixtures never run a second world ticker or leave a foreign collision body.
+CCMD(superset_health_check)
+{
+	if (!IsBloodMap() || gamestate != GS_LEVEL || numplayers != 1) return;
+	auto player = Blood::getPlayer(myconnectindex);
+	auto owner = player->GetActor();
+	auto spawn = [&]() { return Blood::actSpawnDude(owner, Blood::kDudeZombieAxeNormal, 40); };
+	auto remove = [](Blood::DBloodActor* actor)
+	{
+		if (actor)
+		{
+			Blood::seqKill(actor); Blood::evKillActor(actor);
+			actor->spr.cstat &= ~CSTAT_SPRITE_BLOCK_ALL;
+			// Native deaths may already be in gPost. Update that queue instead of
+			// destroying an actor that the end-of-step transfer still references.
+			Blood::actPostSprite(actor, Blood::kStatFree);
+		}
+	};
+	auto hitter = Duke3d::CreateActor(owner->sector(), owner->spr.pos, Duke3d::DukeShotSparkClass,
+		0, DVector2(0, 0), nullAngle, 0, 0, nullptr, STAT_MISC);
+	if (!hitter) { Printf("Superset shared Blood health check: FAIL (no hit payload).\n"); return; }
+	ChangeActorStat(hitter, MAXSTATUS - 2);
+	auto vmHit = [&](DCoreActor* target)
+	{
+		auto function = PClass::FindFunction("CoreActor", "ApplySharedDukeHealthHit");
+		if (!function) return false;
+		int result = 0;
+		VMValue params[] = { target, hitter, owner };
+		VMReturn ret; ret.IntAt(&result);
+		VMCall(function, params, 3, &ret, 1);
+		return result != 0;
+	};
+	auto vmHealth = [&](DCoreActor* target, Damage damage)
+	{
+		auto function = PClass::FindFunction("CoreActor", "ApplySharedHealthDamage");
+		if (!function) return false;
+		int result = 0;
+		VMValue params[] = { target, int(damage.kind), int(damage.amount), owner };
+		VMReturn ret; ret.IntAt(&result);
+		VMCall(function, params, 4, &ret, 1);
+		return result != 0;
+	};
+	const int fraction = MulScale(136, Blood::getDudeInfo(Blood::kDudeZombieAxeNormal)->damageVal[Blood::kDamageBullet], 8);
+	if (argv.argc() > 1)
+	{
+		Blood::DBloodActor* saved = nullptr;
+		Blood::BloodSpriteIterator it;
+		while (auto actor = it.Next()) if (actor->spr.intowner == 31033) { saved = actor; break; }
+		PrepareDukeHit(hitter, {136, DamageKind::Physical}, false);
+		if (!stricmp(argv[1], "seed"))
+		{
+			if (saved) saved->spr.flags &= ~32; // Fixture hold, not a queued transfer.
+			remove(saved); saved = spawn();
+			if (saved)
+			{
+				saved->spr.intowner = 31033; saved->xspr.health = 16000;
+				vmHit(saved); saved->spr.flags |= 32;
+				saved->spr.cstat &= ~CSTAT_SPRITE_BLOCK_ALL;
+			}
+		}
+		else if (!stricmp(argv[1], "saved"))
+		{
+			bool pass = saved && saved->xspr.health == 16000 - fraction;
+			if (saved)
+			{
+				saved->spr.flags &= ~32;
+				pass &= vmHit(saved) && saved->xspr.health == 16000 - fraction * 2 && saved->GetTarget() == owner;
+			}
+			Printf("Superset shared Blood health save check: %s.\n", pass ? "PASS" : "FAIL");
+			remove(saved);
+		}
+		else if (!stricmp(argv[1], "clear")) { if (saved) saved->spr.flags &= ~32; remove(saved); }
+		hitter->Destroy();
+		return;
+	}
+	TArray<Blood::DBloodActor*> previous;
+	Blood::BloodSpriteIterator before;
+	while (auto actor = before.Next()) previous.Push(actor);
+	auto target = spawn();
+	if (!target) { hitter->Destroy(); Printf("Superset shared Blood health check: FAIL (no target).\n"); return; }
+	target->xspr.health = 16000;
+	hitter->spr.extra = 9;
+	bool hit = vmHit(target) && target->xspr.health == 16000 - MulScale(144,
+		Blood::getDudeInfo(target->spr.type)->damageVal[Blood::kDamageBullet], 8) && target->GetTarget() == owner;
+	target->xspr.health = 16000;
+	PrepareDukeHit(hitter, {136, DamageKind::Physical}, false);
+	bool fractions = vmHit(target) && vmHit(target) && target->xspr.health == 16000 - fraction * 2;
+	bool categories = true;
+	for (int kind = 0; kind < Blood::kDamageMax; ++kind)
+	{
+		DamageKind shared;
+		BloodDamageKind(kind, shared);
+		target->xspr.health = 16000;
+		int expected = MulScale(128, Blood::getDudeInfo(target->spr.type)->damageVal[kind], 8);
+		categories &= vmHealth(target, {128, shared}) && target->xspr.health == 16000 - expected;
+	}
+	bool electric = target->dudeExtra.teslaHit != 0;
+	bool separate = target->xspr.burnTime == 0; // Heat did not request ignition.
+	auto velocity = target->vel;
+	vmHit(target);
+	separate &= target->vel == velocity;
+	target->xspr.health = 16000;
+	target->spr.flags |= 32;
+	bool blocked = vmHit(target) && target->xspr.health == 16000;
+	target->spr.flags &= ~32;
+	target->xspr.locked = 1;
+	blocked &= vmHit(target) && target->xspr.health == 16000;
+	target->xspr.locked = 0;
+	target->dudeExtra.teslaHit = 0;
+	bool rejection = ApplyHealthDamage(target, {0, DamageKind::Electric}, owner) && !target->dudeExtra.teslaHit &&
+		!ApplyHealthDamage(target, {-1, DamageKind::Physical}, owner) &&
+		!ApplyHealthDamage(target, {Units::FromDukeHealth(INT16_MAX) + 1, DamageKind::Physical}, owner) &&
+		!ApplyHealthDamage(target, {Units::Health(INT_MAX) + 1, DamageKind::Physical}, owner) &&
+		!ApplyHealthDamage(target, {128, DamageKind(255)}, owner) &&
+		!ApplyHealthDamage(target, {128, DamageKind::Cold}, owner) &&
+		!ApplyHealthDamage(target, {128, DamageKind::Physical}, hitter) && target->xspr.health == 16000;
+	DamageKind kind;
+	rejection &= !DukeDamageKind(Duke3d::DukeFreezeBlastClass, kind) &&
+		!DukeDamageKind(Duke3d::DukeShrinkSparkClass, kind) && !DukeDamageKind(Duke3d::DukeGrowSparkClass, kind);
+	bool blast = DukeDamageKind(Duke3d::DukeRPGClass, kind) && kind == DamageKind::Blast;
+	int armor = player->armor[0], health = owner->xspr.health;
+	player->armor[0] = 3200;
+	bool armored = ApplyHealthDamage(owner, {128, DamageKind::Physical}, owner) &&
+		int(owner->xspr.health) < health && health - int(owner->xspr.health) < 128 && player->armor[0] < 3200;
+	owner->xspr.health = health; player->armor[0] = armor;
+	auto thing = Blood::actSpawnThing(owner->sector(), owner->spr.pos, Blood::kThingTNTBarrel);
+	bool things = thing && ApplyHealthDamage(thing, {16, DamageKind::Physical}, owner) && thing->xspr.health < 400;
+	remove(thing);
+	auto kills = Level.kills;
+	target->xspr.health = 1;
+	bool death = vmHit(target) && target->xspr.health == 0 && Blood::seqGetStatus(target) >= 0 &&
+		Level.kills.got == kills.got + 1 && Level.kills.player[myconnectindex] == kills.player[myconnectindex] + 1;
+	Level.kills = kills;
+	Printf("Superset shared Blood health check: Duke hit/VM=%s, Q4=%s, categories/resistance=%s, electric=%s, separate effects=%s, blocked=%s, rejection=%s, blast mapping=%s, armor=%s, things=%s, native death/credit=%s.\n",
+		hit ? "PASS" : "FAIL", fractions ? "PASS" : "FAIL", categories ? "PASS" : "FAIL", electric ? "PASS" : "FAIL",
+		separate ? "PASS" : "FAIL", blocked ? "PASS" : "FAIL", rejection ? "PASS" : "FAIL", blast ? "PASS" : "FAIL",
+		armored ? "PASS" : "FAIL", things ? "PASS" : "FAIL", death ? "PASS" : "FAIL");
+	// Death callbacks may create native drops or gibs synchronously.
+	Blood::BloodSpriteIterator after;
+	while (auto actor = after.Next()) if (!previous.Contains(actor)) remove(actor);
+	hitter->Destroy();
 }
 
 namespace
