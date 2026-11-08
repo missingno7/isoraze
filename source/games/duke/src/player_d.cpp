@@ -339,6 +339,60 @@ void selectweapon_d(DDukePlayer* const p, int weap) // playernum, weaponnum
 //
 //---------------------------------------------------------------------------
 
+// Map-owned actions must also advance when another native character controller
+// supplies movement and weapons. Keep the original implementation shared.
+void ticktransporterhold_d(DDukePlayer* p)
+{
+	if (p->transporter_hold > 0)
+	{
+		p->transporter_hold--;
+		if (p->transporter_hold == 0 && p->on_warping_sector)
+			p->transporter_hold = 2;
+	}
+	if (p->transporter_hold < 0) p->transporter_hold++;
+}
+
+void tickaccessswitch_d(DDukePlayer* p)
+{
+	auto pact = p->GetActor();
+	if (p->access_incs && pact->spr.pal != 1)
+	{
+		p->oaccess_incs = p->access_incs;
+		p->access_incs++;
+		if (pact->spr.extra <= 0) p->access_incs = 12;
+		if (p->access_incs == 12)
+		{
+			if (p->access_spritenum != nullptr)
+			{
+				checkhitswitch(p, nullptr, p->access_spritenum);
+				switch (p->access_spritenum->spr.pal)
+				{
+				case 0:p->got_access &= (0xffff - 0x1); break;
+				case 21:p->got_access &= (0xffff - 0x2); break;
+				case 23:p->got_access &= (0xffff - 0x4); break;
+				}
+				p->access_spritenum = nullptr;
+			}
+			else
+			{
+				checkhitswitch(p, p->access_wall, nullptr);
+				switch (p->access_wall->pal)
+				{
+				case 0:p->got_access &= (0xffff - 0x1); break;
+				case 21:p->got_access &= (0xffff - 0x2); break;
+				case 23:p->got_access &= (0xffff - 0x4); break;
+				}
+			}
+		}
+		if (p->access_incs > 20)
+		{
+			p->oaccess_incs = p->access_incs = 0;
+			p->oweapon_pos = p->weapon_pos = 10;
+			p->okickback_pic = p->kickback_pic = 0;
+		}
+	}
+}
+
 int doincrements_d(DDukePlayer* p)
 {
 	auto pact = p->GetActor();
@@ -437,44 +491,7 @@ int doincrements_d(DDukePlayer* p)
 	else if (p->last_quick_kick > 0)
 		p->last_quick_kick--;
 
-	if (p->access_incs && pact->spr.pal != 1)
-	{
-		p->oaccess_incs = p->access_incs;
-		p->access_incs++;
-		if (pact->spr.extra <= 0)
-			p->access_incs = 12;
-		if (p->access_incs == 12)
-		{
-			if (p->access_spritenum != nullptr)
-			{
-				checkhitswitch(p, nullptr, p->access_spritenum);
-				switch (p->access_spritenum->spr.pal)
-				{
-				case 0:p->got_access &= (0xffff - 0x1); break;
-				case 21:p->got_access &= (0xffff - 0x2); break;
-				case 23:p->got_access &= (0xffff - 0x4); break;
-				}
-				p->access_spritenum = nullptr;
-			}
-			else
-			{
-				checkhitswitch(p, p->access_wall, nullptr);
-				switch (p->access_wall->pal)
-				{
-				case 0:p->got_access &= (0xffff - 0x1); break;
-				case 21:p->got_access &= (0xffff - 0x2); break;
-				case 23:p->got_access &= (0xffff - 0x4); break;
-				}
-			}
-		}
-
-		if (p->access_incs > 20)
-		{
-			p->oaccess_incs = p->access_incs = 0;
-			p->oweapon_pos = p->weapon_pos = 10;
-			p->okickback_pic = p->kickback_pic = 0;
-		}
-	}
+	tickaccessswitch_d(p);
 
 	if (p->scuba_on == 0 && p->insector() && p->cursector->lotag == 2)
 	{
@@ -1641,14 +1658,7 @@ void processinput_d(DDukePlayer* const p)
 		p->fistsign += int(pact->vel.X * 16);
 	}
 
-	if (p->transporter_hold > 0)
-	{
-		p->transporter_hold--;
-		if (p->transporter_hold == 0 && p->on_warping_sector)
-			p->transporter_hold = 2;
-	}
-	if (p->transporter_hold < 0)
-		p->transporter_hold++;
+	ticktransporterhold_d(p);
 
 	if (p->newOwner != nullptr)
 	{

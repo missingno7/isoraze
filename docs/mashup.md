@@ -348,6 +348,42 @@ covers luminosity translation preservation, and an ordinary Duke E1L1 launch
 checks the bank-disabled path. These checks still use the local Plutonium Pak
 data described above.
 
+### Native map navigation checks
+
+Duke transporter cooldowns and access-card activation now have small native
+handlers shared by the Duke player and the Caleb adapter. They still belong to
+the Duke environment; Caleb does not run Duke's movement or inventory timer
+loop. The adapter also advances native timed exits and exit-button sequences.
+This fixes actions that otherwise stop when Duke's player input is replaced.
+
+`make-superset-navigation.py` generates a Build v7 map containing a ceiling door,
+floor lift, paired teleporters, access-card-controlled door and paired water
+sectors. It contains geometry and native map tags only, with no game assets.
+The diagnostic `superset_navigation` command is restricted to this fixture.
+It positions the player for each case; actual use, movement, animations and
+portal traversal execute through normal input and game ticks.
+
+```powershell
+./tools/check-superset-navigation.ps1 -DukeGrp 'D:/games/duke/duke3d.grp' -BloodDirectory 'D:/games/blood' -PythonPath python
+```
+
+The PowerShell 7 harness runs both selectable characters, checks opening and
+walking through the door, riding the lift, teleporting twice with cooldown
+recovery, refusal without a card, activation and card consumption, timed-exit
+countdown advancement, save/load restoration and diving/surfacing. A different
+player position is set between save and load to detect failed restoration.
+It does not test a full end-of-level transition, breath depletion, crushers,
+all transport variants or arbitrary geometry. It is not a stock-map playthrough.
+Water entry/exit passed at Caleb's original size in this fixture; no scale or
+water-portal adjustment was introduced based on the earlier suspicion alone.
+
+Verified on 2026-11-08: the Release build and all eleven navigation checks
+passed for Duke and Caleb (`navigation-20261108T003909335`). Ordinary Duke E1L1
+and Blood E1M1 runtime/save/load checks passed
+(`runtime-20261108T003734072`). Caleb's E1L1 checks, save/load and fresh E1L2
+load also passed with audio enabled (`runtime-20261108T003823712`). These runs
+use the local Plutonium Pak archive described above.
+
 ## Scale findings
 
 Both games use the same Build-to-Raze coordinate conversion. Caleb's larger
@@ -374,9 +410,9 @@ compensation does not address collision, projectile origins or interaction reach
 
 ## Next integration boundaries
 
-1. Harden the native Blood movement adapter against Duke doors, lifts, water,
-   transports and crushers. Separate map-specific player timers/actions from
-   the original input loop. Keep one collider and authoritative pose/health;
+1. Expand the native Blood movement adapter checks beyond the generated door,
+   lift, water, access-switch and transport fixture to stock-map routes,
+   crushers and other mechanism variants. Keep one collider and authoritative pose/health;
    the current native controller-state actor and Duke world identity are an
    incremental adapter, not the final shared actor model.
 2. Generalize actor identity, targeting, ownership and damage in both directions.

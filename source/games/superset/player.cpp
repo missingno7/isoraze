@@ -76,6 +76,7 @@ void Publish(Duke3d::DDukePlayer* duke, Blood::DBloodPlayer* blood)
 	// native Duke hits are imported as deltas, never by replacing Blood health.
 	body->spr.extra = max(0, (int(state->xspr.health) + 15) / 16);
 	duke->bloodPublishedHealth = body->spr.extra;
+	duke->last_extra = body->spr.extra;
 	HideStateActor(state);
 }
 
@@ -189,6 +190,11 @@ bool TickBloodMovement(DCorePlayer* player)
 	auto state = blood->GetActor();
 	auto body = duke->GetActor();
 	Blood::viewBackupView(blood);
+	++duke->player_par;
+	Duke3d::ticktransporterhold_d(duke);
+	duke->on_warping_sector = 0;
+	if ((duke->fist_incs && Duke3d::endoflevel(duke)) ||
+		(duke->timebeforeexit > 1 && body->spr.extra > 0 && Duke3d::timedexit(duke))) return true;
 	if (duke->newOwner || Duke3d::ud.cameraactor)
 	{
 		blood->cmd.ucmd.vel.Zero();
@@ -207,6 +213,7 @@ bool TickBloodMovement(DCorePlayer* player)
 	if (world.useRequested) duke->cmd.ucmd.actions |= SB_OPEN;
 	else duke->cmd.ucmd.actions &= ~SB_OPEN;
 	Publish(duke, blood);
+	Duke3d::tickaccessswitch_d(duke);
 	if (probe.active)
 	{
 		if (probe.ticks) probe.clock &= PlayClock - probe.lastClock == Units::ClocksPerStep;
@@ -275,5 +282,72 @@ CCMD(superset_movement_check)
 	Printf("Superset movement check: native profile=%s, move/jump/crouch=%s, one collider=%s, clock=%s.\n",
 		nativeProfile ? "PASS" : "FAIL", inputs ? "PASS" : "FAIL", probe.oneCollider ? "PASS" : "FAIL", probe.clock ? "PASS" : "FAIL");
 	probe.active = false;
+}
+
+// Deliberately restricted to the generated fixture. Positioning is test setup;
+// doors, switches, lifts and transports still run through input/world ticks.
+CCMD(superset_navigation)
+{
+	if (!IsActive() || sector.Size() != 12 || sector[0].hitag != 32123 || argv.argc() < 2)
+	{
+		Printf("Superset navigation: requires the generated navigation fixture.\n");
+		return;
+	}
+	auto duke = static_cast<Duke3d::DDukePlayer*>(PlayerArray[myconnectindex]);
+	auto body = duke->GetActor();
+	if (!stricmp(argv[1], "pose") && argv.argc() == 3)
+	{
+		int n = atoi(argv[2]);
+		if (n < 0 || n >= int(sector.Size()) || n == 1 || n == 10) return;
+		auto sec = &sector[n];
+		auto first = sec->walls.Data();
+		DVector3 feet((first[0].pos.X + first[1].pos.X) / 2., 128., sec->floorz);
+		if (n == 0) feet.X = first[1].pos.X - 32.;
+		if (n == 9) feet.Y = 24.;
+		ChangeActorSect(body, sec);
+		body->spr.pos = feet;
+		body->spr.Angles.Yaw = DAngle::fromDeg(n == 9 ? -90. : 0.);
+		body->spr.Angles.Pitch = nullAngle;
+		body->vel.Zero();
+		duke->vel.Zero();
+		duke->setCursector(sec);
+		duke->on_ground = 1;
+		duke->jumping_counter = 0;
+		duke->toggle_key_flag = 0;
+		if (HasBloodMovement(duke))
+		{
+			auto blood = NativePlayer(duke);
+			auto state = blood->GetActor();
+			ChangeActorSect(state, sec);
+			state->spr.pos = DVector3(feet.XY(), state->spr.pos.Z + feet.Z - FeetZ(state));
+			state->spr.Angles = body->spr.Angles;
+			state->vel.Zero();
+			state->xspr.height = 0;
+			blood->InitAngles();
+			Blood::playerResetInertia(blood);
+			Publish(duke, blood);
+			state->backuploc();
+		}
+		body->backuploc();
+		duke->InitAngles();
+		return;
+	}
+	if (!stricmp(argv[1], "key")) { duke->got_access |= 1; return; }
+	if (!stricmp(argv[1], "check") && argv.argc() == 7)
+	{
+		int expectedSector = atoi(argv[3]);
+		if (expectedSector < 0 || expectedSector >= int(sector.Size())) return;
+		auto sec = &sector[expectedSector];
+		bool pass = body->sector() == sec && body->spr.extra > 0 &&
+			fabs(sec->floorz - atof(argv[4])) < .1 && fabs(sec->ceilingz - atof(argv[5])) < .1;
+		if (!stricmp(argv[6], "cooldown")) pass &= duke->transporter_hold == 0 && !duke->on_warping_sector;
+		if (!stricmp(argv[6], "ground")) pass &= fabs(body->spr.pos.Z - sec->floorz) < 1.;
+		if (!stricmp(argv[6], "locked")) pass &= sector[10].ceilingz == 128 && duke->access_incs == 0;
+		if (!stricmp(argv[6], "key")) pass &= duke->got_access == 0 && duke->access_incs == 0 && sector[10].ceilingz == 0;
+		if (!stricmp(argv[6], "clock")) { pass &= duke->timebeforeexit < 26 * 8 && duke->timebeforeexit > 1; duke->timebeforeexit = 0; }
+		Printf("Superset navigation %s: %s (sector=%d floor=%.2f ceiling=%.2f feet=%.2f health=%d hold=%d warp=%d access=%d keys=%d).\n",
+			argv[2], pass ? "PASS" : "FAIL", sectindex(body->sector()), sec->floorz, sec->ceilingz,
+			body->spr.pos.Z, body->spr.extra, duke->transporter_hold, duke->on_warping_sector, duke->access_incs, duke->got_access);
+	}
 }
 }

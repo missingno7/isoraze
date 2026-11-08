@@ -98,6 +98,8 @@ int wakeup(DDukeActor* sn, DDukePlayer* const p);
 
 
 int timedexit(DDukePlayer* const p);
+void ticktransporterhold_d(DDukePlayer* p);
+void tickaccessswitch_d(DDukePlayer* p);
 void dokneeattack(DDukePlayer* const p);
 int endoflevel(DDukePlayer* const p);
 void playerisdead(DDukePlayer* const p, int psectlotag, double fz, double cz);
