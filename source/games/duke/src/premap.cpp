@@ -39,6 +39,7 @@ Prepared for public release: 03/21/2003 - Charlie Wiederhold, 3D Realms
 #include "render.h"
 #include "screenjob_.h"
 #include "mashup_player.h"
+#include "games/superset/duke_weapons.h"
 
 BEGIN_DUKE_NS  
 
@@ -1219,6 +1220,9 @@ void GameInterface::NewGame(MapRecord* map, int skill, bool)
 	ud.multimode = 1;
 
 	donewgame(map, skill);
+	// donewgame also grants Duke's starting guns after resetweapons.
+	for (int i = connecthead; i >= 0; i = connectpoint2[i])
+		Superset::ApplyDukeMapStartingLoadout(getPlayer(i));
 	enterlevel(map, 0);
 	if (isShareware() && ud.recstat != 2) FTA(QUOTE_F1HELP, getPlayer(myconnectindex));
 

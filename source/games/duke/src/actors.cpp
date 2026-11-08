@@ -49,6 +49,7 @@ This file is a combination of code from the following sources:
 #include "games/superset/superset.h"
 #include "games/superset/duke_projectiles.h"
 #include "games/superset/duke_weapons.h"
+#include "games/superset/duke_pickups.h"
 
 BEGIN_DUKE_NS
 
@@ -3867,30 +3868,35 @@ void makeitfall(DDukeActor* actor)
 	if (actor->flags3 & SFLAG3_NOGRAVITY) return;
 
 	double grav;
+	int medium = actor->sector()->lotag;
+	bool foreign = Superset::BloodDukePickupEnvironment(actor, medium);
 
-	if( floorspace(actor->sector()) )
+	if (!foreign && floorspace(actor->sector()))
 		grav = 0;
 	else
 	{
-		if (ceilingspace(actor->sector()) || actor->sector()->lotag == ST_2_UNDERWATER)
+		if ((!foreign && ceilingspace(actor->sector())) || medium == ST_2_UNDERWATER)
 			grav = gs.gravity / 6;
 		else grav = gs.gravity * actor->FloatVar(NAME_gravityfactor);
 	}
 
-	if ((actor->spr.statnum == STAT_ACTOR || actor->spr.statnum == STAT_PLAYER || actor->spr.statnum == STAT_ZOMBIEACTOR || actor->spr.statnum == STAT_STANDABLE))
+	if (!foreign)
 	{
-		Collision coll;
-		getzrange(actor->spr.pos.plusZ(-1), actor->sector(), &actor->ceilingz, coll, &actor->floorz, coll, 7.9375, CLIPMASK0);
-	}
-	else
-	{
-		actor->ceilingz = actor->sector()->ceilingz;
-		actor->floorz = actor->sector()->floorz;
+		if ((actor->spr.statnum == STAT_ACTOR || actor->spr.statnum == STAT_PLAYER || actor->spr.statnum == STAT_ZOMBIEACTOR || actor->spr.statnum == STAT_STANDABLE))
+		{
+			Collision coll;
+			getzrange(actor->spr.pos.plusZ(-1), actor->sector(), &actor->ceilingz, coll, &actor->floorz, coll, 7.9375, CLIPMASK0);
+		}
+		else
+		{
+			actor->ceilingz = actor->sector()->ceilingz;
+			actor->floorz = actor->sector()->floorz;
+		}
 	}
 
 	if( actor->spr.pos.Z < actor->floorz - FOURSLEIGHT_F)
 	{
-		if( actor->sector()->lotag == ST_2_UNDERWATER && actor->vel.Z > 3122/256.)
+		if (medium == ST_2_UNDERWATER && actor->vel.Z > 3122/256.)
 			actor->vel.Z = 3144 / 256.;
 		if (actor->vel.Z < 24)
 			actor->vel.Z += grav;
@@ -4181,23 +4187,25 @@ void fall(DDukeActor *actor, int playernum)
 	//			  if(!gotz)
 	{
 		double grav;
+		int medium = actor->sector()->lotag;
+		bool foreign = Superset::BloodDukePickupEnvironment(actor, medium);
 
-		int sphit = fallspecial(actor, playernum);
-		if (floorspace(actor->sector()))
+		int sphit = foreign ? 0 : fallspecial(actor, playernum);
+		if (!foreign && floorspace(actor->sector()))
 			grav = 0;
 		else
 		{
-			if (ceilingspace(actor->sector()) || actor->sector()->lotag == 2)
+			if ((!foreign && ceilingspace(actor->sector())) || medium == 2)
 				grav = gs.gravity / 6;
 			else grav = gs.gravity;
 		}
 
-		if (actor->cgg <= 0 || (actor->sector()->floorstat & CSTAT_SECTOR_SLOPE))
+		if (!foreign && (actor->cgg <= 0 || (actor->sector()->floorstat & CSTAT_SECTOR_SLOPE)))
 		{
 			getglobalz(actor);
 			actor->cgg = 6;
 		}
-		else actor->cgg--;
+		else if (!foreign) actor->cgg--;
 
 		if (actor->spr.pos.Z < actor->floorz - FOURSLEIGHT_F)
 		{
@@ -4249,7 +4257,7 @@ void fall(DDukeActor *actor, int playernum)
 					S_PlayActorSound(THUD, actor);
 				}
 			}
-			if (actor->sector()->lotag == 1)
+			if (medium == 1)
 				actor->spr.pos.Z += actor->IntVar(NAME_falladjustz);
 			else actor->vel.Z = 0;
 		}

@@ -42,6 +42,8 @@ TObjPtr<DDukePlayer*> players[MAXPLAYERS];
 TMap<FName, int> soundSymbols;
 TMap<int, FSoundID> privateSounds;
 TMap<int, int> privateSoundResources, soundLimits;
+TMap<PClass*, int> actorTiles;
+TMap<int, PClassActor*> actorTypes;
 TArray<FString> soundSamples;
 constexpr int DukeSampleBase = INT_MIN + 0x10000000;
 void MarkPlayers()
@@ -73,6 +75,25 @@ FString Fingerprint()
 DDukePlayer* SecondaryDukePlayer(int index)
 {
 	return unsigned(index) < MAXPLAYERS ? players[index].Get() : nullptr;
+}
+
+void BindSecondaryDukeActor(PClassActor* type, int tile)
+{
+	if (!HasSecondaryDukeContext() || !type || unsigned(tile) >= MAXTILES)
+		I_FatalError("Superset: invalid private Duke actor binding");
+	actorTiles.Insert(type, tile);
+	actorTypes.Insert(tile, type);
+}
+const ActorInfo* SecondaryDukeActorInfo(PClass* type)
+{
+	auto tile = actorTiles.CheckKey(type);
+	return tile && gs.actorinfo[*tile].scriptaddress ? &gs.actorinfo[*tile] : nullptr;
+}
+PClassActor* ConSpawnType(int tile)
+{
+	if (!HasSecondaryDukeContext()) return GetSpawnType(tile);
+	auto type = actorTypes.CheckKey(tile);
+	return type ? *type : nullptr;
 }
 
 void PrepareSecondaryDukeSoundNames()

@@ -229,6 +229,7 @@ inline void rotateInputVel(DDukePlayer* const p)
 
 inline const ActorInfo* DDukeActor::conInfo() const
 {
+	if (HasSecondaryDukeContext()) return SecondaryDukeActorInfo(GetClass());
 	auto tn = static_cast<PClassActor*>(GetClass())->ActorInfo()->TypeNum;
 	return tn < 0 || gs.actorinfo[tn].scriptaddress == 0 ? nullptr : &gs.actorinfo[tn];
 }

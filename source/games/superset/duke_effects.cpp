@@ -7,6 +7,7 @@
 #include "duke_effects.h"
 #include "duke_projectiles.h"
 #include "duke_weapons.h"
+#include "duke_pickups.h"
 #include "superset.h"
 #include "mashup_resources.h"
 #include "savegamehelp.h"
@@ -22,7 +23,7 @@ void MarkEffects() { GC::MarkArray(Duke3d::spriteq, 1024); }
 bool Supported(Duke3d::DDukeActor* actor)
 {
 	return actor && ((actor->supersetForeignFx && actor->IsKindOf(PClass::FindClass("DukeBloodSplat1"))) ||
-		IsBloodDukeProjectile(actor) || IsDukeProjectileEffect(actor) || IsDukeWeaponEffect(actor));
+		IsBloodDukeProjectile(actor) || IsDukeProjectileEffect(actor) || IsDukeWeaponEffect(actor) || IsBloodDukePickup(actor));
 }
 Blood::DBloodActor* MissileTarget()
 {
@@ -77,6 +78,7 @@ void TickDukeEffects()
 	while (auto actor = it.Next())
 	{
 		if (!Supported(actor)) continue;
+		if (IsBloodDukePickup(actor)) continue; // Native CON runs through its own environment boundary.
 		if (!actor->sector() || actor->spr.scale.X == 0 || (actor->flags2 & SFLAG2_DIENOW)) actor->Destroy();
 		else
 		{

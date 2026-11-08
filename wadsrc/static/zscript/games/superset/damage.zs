@@ -14,6 +14,8 @@ extend class CoreActor
 	// Source is this actor. Velocity is world displacement per 30 Hz step.
 	// Currently supports DukeFirelaser in Blood maps, otherwise returns null.
 	native DukeActor SpawnSharedDukeProjectile(class<DukeActor> type, Vector3 position, Vector3 velocity);
+	// Place a supported native Duke pickup in the current Blood environment.
+	native DukeActor SpawnSharedDukePickup(class<DukeActor> type, Vector3 position);
 }
 
 extend class DukeActor

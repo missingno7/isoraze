@@ -91,6 +91,7 @@ public:
 	TObjPtr<DCoreActor*> supersetFreezeSource;
 	bool supersetForeignFx = false;
 	bool supersetForeignProjectile = false;
+	bool supersetConBlocked = false;
 	TObjPtr<DCoreActor*> supersetAttackSource;
 	short tempval, basepicnum;
 	unsigned short timetosleep;
@@ -258,6 +259,7 @@ public:
 	int supersetWeaponMode = -1; // Applied mode: -1 uninitialized, 0 Duke, 1 Blood.
 	int supersetStowedBloodWeapon = 1;
 	bool supersetForeignWeaponsInitialized = false;
+	bool supersetForeignStartWithWeapons = false;
 	DVector3 vel;
 	DVector2 bobpos;
 	DVector2 fric;

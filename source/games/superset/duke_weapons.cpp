@@ -12,7 +12,6 @@
 #include "c_dispatch.h"
 #include "gamestate.h"
 
-namespace Duke3d { void InitWeaponOrder(int); }
 namespace Superset
 {
 using Duke3d::DDukeActor;
@@ -32,7 +31,9 @@ void PublishWeaponBody(Blood::DBloodPlayer* blood, Duke3d::DDukePlayer* duke)
 	actor->spr.Angles = source->spr.Angles;
 	actor->viewzoffset = blood->zView - bottom;
 	actor->oviewzoffset = actor->viewzoffset;
-	actor->spr.extra = max(0, int(source->xspr.health) >> 4);
+	// This integer facade supplies native alive/dead predicates, not health
+	// authority. A positive Q4 fraction must still be an alive native player.
+	actor->spr.extra = max(0, (int(source->xspr.health) + 15) >> 4);
 	actor->spr.shade = source->spr.shade;
 	actor->spr.cstat = CSTAT_SPRITE_INVISIBLE;
 	actor->supersetAttackSource = source; GC::WriteBarrier(actor, source);
@@ -73,6 +74,29 @@ public:
 		duke->GetActor()->spr.cstat = CSTAT_SPRITE_INVISIBLE;
 	}
 } weaponServices;
+
+void CaptureStartingWeaponFamily(Duke3d::DDukePlayer* duke)
+{
+	if (duke->supersetWeaponMode >= 0) return;
+	duke->supersetWeaponMode = 1;
+	duke->supersetForeignStartWithWeapons = !BloodWeaponsRequested();
+}
+
+void ClearDukeWeaponLoadout(Duke3d::DDukePlayer* duke)
+{
+	for (int weapon = 0; weapon < Duke3d::MAX_WEAPONS; ++weapon)
+	{
+		duke->ammo_amount[weapon] = 0;
+		duke->gotweapon[weapon] = weapon == Duke3d::KNEE_WEAPON;
+	}
+	duke->curr_weapon = Duke3d::KNEE_WEAPON;
+	duke->kickback_pic = duke->okickback_pic = 0;
+}
+}
+
+void ApplyDukeMapStartingLoadout(Duke3d::DDukePlayer* duke)
+{
+	if (IsDukeMap() && BloodWeaponsRequested()) ClearDukeWeaponLoadout(duke);
 }
 
 bool IsDukeWeaponActor(Duke3d::DDukeActor* actor)
@@ -109,7 +133,7 @@ Blood::PlayerWeaponServices* BloodMapWeaponServices(Blood::DBloodPlayer* blood)
 	if (!IsBloodMap() || numplayers != 1) return nullptr;
 	auto duke = Duke3d::SecondaryDukePlayer(blood->pnum);
 	bool wanted = !BloodWeaponsRequested();
-	if (duke->supersetWeaponMode < 0) duke->supersetWeaponMode = 1;
+	CaptureStartingWeaponFamily(duke);
 	bool current = duke->supersetWeaponMode == 0;
 	if (wanted != current && blood->GetActor()->xspr.health > 0)
 	{
@@ -138,6 +162,15 @@ Blood::PlayerWeaponServices* BloodMapWeaponServices(Blood::DBloodPlayer* blood)
 		}
 	}
 	if (!current) return nullptr;
+	PrepareBloodMapDukePlayer(blood);
+	return &weaponServices;
+}
+
+Duke3d::DDukePlayer* PrepareBloodMapDukePlayer(Blood::DBloodPlayer* blood)
+{
+	if (!IsBloodMap() || numplayers != 1) return nullptr;
+	auto duke = Duke3d::SecondaryDukePlayer(blood->pnum);
+	CaptureStartingWeaponFamily(duke);
 	if (!duke->GetActor())
 	{
 		auto source = blood->GetActor();
@@ -149,11 +182,13 @@ Blood::PlayerWeaponServices* BloodMapWeaponServices(Blood::DBloodPlayer* blood)
 		if (!duke->supersetForeignWeaponsInitialized)
 		{
 			Duke3d::resetweapons(duke); duke->wantweaponfire = -1;
+			if (!duke->supersetForeignStartWithWeapons)
+				ClearDukeWeaponLoadout(duke);
 			duke->supersetForeignWeaponsInitialized = true;
 		}
-		PublishWeaponBody(blood, duke);
 	}
-	return &weaponServices;
+	PublishWeaponBody(blood, duke);
+	return duke;
 }
 
 bool DrawBloodMapDukeWeapons(Blood::DBloodPlayer* blood, double fraction)
@@ -192,6 +227,7 @@ void ResetBloodMapDukeWeapons()
 		if (!player) continue;
 		player->supersetWeaponMode = -1;
 		player->supersetForeignWeaponsInitialized = false;
+		player->supersetForeignStartWithWeapons = false;
 	}
 }
 bool IsDukeWeaponEffect(DDukeActor* actor)

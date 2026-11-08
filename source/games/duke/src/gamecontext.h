@@ -5,6 +5,8 @@
 class Quotes;
 class FSerializer;
 class FSoundID;
+class PClass;
+class PClassActor;
 struct MapRecord;
 struct VolumeRecord;
 struct ClusterDef;
@@ -12,6 +14,7 @@ struct ClusterDef;
 namespace Duke3d
 {
 class DDukePlayer;
+struct ActorInfo;
 
 // Native Duke rules can own a program while another adapter owns the map.
 // A zero override keeps every original Duke/RR frontend on its existing flags.
@@ -38,6 +41,9 @@ inline bool isDukeEngine() { return DukeGameFlags() & (GAMEFLAG_NAM | GAMEFLAG_N
 
 void InitSecondaryDukeProgram(const char* rootCon);
 DDukePlayer* SecondaryDukePlayer(int index);
+void BindSecondaryDukeActor(PClassActor* type, int tile);
+const ActorInfo* SecondaryDukeActorInfo(PClass* type);
+PClassActor* ConSpawnType(int tile);
 void SerializeSecondaryDukeProgram(FSerializer& arc);
 const char* SecondaryDukeProgramFingerprint();
 FSoundID DukeSoundByResource(int resource);

@@ -190,6 +190,10 @@ bool IsDukeTexture(FTextureID texture)
 {
 	return bank && unsigned(texture.GetIndex() - bank->firstTexture) < bank->tiles.Size();
 }
+int DukeTileNumber(FTextureID texture)
+{
+	return IsDukeTexture(texture) ? texture.GetIndex() - bank->firstTexture : -1;
+}
 bool PickDukeTexture(FGameTexture* texture, int translation, TexturePick& pick)
 {
 	if (!IsDukeTexture(texture->GetID())) return false;

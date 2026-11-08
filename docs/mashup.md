@@ -143,7 +143,7 @@ The bank retains Duke lookup/base-palette data and decodes the native colors,
 including opaque index 0 and transparent index 255. Normal/underwater view roles
 are mapped explicitly; other Blood view palettes are not assumed to mean the
 same Duke effect. Complete indexed shading, fullbright masks, voxels, sounds,
-overrides and world-dependent CON execution remain integration work for secondary Duke content.
+overrides and broader world-dependent CON execution remain integration work for secondary Duke content.
 
 Existing Duke-world adapters use `IsDukeMap()` at their environment boundaries.
 Frontend identity alone must not intercept native Blood missiles, clear its
@@ -153,7 +153,7 @@ the separate secondary-Blood serializer used in Duke maps is not run again.
 Shared gameplay becomes map-independent as the reverse collision/damage and
 controller services are added; these gates identify the still one-way adapters.
 
-Rules revision 14 records `map_rules=blood`, Blood's native save adapter version,
+Rules revision 15 records `map_rules=blood`, Blood's native save adapter version,
 `blood_archive_md5`, `duke_bank_md5` and `duke_program_md5`. The bank digest fingerprints the secondary
 archive and engine alias definitions without installation paths. The manifest
 rejects the opposite map family, altered secondary content and missing metadata
@@ -215,17 +215,19 @@ Additional ART, samples and other mod dependencies still need manifest support.
 This is a compiler/state foundation, not arbitrary CON mod gameplay support.
 Atomic/Plutonium-style `gamestartup` is required (30 entries; the 31-entry World
 Tour variant parses but is unverified). Earlier startup formats are rejected.
-Duke actor-class finalization, world queries, map events, HUD
-and the reverse weapon controller still need environment adapters. The private
+General Duke actor-class finalization, additional world queries, map events and
+HUD still need environment adapters. The supported reverse weapons and pickup
+CON boundary are described below. The private
 program's actor health headers are retained; native Duke finalization normally
 copies these into class defaults and clears them in bytecode. ZScript's existing
 `isDuke()` family predicates are compile-time checks of the primary map flags;
 the new C++ context does not make these predicates component-aware.
 Automatic CON event dispatch is deferred until those boundaries exist. The
 diagnostic fixture explicitly runs a world-independent native VM event only.
-Secondary program/player state is currently initialized once at startup and
-restored by saves; native Duke new-game reset/event sequencing still needs to
-be connected when the reverse controller is installed.
+Secondary program/player state is initialized once at startup and restored by
+saves. The reverse inventory invokes native weapon reset on first use and
+resets its loadout recipe on a new game; broader Duke new-game/event sequencing
+still needs integration.
 Quote definitions rebuild from CON; native quote serialization is a no-op, so
 mutable runtime quote persistence is not yet supported.
 
@@ -240,7 +242,7 @@ checks independent player slots, mutates state, restores across a fresh Blood
 map and GC, and reloads in a fresh process from a relocated CON directory.
 Changing an included file must reject the save before restoring the private
 state or map record; the engine follows its normal failed-load console handling.
-Rules revision 14 rejects earlier experimental saves; ordinary game signatures
+Rules revision 15 rejects earlier experimental saves; ordinary game signatures
 are unchanged. Remaining Duke weapons, Duke movement and enemy selection in
 Blood maps still need adapters.
 
@@ -297,7 +299,7 @@ affect Duke channels in the host. Native actor destruction still stops all loops
 owned by that actor. Save/load uses the engine's existing named-channel and
 generic actor-reference serialization. Blood's post-restore cleanup preserves
 the secondary module's restored channels; ordinary Blood keeps its original
-cleanup behavior. Rules revision 14 rejects earlier experimental saves.
+cleanup behavior. Rules revision 15 rejects earlier experimental saves.
 
 ```powershell
 ./tools/check-superset-duke-sounds.ps1 -DukeGrp D:/dos/duke3D/duke3d.grp -BloodRff D:/prog/isoraze/build-isoraze/run/blood-data/BLOOD.RFF
@@ -357,8 +359,8 @@ Map transitions preserve that inventory; saves include the selected family,
 native Duke weapon state, hidden actor and attack source. The native Blood
 status-bar ammo field displays the active Duke ammunition. The inventory grid
 still represents Blood ammunition. `superset_duke_weapon_check give` grants
-the three supported guns for testing; spawning/collecting native Duke weapon
-and ammo pickups in Blood maps remains the next inventory step. Blood pickups
+the three supported guns for testing. Native Duke weapon/ammo pickups can also
+be spawned and collected through the component described below. Blood pickups
 keep their native meanings; no Blood-to-Duke ammo conversion is assumed.
 
 This is an initial combat adapter. Cross-game bullet knockback, wall/blood hit
@@ -387,6 +389,89 @@ combat/events and foreign actor lifetime passed (`blood-map-20261108T103453861`)
 private CON parity/restore/content validation passed
 (`duke-program-20261108T103528337`). Ordinary Duke E1L1/E2L1/E3L1/E4L1 and Blood
 E1M1, with native flare/spray/save checks, passed (`runtime-20261108T103600197`).
+
+## Native Duke pickup CON in Blood maps
+
+The reverse adapter supports native Duke pistol, shotgun and chaingun pickups,
+pistol clips/boxes, shotgun shells and chaingun batteries. They are real Duke
+actors with isolated Duke artwork, running their original compiled CON pickup
+code through the existing VM. Amounts, caps, ownership checks, pickup delay,
+distance/visibility predicates, quotes, sounds and removal come from that code
+and native `playeraddammo`/`playeraddweapon`; no second amount table is used.
+The supported item classes bind to the private program's actor definitions
+without changing the primary map's spawn table or actor type numbers.
+
+`CoreActor.SpawnSharedDukePickup(class<DukeActor>, position)` places one of these
+items in a Blood environment. The console entry point calls the same VM API:
+
+```text
+superset_spawn_duke_pickup pistol|shotgun|chaingun|bullets|bulletbox|shells|battery
+```
+
+Caleb can collect them with Blood weapons active. The private Duke inventory is
+initialized lazily and preserved across family changes; the active Blood
+weapon and ammunition remain unchanged. Switching to Duke weapons can then use
+the collected gun/ammo. Starting with Blood weapons leaves Duke guns and ammo
+empty, with only the knee available when switching families. Collecting ammo
+does not grant a pistol. The starting choice is captured before lazy inventory
+creation and saved, so later family switches and map changes do not grant a
+loadout. An explicit Duke-weapon start retains the native pistol and 48 rounds.
+The same empty Duke gun/ammo loadout applies to Blood-weapon starts on Duke
+maps; native Duke pickup behavior can fill it there too. This changes only
+Superset starts and leaves ordinary Duke's loadout intact.
+
+Native Duke `makeitfall`/`fall` retain their movement algorithms and floor
+offset. The Blood environment supplies generic collision results and its water
+state, refreshing height queries each step. Blood sector type 2 is not treated
+as Duke underwater. Neither Duke sector effects nor Duke's typed actor floor
+handlers run on the Blood map. Blood's native green pickup feedback is used.
+Positive fractional Blood health publishes as alive to Duke predicates; the
+native Blood health value remains authoritative and is not rounded or healed.
+
+An optional execution service checks each foreign CON command before the native
+VM executes it. The supported boundary covers the stock pickup control flow,
+inventory operations and feedback. Unsupported world operations or weapon IDs
+stop that item's script with a diagnostic and preserve the stopped state in
+saves. Earlier commands in that script are not rolled back. Native Duke
+execution has no such component restriction. A CON override changing a supported
+pickup's amount is exercised; this does not claim arbitrary CON mod support.
+
+Pickups, native script counters, blocked state, both inventories and the hidden
+nonblocking Duke player serialize through existing actor/player/component save
+paths. Full inventory leaves the item available for later collection. Stock
+single-player behavior is the target; enemy drops, arbitrary item classes,
+respawn modes, room-link transport, shared physics extensions and a unified
+inventory display remain work. The pickup reach still follows the native Duke
+CON distance predicate using Caleb's full-size eye pose; it is not retuned to
+Blood's pickup radius.
+
+```powershell
+./tools/check-superset-reverse-pickups.ps1 -DukeGrp D:/dos/duke3D/duke3d.grp -BloodRff D:/prog/isoraze/build-isoraze/run/blood-data/BLOOD.RFF
+```
+
+The fixture exercises all seven items through the VM spawn API and actual
+movement, checks native stock amounts/caps/refusal and inactive-family
+isolation, then fires a collected shotgun. It restores retained pickups after
+a fresh map, full GC and a fresh process. Component checks exercise native
+falling with Blood dry type 2/underwater state. A modified CON amount and
+collection at one Q4 health quantum are verified separately. Another CON
+fixture attempts an unsupported map opcode and checks its persisted stop.
+Production loadout checks use no inventory fixture: first switching families
+grants no guns/ammo, and collecting pistol ammo before acquiring a pistol
+preserves that ownership through a normal level transition and save/restore.
+
+Verified on 2026-11-08: Release build and the complete pickup/loadout fixture
+passed (`reverse-pickups-20261108T112238149`), including both map families.
+Reverse native weapons and Blood vector triggers passed
+(`reverse-weapons-20261108T111751305`), as did private CON parity, isolation,
+fresh-process restoration and content validation
+(`duke-program-20261108T111824275`). Both selectable characters passed the
+existing weapon-family pickup, firing, deferred handoff and save/restore fixture
+(`weapons-20261108T112438281`).
+Ordinary Duke E1L1/E2L1/E3L1/E4L1 and Blood E1M1 passed native runtime and
+save/load checks, including Blood flare/spray behavior
+(`runtime-20261108T112605185`). The pickup fixture's visual restore was inspected
+looking down at the native Duke pistol in Blood's room with Caleb's pitchfork/HUD.
 
 ## Native Duke laser projectiles in Blood maps
 
@@ -449,9 +534,9 @@ attacks run after the native Blood actor phase, so the frontend commits Blood's
 deferred actor transfers/removals again at the end of that component phase.
 Native death state must be complete before a frame can be saved or collected.
 
-Rules revision 14 includes this component and rejects earlier experimental
-revisions. Duke weapons/inventory, enemy controllers, world-dependent secondary CON execution,
-other projectile families, special body effects and broader
+Rules revision 15 includes this component and rejects earlier experimental
+revisions. Remaining Duke weapons/inventory, enemy controllers, broader
+world-dependent secondary CON execution, other projectile families, special body effects and broader
 cross-game attacker identities in Blood maps remain unfinished.
 
 ```powershell
@@ -520,8 +605,8 @@ This is an incremental native adapter, not the final shared actor/AI model.
 
 No scale compensation is applied: initial idle eye height is 56.6875 world units
 and horizontal radius is 12. Native Blood SEQ state and the selected controller
-are serialized with the session. Save schema is 2; rules revision is now 14
-after adding reverse Duke weapon state and the chosen fire/ice rule. Earlier
+are serialized with the session. Save schema is 2; rules revision is now 15
+after adding reverse Duke weapon/pickup state and the chosen fire/ice rule. Earlier
 Superset bootstrap saves are intentionally incompatible with this experimental
 schema. The legacy native game save signatures remain separate.
 

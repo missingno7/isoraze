@@ -17,6 +17,7 @@ FileReader OpenDukeResource(const char* name);
 FString DukeSoundDefinitions();
 FTextureID DukeTile(int tile);
 FTextureID DukeTexture(const char* name);
+int DukeTileNumber(FTextureID texture);
 bool IsDukeTexture(FTextureID texture);
 bool PickDukeTexture(FGameTexture* texture, int translation, TexturePick& pick);
 bool CheckDukeResources();

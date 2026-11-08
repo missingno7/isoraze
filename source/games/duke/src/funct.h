@@ -177,8 +177,16 @@ DDukeActor* LocateTheLocator(int n, sectortype* sectnum);
 void clearcamera(DDukePlayer* ps);
 
 void LoadActor(DDukeActor* i, int p, int x);
-bool execute(DDukeActor* s, DDukePlayer* const p, double d, int* killit_flag = nullptr);
+// Native CON control flow and inventory operations can run against a foreign
+// map once its caller supplies the supported world-command boundary.
+struct ConExecutionServices
+{
+	virtual bool AllowCommand(int opcode, const int* operands) const = 0;
+	virtual void UnsupportedCommand(DDukeActor* actor, int opcode) = 0;
+};
+bool execute(DDukeActor* s, DDukePlayer* const p, double d, int* killit_flag = nullptr, ConExecutionServices* services = nullptr);
 void makeitfall(DDukeActor* s);
+void fall(DDukeActor* actor, int playernum);
 DAngle furthestangle(DDukeActor* snum, int angDiv);
 void getglobalz(DDukeActor* s);
 void OnEvent(int id, int pnum = -1, DDukeActor* snum = nullptr, int dist = -1);

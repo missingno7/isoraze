@@ -23,6 +23,8 @@ vid_activeinbackground=true
 i_pauseinbackground=false
 vid_vsync=false
 cl_nostartscreens=true
+use_mouse=false
+use_joystick=false
 '@ | Set-Content -LiteralPath $config
 $commands = @('wait 100', 'superset_duke_projectile_check arena', 'wait 8', 'superset_duke_weapon_check target', 'wait 4', 'superset_duke_weapon_check',
     'save reverse-start "Native Duke pistol on Caleb in Blood"', 'wait 4', 'screenshot',

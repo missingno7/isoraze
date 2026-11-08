@@ -983,6 +983,7 @@ set (PCH_SOURCES
 	games/superset/duke_projectiles.cpp
 	games/superset/duke_sounds.cpp
 	games/superset/duke_weapons.cpp
+	games/superset/duke_pickups.cpp
 	games/duke/src/gamecontext.cpp
 	core/postprocessor.cpp
 	core/searchpaths.cpp

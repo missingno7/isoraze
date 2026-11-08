@@ -18,6 +18,7 @@
 #include "duke_projectiles.h"
 #include "duke_sounds.h"
 #include "duke_weapons.h"
+#include "duke_pickups.h"
 #include <memory>
 #include <utility>
 
@@ -46,7 +47,7 @@ bool calebPlayer = false;
 bool bloodMap = false;
 FString bloodDataPath, dukeDataPath;
 constexpr int SaveSchema = 2;
-constexpr int RulesRevision = 14;
+constexpr int RulesRevision = 15;
 constexpr const char* SaveSignature = GAMENAME ".Superset";
 
 FString FingerprintPrimaryArchive()
@@ -105,6 +106,7 @@ public:
 			// Bind native actor classes and their private program without starting Duke's world.
 			Duke3d::RegisterClasses();
 			Duke3d::InitSecondaryDukeProgram(Args->CheckValue("-dukecon"));
+			InitBloodMapDukePickups();
 			InitDukeEffects();
 		}
 		Printf("Superset frontend: independent identity/configuration/saves; %s map adapter.\n", bloodMap ? "Blood" : "Duke");
@@ -219,6 +221,7 @@ public:
 		if (bloodMap && PlayClock != before)
 		{
 			TickDukeEffects();
+			TickBloodMapDukePickups();
 			FinishDukeProjectileStep();
 		}
 	}

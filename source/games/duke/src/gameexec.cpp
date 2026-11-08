@@ -68,6 +68,7 @@ enum playeraction_t {
 
 struct ParseState
 {
+	ConExecutionServices* services = nullptr;
 	int killit_flag;
 	int g_p;
 	int g_x;
@@ -1468,6 +1469,12 @@ int ParseState::parse(void)
 	int j;
 
 	if(killit_flag) return 1;
+	if (services && !services->AllowCommand(*insptr, insptr + 1))
+	{
+		services->UnsupportedCommand(g_ac, *insptr);
+		killit_flag = 2;
+		return 1;
+	}
 
 	const auto p = getPlayer(g_p);
 	const auto pact = p->GetActor();
@@ -1890,7 +1897,7 @@ int ParseState::parse(void)
 	case concmd_ifwasweapon:
 	case concmd_ifspawnedby:	// these two are the same
 		insptr++;
-		parseifelse( g_ac->attackertype == GetSpawnType(*insptr));
+		parseifelse( g_ac->attackertype == ConSpawnType(*insptr));
 		break;
 	case concmd_ifai:
 		insptr++;
@@ -1977,7 +1984,7 @@ int ParseState::parse(void)
 		break;
 	case concmd_ifactor:
 		insptr++;
-		parseifelse(g_ac->GetClass() == GetSpawnType(*insptr));
+		parseifelse(g_ac->GetClass() == ConSpawnType(*insptr));
 		break;
 	case concmd_resetcount:
 		insptr++;
@@ -3152,7 +3159,7 @@ void LoadActor(DDukeActor *actor, int p, int x)
 //
 //---------------------------------------------------------------------------
 
-bool execute(DDukeActor *actor, DDukePlayer* const p, double pdist, int* killit_flag)
+bool execute(DDukeActor *actor, DDukePlayer* const p, double pdist, int* killit_flag, ConExecutionServices* services)
 {
 	if (killit_flag) *killit_flag = 0;
 	if ((actor->flags4 & SFLAG4_CONOVERRIDE) && overridecon) return false;
@@ -3163,6 +3170,7 @@ bool execute(DDukeActor *actor, DDukePlayer* const p, double pdist, int* killit_
 
 	ParseState s;
 	s.g_p = p->pnum;	// Player ID
+	s.services = services;
 	s.g_x = int(pdist / maptoworld);	// ??
 	s.g_ac = actor;
 	s.killit_flag = 0;

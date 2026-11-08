@@ -21,9 +21,11 @@ struct DukeAimCandidate
 };
 bool IsDukeWeaponActor(Duke3d::DDukeActor* actor);
 bool DukeWeaponSupported(int weapon);
+void ApplyDukeMapStartingLoadout(Duke3d::DDukePlayer* player);
 bool IsBloodDirectAimTarget(DCoreActor* actor);
 void ForEachBloodAimTarget(int group, const std::function<void(const DukeAimCandidate&)>& visitor);
 Blood::PlayerWeaponServices* BloodMapWeaponServices(Blood::DBloodPlayer* player);
+Duke3d::DDukePlayer* PrepareBloodMapDukePlayer(Blood::DBloodPlayer* player);
 bool DrawBloodMapDukeWeapons(Blood::DBloodPlayer* player, double fraction);
 // -2: native weapon family; -1: foreign weapon without ammunition.
 int BloodMapForeignWeaponAmmo(Blood::DBloodPlayer* player);
