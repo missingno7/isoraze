@@ -42,7 +42,7 @@ HitInfo gHitInfo;
 //
 //---------------------------------------------------------------------------
 
-bool CheckProximity(DBloodActor* actor, const DVector3& pos, sectortype* pSector, int nDist)
+bool CheckProximity(DCoreActor* actor, const DVector3& pos, sectortype* pSector, int nDist)
 {
 	assert(actor != nullptr);
 	auto vec = pos - actor->spr.pos;
@@ -51,7 +51,7 @@ bool CheckProximity(DBloodActor* actor, const DVector3& pos, sectortype* pSector
 	if (vec.LengthSquared() >= nDist * nDist) return false;
 
 	double bottom, top;
-	GetActorExtents(actor, &top, &bottom);
+	GetSpriteExtents(&actor->spr, &top, &bottom);
 	if (cansee(actor->spr.pos, actor->sector(), pos, pSector))
 		return 1;
 	if (cansee(DVector3(actor->spr.pos.XY(), bottom), actor->sector(), pos, pSector))

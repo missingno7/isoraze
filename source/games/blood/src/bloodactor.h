@@ -232,9 +232,9 @@ public:
 	double              throwPower;
 	DVector3            aim;  // world
 	DVector3            relAim;  // relative
-	TObjPtr<DBloodActor*>        aimTarget;  // aim target sprite
+	TObjPtr<DCoreActor*>        aimTarget;  // common target; native controllers narrow explicitly
 	int                 aimTargetsCount;
-	TObjPtr<DBloodActor*>        aimTargets[16];
+	TObjPtr<DCoreActor*>        aimTargets[16];
 	int                 deathTime;
 	int                 pwUpTime[kMaxPowerUps];
 	int                 fragCount;
@@ -255,7 +255,7 @@ public:
 	int                 armor[3];      // armor
 	//int               at342;
 	//int               at346;
-	TObjPtr<DBloodActor*>        voodooTarget;
+	TObjPtr<DCoreActor*>        voodooTarget;
 	int                 voodooTargets;  // --> useless
 	int                 voodooVar1;     // --> useless
 	int                 vodooVar2;      // --> useless

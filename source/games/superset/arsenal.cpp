@@ -47,7 +47,9 @@ const WeaponDefinition* Definition(int id)
 bool Available(const WeaponDefinition& weapon, DCorePlayer* owner, Blood::DBloodPlayer* blood, Duke3d::DDukePlayer* duke)
 {
 	if (weapon.blood)
-		return blood->WeaponOwnership()[weapon.native] && (owner == blood || weapon.native == Blood::kWeapPitchFork ||
+		// Beast hands belong to the native transformation, not normal weapon
+		// cycling (their native weaponModes entry has no selectable modes).
+		return weapon.native != Blood::kWeapBeast && blood->WeaponOwnership()[weapon.native] && (owner == blood || weapon.native == Blood::kWeapPitchFork ||
 			weapon.native == Blood::kWeapShotgun || weapon.native == Blood::kWeapTommyGun || weapon.native == Blood::kWeapSpraycan);
 	if (!duke->WeaponOwnership()[weapon.native] || (owner != duke && !DukeWeaponSupported(weapon.native))) return false;
 	// The detonator is an action on deployed bombs, not a free starting gun.

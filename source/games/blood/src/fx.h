@@ -97,7 +97,7 @@ public:
 	void fxProcess(void);
 };
 
-void fxSpawnBlood(DBloodActor* pSprite, int a2);
+void fxSpawnBlood(DCoreActor* pSprite, int a2);
 void fxSpawnPodStuff(DBloodActor* pSprite, int a2);
 
 extern CFX gFX;

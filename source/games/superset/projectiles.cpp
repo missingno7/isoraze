@@ -183,6 +183,51 @@ void TickStatusEffects()
 
 int BloodDifficulty() { return clamp(int(superset_blood_difficulty), 0, 4); }
 
+CCMD(superset_blood_combat_check)
+{
+	if (!IsBloodMap() || gamestate != GS_LEVEL || numplayers != 1 || argv.argc() != 2) return;
+	if (!stricmp(argv[1], "blast"))
+	{
+		TargetInfo selected;
+		ForEachGameplayTarget([&](const TargetInfo& target)
+		{
+			if (target.alive && !dyn_cast<Blood::DBloodActor>(target.actor) && target.identity > selected.identity) selected = target;
+		});
+		auto bomb = selected.actor ? Blood::actSpawnThing(selected.actor->sector(), selected.aim, Blood::kThingArmedTNTBundle) : nullptr;
+		if (bomb)
+		{
+			bomb->SetOwner(Blood::getPlayer(myconnectindex)->GetActor());
+			Blood::actExplodeSprite(bomb);
+		}
+		Printf("Superset Blood explosion fixture: %s.\n", bomb ? "PASS" : "FAIL");
+		return;
+	}
+	if (!stricmp(argv[1], "isolate"))
+	{
+		// Stock innocents remain with -nomonsters and can consume Voodoo's
+		// native sequential area budget. Isolate test aiming from those actors.
+		Blood::BloodStatIterator it(Blood::kStatDude);
+		while (auto actor = it.Next()) if (!actor->IsPlayerActor())
+		{
+			Blood::seqKill(actor); Blood::evKillActor(actor);
+			actor->spr.cstat &= ~CSTAT_SPRITE_BLOCK_ALL;
+			Blood::actPostSprite(actor, Blood::kStatFree);
+		}
+		return;
+	}
+	if (stricmp(argv[1], "clear")) return;
+	// Regression cleanup isolates ongoing ignition from repeated flame contacts.
+	// Use the native post queue: sequence callbacks may already have posted it.
+	auto source = Blood::getPlayer(myconnectindex)->GetActor();
+	Blood::BloodStatIterator it(Blood::kStatProjectile);
+	while (auto actor = it.Next()) if (actor->GetOwner() == source)
+	{
+		Blood::seqKill(actor); Blood::evKillActor(actor);
+		actor->spr.cstat &= ~CSTAT_SPRITE_BLOCK_ALL;
+		Blood::actPostSprite(actor, Blood::kStatFree);
+	}
+}
+
 void SerializeProjectileOptions(FSerializer& arc)
 {
 	int difficulty = clamp(int(superset_blood_difficulty), 0, 4);

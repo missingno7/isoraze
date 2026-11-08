@@ -21,6 +21,7 @@
 #include "duke_pickups.h"
 #include "arsenal.h"
 #include "level.h"
+#include "projectiles.h"
 #include "mashup_player.h"
 #include "coreplayer.h"
 #include "build.h"
@@ -52,7 +53,7 @@ bool calebPlayer = false;
 bool bloodMap = false;
 FString bloodDataPath, dukeDataPath;
 constexpr int SaveSchema = 2;
-constexpr int RulesRevision = 16;
+constexpr int RulesRevision = 17;
 constexpr const char* SaveSignature = GAMENAME ".Superset";
 
 FString FingerprintPrimaryArchive()
@@ -230,6 +231,7 @@ public:
 		{
 			TickDukeEffects();
 			TickBloodMapDukePickups();
+			TickStatusEffects();
 		}
 		if (PlayClock != before) TickRuntimeLevel();
 		if (bloodMap && PlayClock != before) FinishDukeProjectileStep();

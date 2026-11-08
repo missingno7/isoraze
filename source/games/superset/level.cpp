@@ -406,9 +406,17 @@ bool EntityPickedUp(DCoreActor* actor, DCoreActor* collector)
 bool RuntimeTarget(DCoreActor* actor, TargetInfo& result)
 {
 	if (!IsRuntimeActor(actor)) return false;
-	result.actor = actor; result.identity = actor->gameplayEntity->identity; result.enemy = actor->gameplayEntity->enemy;
+	return GameplayTarget(actor, result);
+}
+bool GameplayTarget(DCoreActor* actor, TargetInfo& result)
+{
+	if (!IsActive() || !actor || (actor->ObjectFlags & OF_EuthanizeMe) || ResolveGameplayActor(actor) != actor) return false;
+	result = {};
+	result.actor = actor;
+	if (IsRuntimeActor(actor)) { result.identity = actor->gameplayEntity->identity; result.enemy = actor->gameplayEntity->enemy; }
 	if (auto blood = dyn_cast<Blood::DBloodActor>(actor))
 	{
+		if (!IsRuntimeActor(actor)) result.enemy = blood->IsDudeActor() && !blood->IsPlayerActor() && blood->spr.statnum == Blood::kStatDude;
 		result.health = blood->hasX() ? blood->xspr.health : 0;
 		double top, bottom; Blood::GetActorExtents(blood, &top, &bottom);
 		result.height = bottom - top;
@@ -417,13 +425,20 @@ bool RuntimeTarget(DCoreActor* actor, TargetInfo& result)
 	}
 	else if (auto duke = dyn_cast<Duke3d::DDukeActor>(actor))
 	{
+		if (!IsRuntimeActor(actor)) result.enemy = Duke3d::badguy(duke) && !duke->isPlayer();
 		result.health = max<Units::Health>(0, Units::FromDukeHealth(duke->spr.extra) - duke->supersetDamageRemainder);
 		result.height = TexMan.GetGameTexture(duke->spr.spritetexture())->GetDisplayHeight() * duke->spr.scale.Y;
 		result.aim = duke->spr.pos.plusZ(-result.height * .5);
 	}
+	else return false;
 	result.radius = actor->clipdist;
-	result.alive = result.enemy && result.health > 0 && !actor->gameplayEntity->deathEmitted;
+	result.alive = result.enemy && result.health > 0 && (!IsRuntimeActor(actor) || !actor->gameplayEntity->deathEmitted);
 	return true;
+}
+void ForEachGameplayTarget(const std::function<void(const TargetInfo&)>& visitor)
+{
+	TSpriteIterator<DCoreActor> it;
+	while (auto actor = it.Next()) { TargetInfo target; if (GameplayTarget(actor, target) && target.enemy) visitor(target); }
 }
 void ForEachRuntimeTarget(const std::function<void(const TargetInfo&)>& visitor)
 {

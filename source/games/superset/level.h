@@ -38,6 +38,9 @@ bool EntityPickedUp(DCoreActor* actor, DCoreActor* collector);
 bool IsRuntimeActor(DCoreActor* actor);
 DCoreActor* ResolveGameplayActor(DCoreActor* actor);
 bool RuntimeTarget(DCoreActor* actor, TargetInfo& result);
+// Receiver capabilities also cover native enemies outside the import slice.
+bool GameplayTarget(DCoreActor* actor, TargetInfo& result);
+void ForEachGameplayTarget(const std::function<void(const TargetInfo&)>& visitor);
 void ForEachRuntimeTarget(const std::function<void(const TargetInfo&)>& visitor);
 DCoreActor* SpawnRuntimeEntity(Archetype type, sectortype* sector, const DVector3& feet, DAngle angle);
 void TickRuntimeLevel();

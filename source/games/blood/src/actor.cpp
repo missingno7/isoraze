@@ -39,6 +39,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 BEGIN_BLD_NS
 
+CVAR(Int, superset_trace_blood_impacts, 0, 0)
+
 const VECTORDATA gVectorData[] = {
 
 	// Tine
@@ -2638,6 +2640,21 @@ void actRadiusDamage(DBloodActor* source, const DVector3& pos, sectortype* pSect
 	auto pOwner = source->GetOwner();
 	const bool newSectCheckMethod = !cl_bloodvanillaexplosions && pOwner && pOwner->IsDudeActor() && !VanillaMode(); // use new sector checking logic
 	auto sectorMap = GetClosestSpriteSectors(pSector, pos.XY(), nDist, nullptr, newSectCheckMethod);
+	if (Superset::IsActive() && (flags & 2))
+	{
+		Superset::ForEachGameplayTarget([&](const Superset::TargetInfo& target)
+		{
+			auto receiver = target.actor;
+			if (dyn_cast<DBloodActor>(receiver) || !target.alive || !sectorMap[receiver->sectno()] ||
+				!CheckProximity(receiver, pos, pSector, nDist << 4)) return;
+			double distance = (pos - receiver->spr.pos).Length();
+			if (distance > nDist) return;
+			int amount = distance != 0 ? int(baseDmg + ((nDist - distance) * distDmg) / nDist) : baseDmg + distDmg;
+			Superset::DamageKind kind;
+			if (Superset::BloodDamageKind(dmgType, kind)) Superset::ApplyHealthDamage(receiver, {amount << 4, kind}, source);
+			if (burn) Superset::Ignite(receiver, source, burn);
+		});
+	}
 	if (flags & 2)
 	{
 		BloodStatIterator it(kStatDude);
@@ -3790,6 +3807,15 @@ int actDamageSprite(DBloodActor* source, DBloodActor* actor, DAMAGE_TYPE damageT
 //
 //---------------------------------------------------------------------------
 
+int actDamageActor(DBloodActor* source, DCoreActor* target, DAMAGE_TYPE kind, int amount)
+{
+	if (auto native = dyn_cast<DBloodActor>(target)) return actDamageSprite(source, native, kind, amount);
+	Superset::DamageKind mapped;
+	Superset::Units::Health applied = 0;
+	if (Superset::BloodDamageKind(kind, mapped)) Superset::ApplyHealthDamage(target, {amount, mapped}, source, &applied);
+	return int(applied / Superset::Units::HealthPerPoint);
+}
+
 void actHitcodeToData(int a1, HitInfo* pHitInfo, DBloodActor** pActor, walltype** ppWall)
 {
 	assert(pHitInfo != nullptr);
@@ -3799,7 +3825,7 @@ void actHitcodeToData(int a1, HitInfo* pHitInfo, DBloodActor** pActor, walltype*
 	{
 	case 3:
 	case 5:
-		actor = pHitInfo->actor();
+		actor = dyn_cast<DBloodActor>(pHitInfo->hitActor);
 		break;
 	case 0:
 	case 4:
@@ -3820,12 +3846,34 @@ void actHitcodeToData(int a1, HitInfo* pHitInfo, DBloodActor** pActor, walltype*
 
 static void actImpactMissile(DBloodActor* missileActor, int hitCode)
 {
+	if (Superset::IsActive() && superset_trace_blood_impacts > 0)
+	{
+		superset_trace_blood_impacts = int(superset_trace_blood_impacts) - 1;
+		Printf("Superset Blood impact: missile=%d code=%d target=%s wall=%d pos=(%.2f,%.2f,%.2f) sector=%d.\n",
+			missileActor->spr.type, hitCode, gHitInfo.hitActor ? gHitInfo.hitActor->GetClass()->TypeName.GetChars() : "none",
+			gHitInfo.hitWall ? wall.IndexOf(gHitInfo.hitWall) : -1,
+			missileActor->spr.pos.X, missileActor->spr.pos.Y, missileActor->spr.pos.Z, missileActor->sectno());
+	}
 	auto missileOwner = missileActor->GetOwner();
 
 	DBloodActor* actorHit = nullptr;
 	walltype* pWallHit = nullptr;
 
 	actHitcodeToData(hitCode, &gHitInfo, &actorHit, &pWallHit);
+	auto target = hitCode == 3 ? gHitInfo.hitActor : nullptr;
+	const bool foreign = Superset::IsActive() && target && !actorHit;
+	// Keep native impact algorithms and their random rolls, sounds, sequences
+	// and projectile lifetime. Only health/ignition cross the receiver boundary.
+	auto damageTarget = [&](DAMAGE_TYPE kind, int amount)
+	{
+		return actDamageActor(missileOwner, target, kind, amount);
+	};
+	auto burnTarget = [&](int clocks)
+	{
+		if (foreign) return Superset::Ignite(target, missileOwner, clocks);
+		actBurnSprite(missileOwner, actorHit, clocks);
+		return true;
+	};
 
 	const THINGINFO* pThingInfo = nullptr;
 	DUDEINFO* pDudeInfo = nullptr;
@@ -3845,19 +3893,21 @@ static void actImpactMissile(DBloodActor* missileActor, int hitCode)
 	switch (missileActor->spr.type)
 	{
 	case kMissileLifeLeechRegular:
-		if (hitCode == 3 && actorHit && (pThingInfo || pDudeInfo))
+		if ((hitCode == 3 && actorHit && (pThingInfo || pDudeInfo)) || foreign)
 		{
 			DAMAGE_TYPE rand1 = (DAMAGE_TYPE)Random(7);
 			int rand2 = (7 + Random(7)) << 4;
-			int nDamage = actDamageSprite(missileOwner, actorHit, rand1, rand2);
+			int nDamage = damageTarget(rand1, rand2);
 
-			if ((pThingInfo && pThingInfo->dmgControl[kDamageBurn] != 0) || (pDudeInfo && pDudeInfo->damageVal[kDamageBurn] != 0))
-				actBurnSprite(missileActor->GetOwner(), actorHit, 360);
+			if (foreign || (pThingInfo && pThingInfo->dmgControl[kDamageBurn] != 0) || (pDudeInfo && pDudeInfo->damageVal[kDamageBurn] != 0))
+				burnTarget(360);
 
 			// by NoOne: make Life Leech heal user, just like it was in 1.0x versions
-			if (gGameOptions.weaponsV10x && !VanillaMode() && pDudeInfo != nullptr)
+			Superset::TargetInfo sharedTarget;
+			bool enemyReceiver = foreign && Superset::GameplayTarget(target, sharedTarget) && sharedTarget.enemy;
+			if (gGameOptions.weaponsV10x && !VanillaMode() && (pDudeInfo != nullptr || enemyReceiver))
 			{
-				if (missileOwner->IsDudeActor() && missileOwner->hasX() && missileOwner->xspr.health != 0)
+				if (missileOwner && missileOwner->IsDudeActor() && missileOwner->hasX() && missileOwner->xspr.health != 0)
 					actHealDude(missileOwner, nDamage >> 2, getDudeInfo(missileOwner->spr.type)->startHealth);
 			}
 		}
@@ -3894,10 +3944,10 @@ static void actImpactMissile(DBloodActor* missileActor, int hitCode)
 
 	case kMissilePukeGreen:
 		seqKill(missileActor);
-		if (hitCode == 3 && actorHit && (pThingInfo || pDudeInfo))
+		if ((hitCode == 3 && actorHit && (pThingInfo || pDudeInfo)) || foreign)
 		{
 			int nDamage = (15 + Random(7)) << 4;
-			actDamageSprite(missileOwner, actorHit, kDamageBullet, nDamage);
+			damageTarget(kDamageBullet, nDamage);
 		}
 		actPostSprite(missileActor, kStatFree);
 		break;
@@ -3907,10 +3957,10 @@ static void actImpactMissile(DBloodActor* missileActor, int hitCode)
 		sfxPlay3DSound(missileActor->spr.pos, 306, missileActor->sector());
 		GibSprite(missileActor, GIBTYPE_6, NULL, NULL);
 
-		if (hitCode == 3 && actorHit && (pThingInfo || pDudeInfo))
+		if ((hitCode == 3 && actorHit && (pThingInfo || pDudeInfo)) || foreign)
 		{
 			int nDamage = (25 + Random(20)) << 4;
-			actDamageSprite(missileOwner, actorHit, kDamageSpirit, nDamage);
+			damageTarget(kDamageSpirit, nDamage);
 		}
 		actPostSprite(missileActor, kStatFree);
 		break;
@@ -3920,24 +3970,24 @@ static void actImpactMissile(DBloodActor* missileActor, int hitCode)
 		sfxKill3DSound(missileActor, -1, -1);
 		sfxPlay3DSound(missileActor->spr.pos, 306, missileActor->sector());
 
-		if (hitCode == 3 && actorHit && (pThingInfo || pDudeInfo))
+		if ((hitCode == 3 && actorHit && (pThingInfo || pDudeInfo)) || foreign)
 		{
 			int nDmgMul = (missileActor->spr.type == kMissileLifeLeechAltSmall) ? 6 : 3;
 			int nDamage = (nDmgMul + Random(nDmgMul)) << 4;
-			actDamageSprite(missileOwner, actorHit, kDamageSpirit, nDamage);
+			damageTarget(kDamageSpirit, nDamage);
 		}
 		actPostSprite(missileActor, kStatFree);
 		break;
 
 	case kMissileFireball:
 	case kMissileFireballNapalm:
-		if (hitCode == 3 && actorHit && (pThingInfo || pDudeInfo))
+		if ((hitCode == 3 && actorHit && (pThingInfo || pDudeInfo)) || foreign)
 		{
 			if (pThingInfo && actorHit->spr.type == kThingTNTBarrel && actorHit->xspr.burnTime == 0)
 				evPostActor(actorHit, 0, kCallbackFXFlameLick);
 
 			int nDamage = (50 + Random(50)) << 4;
-			actDamageSprite(missileOwner, actorHit, kDamageBullet, nDamage);
+			damageTarget(kDamageBullet, nDamage);
 		}
 		actExplodeSprite(missileActor);
 		break;
@@ -3949,30 +3999,30 @@ static void actImpactMissile(DBloodActor* missileActor, int hitCode)
 
 	case kMissileFlareRegular:
 		sfxKill3DSound(missileActor, -1, -1);
-		if ((hitCode == 3 && actorHit) && (pThingInfo || pDudeInfo))
+		if (((hitCode == 3 && actorHit) && (pThingInfo || pDudeInfo)) || foreign)
 		{
-			if ((pThingInfo && pThingInfo->dmgControl[kDamageBurn] != 0) || (pDudeInfo && pDudeInfo->damageVal[kDamageBurn] != 0))
+			if (foreign ? burnTarget(480) : ((pThingInfo && pThingInfo->dmgControl[kDamageBurn] != 0) || (pDudeInfo && pDudeInfo->damageVal[kDamageBurn] != 0)))
 			{
 				if (pThingInfo && actorHit->spr.type == kThingTNTBarrel && actorHit->xspr.burnTime == 0)
 					evPostActor(actorHit, 0, kCallbackFXFlameLick);
 
-				actBurnSprite(missileOwner, actorHit, 480);
+				if (!foreign) burnTarget(480);
 				actRadiusDamage(missileOwner, missileActor->spr.pos, missileActor->sector(), 16, 20, 10, kDamageBullet, 6, 480);
 
 				// by NoOne: allow additional bullet damage for Flare Gun
 				if (gGameOptions.weaponsV10x && !VanillaMode())
 				{
 					int nDamage = (20 + Random(10)) << 4;
-					actDamageSprite(missileOwner, actorHit, kDamageBullet, nDamage);
+					damageTarget(kDamageBullet, nDamage);
 				}
 			}
 			else
 			{
 				int nDamage = (20 + Random(10)) << 4;
-				actDamageSprite(missileOwner, actorHit, kDamageBullet, nDamage);
+				damageTarget(kDamageBullet, nDamage);
 			}
 
-			if (GetExtInfo(actorHit->spr.spritetexture()).surftype == kSurfFlesh)
+			if (actorHit && GetExtInfo(actorHit->spr.spritetexture()).surftype == kSurfFlesh)
 			{
 				missileActor->spr.setspritetexture(aTexIds[kTexFLESHHIT]);
 				missileActor->SetTarget(actorHit);
@@ -3990,42 +4040,42 @@ static void actImpactMissile(DBloodActor* missileActor, int hitCode)
 
 	case kMissileFlameSpray:
 	case kMissileFlameHound:
-		if (hitCode == 3 && actorHit && actorHit->hasX())
+		if ((hitCode == 3 && actorHit && actorHit->hasX()) || foreign)
 		{
-			if ((actorHit->spr.statnum == kStatThing || actorHit->spr.statnum == kStatDude) && actorHit->xspr.burnTime == 0)
+			if (!foreign && (actorHit->spr.statnum == kStatThing || actorHit->spr.statnum == kStatDude) && actorHit->xspr.burnTime == 0)
 				evPostActor(actorHit, 0, kCallbackFXFlameLick);
 
-			actBurnSprite(missileOwner, actorHit, (4 + gGameOptions.nDifficulty) << 2);
-			actDamageSprite(missileOwner, actorHit, kDamageBurn, 8);
+			burnTarget((4 + gGameOptions.nDifficulty) << 2);
+			damageTarget(kDamageBurn, 8);
 		}
 		break;
 
 	case kMissileFireballCerberus:
 		actExplodeSprite(missileActor);
-		if (hitCode == 3 && actorHit && actorHit->hasX())
+		if ((hitCode == 3 && actorHit && actorHit->hasX()) || foreign)
 		{
-			if ((actorHit->spr.statnum == kStatThing || actorHit->spr.statnum == kStatDude) && actorHit->xspr.burnTime == 0)
+			if (!foreign && (actorHit->spr.statnum == kStatThing || actorHit->spr.statnum == kStatDude) && actorHit->xspr.burnTime == 0)
 				evPostActor(actorHit, 0, kCallbackFXFlameLick);
 
-			actBurnSprite(missileOwner, actorHit, (4 + gGameOptions.nDifficulty) << 2);
-			actDamageSprite(missileOwner, actorHit, kDamageBurn, 8);
+			burnTarget((4 + gGameOptions.nDifficulty) << 2);
+			damageTarget(kDamageBurn, 8);
 			int nDamage = (25 + Random(10)) << 4;
-			actDamageSprite(missileOwner, actorHit, kDamageBullet, nDamage);
+			damageTarget(kDamageBullet, nDamage);
 		}
 		actExplodeSprite(missileActor);
 		break;
 
 	case kMissileFireballTchernobog:
 		actExplodeSprite(missileActor);
-		if (hitCode == 3 && actorHit && actorHit->hasX())
+		if ((hitCode == 3 && actorHit && actorHit->hasX()) || foreign)
 		{
-			if ((actorHit->spr.statnum == kStatThing || actorHit->spr.statnum == kStatDude) && actorHit->xspr.burnTime == 0)
+			if (!foreign && (actorHit->spr.statnum == kStatThing || actorHit->spr.statnum == kStatDude) && actorHit->xspr.burnTime == 0)
 				evPostActor(actorHit, 0, kCallbackFXFlameLick);
 
-			actBurnSprite(missileOwner, actorHit, 32);
-			actDamageSprite(missileOwner, actorHit, kDamageSpirit, 12);
+			burnTarget(32);
+			damageTarget(kDamageSpirit, 12);
 			int nDamage = (25 + Random(10)) << 4;
-			actDamageSprite(missileOwner, actorHit, kDamageBullet, nDamage);
+			damageTarget(kDamageBullet, nDamage);
 		}
 		actExplodeSprite(missileActor);
 		break;
@@ -4035,12 +4085,12 @@ static void actImpactMissile(DBloodActor* missileActor, int hitCode)
 		sfxPlay3DSound(missileActor->spr.pos, 522, missileActor->sector());
 		actPostSprite(missileActor, kStatDebris);
 		seqSpawn(20, missileActor, -1);
-		if (hitCode == 3 && actorHit && actorHit->hasX())
+		if ((hitCode == 3 && actorHit && actorHit->hasX()) || foreign)
 		{
-			if (actorHit->spr.statnum == kStatDude)
+			if (foreign || actorHit->spr.statnum == kStatDude)
 			{
 				int nDamage = (25 + Random(10)) << 4;
-				actDamageSprite(missileOwner, actorHit, kDamageSpirit, nDamage);
+				damageTarget(kDamageSpirit, nDamage);
 			}
 		}
 		break;
@@ -4050,12 +4100,12 @@ static void actImpactMissile(DBloodActor* missileActor, int hitCode)
 		missileActor->spr.cstat &= ~CSTAT_SPRITE_ALIGNMENT_WALL;
 		missileActor->spr.type = kSpriteDecoration;
 		seqSpawn(20, missileActor, -1);
-		if (hitCode == 3 && actorHit && actorHit->hasX())
+		if ((hitCode == 3 && actorHit && actorHit->hasX()) || foreign)
 		{
-			if (actorHit->spr.statnum == kStatDude)
+			if (foreign || actorHit->spr.statnum == kStatDude)
 			{
 				int nDamage = (10 + Random(10)) << 4;
-				actDamageSprite(missileOwner, actorHit, kDamageSpirit, nDamage);
+				damageTarget(kDamageSpirit, nDamage);
 				int nType = missileOwner->spr.type - kDudeBase;
 				if (missileOwner->xspr.health > 0)
 					actHealDude(missileOwner, 10, getDudeInfo(nType + kDudeBase)->startHealth);
@@ -4070,20 +4120,20 @@ static void actImpactMissile(DBloodActor* missileActor, int hitCode)
 		evKillActor(missileActor);
 		seqKill(missileActor);
 		actPostSprite(missileActor, kStatFree);
-		if (hitCode == 3 && actorHit)
+		if ((hitCode == 3 && actorHit) || foreign)
 		{
 			int nDamage = (15 + Random(10)) << 4;
-			actDamageSprite(missileOwner, actorHit, kDamageTesla, nDamage);
+			damageTarget(kDamageTesla, nDamage);
 		}
 		break;
 
 	default:
 		seqKill(missileActor);
 		actPostSprite(missileActor, kStatFree);
-		if (hitCode == 3 && actorHit)
+		if ((hitCode == 3 && actorHit) || foreign)
 		{
 			int nDamage = (10 + Random(10)) << 4;
-			actDamageSprite(missileOwner, actorHit, kDamageFall, nDamage);
+			damageTarget(kDamageFall, nDamage);
 		}
 		break;
 	}
@@ -5345,7 +5395,7 @@ int MoveMissile(DBloodActor* actor)
 {
 	THitInfo<DCoreActor> hit {};
 	int code = actMoveMissile(actor, hit);
-	gHitInfo.hitActor = dyn_cast<DBloodActor>(hit.hitActor);
+	gHitInfo.hitActor = hit.hitActor;
 	gHitInfo.hitWall = hit.hitWall;
 	gHitInfo.hitSector = hit.hitSector;
 	gHitInfo.hitpos = hit.hitpos;
@@ -5847,6 +5897,28 @@ static void actCheckExplosion()
 				}
 			}
 		}
+
+		if (Superset::IsActive() && actor->xspr.data1)
+			Superset::ForEachGameplayTarget([&](const Superset::TargetInfo& target)
+			{
+				auto receiver = target.actor;
+				if (dyn_cast<DBloodActor>(receiver) || !target.alive || !sectorMap[receiver->sectno()] ||
+					!CheckProximity(receiver, apos, pSector, radius)) return;
+				if (pExplodeInfo->dmg && actor->explosionhackflag)
+				{
+					actor->explosionhackflag = false;
+					actDamageActor(Owner, receiver, kDamageFall, (pExplodeInfo->dmg + Random(pExplodeInfo->dmgRng)) << 4);
+				}
+				// ConcussSprite's native inverse-square health damage is separate
+				// from its Blood mass/velocity response. Do not reinterpret a Duke
+				// forward-speed field as Blood's world-space velocity vector.
+				if (pExplodeInfo->dmgType)
+				{
+					double distance = (receiver->spr.pos - apos).LengthSquared() + 0x400;
+					actDamageActor(Owner, receiver, kDamageExplode, int(double(pExplodeInfo->dmgType) * 0x400 / distance));
+				}
+				if (pExplodeInfo->burnTime) Superset::Ignite(receiver, Owner, pExplodeInfo->burnTime << 2);
+			});
 
 		for (int p = connecthead; p >= 0; p = connectpoint2[p])
 		{

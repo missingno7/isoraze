@@ -31,6 +31,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "bloodactor.h"
 #include "games/superset/level.h"
 #include "games/superset/superset.h"
+#include "games/superset/damage.h"
 
 BEGIN_BLD_NS
 
@@ -446,7 +447,7 @@ void UpdateAimVector(DBloodPlayer* pPlayer)
 	DVector3 Aim(plActor->spr.Angles.Yaw.ToVector(), pPlayer->slope);
 
 	WEAPONTRACK* pWeaponTrack = &gWeaponTrack[pPlayer->curWeapon];
-	DBloodActor* targetactor = nullptr;
+	DCoreActor* targetactor = nullptr;
 	pPlayer->aimTargetsCount = 0;
 	int autoaim = Autoaim(pPlayer->pnum);
 	if (autoaim == 1 || (autoaim == 2 && !pWeaponTrack->bIsProjectile) || pPlayer->curWeapon == kWeapVoodooDoll || pPlayer->curWeapon == kWeapLifeLeech)
@@ -505,10 +506,9 @@ void UpdateAimVector(DBloodPlayer* pPlayer)
 				targetactor = actor;
 			}
 		}
-		// Hitscan weapons consume a common aim vector. Native object-targeted
-		// seekers retain their own typed target list until that controller is migrated.
-		if (Superset::IsActive() && !pWeaponTrack->bIsProjectile && pPlayer->curWeapon != kWeapVoodooDoll && pPlayer->curWeapon != kWeapLifeLeech)
-			Superset::ForEachRuntimeTarget([&](const Superset::TargetInfo& target)
+		// Aim vectors and object-targeted attacks use the same receiver query.
+		if (Superset::IsActive())
+			Superset::ForEachGameplayTarget([&](const Superset::TargetInfo& target)
 			{
 				auto actor = target.actor;
 				if (!target.alive || dyn_cast<DBloodActor>(actor)) return;
@@ -521,10 +521,12 @@ void UpdateAimVector(DBloodPlayer* pPlayer)
 				double range = distance * (9460 / 16384.);
 				if (ray.Z - range > point.Z + target.height * .5 || ray.Z + range < point.Z - target.height * .5) return;
 				double separation = (ray - point).Length();
-				if (separation >= nClosest || !cansee(pos, plActor->sector(), point, actor->sector())) return;
+				if (!cansee(pos, plActor->sector(), point, actor->sector())) return;
+				if (pPlayer->aimTargetsCount < 16) pPlayer->aimTargets[pPlayer->aimTargetsCount++] = actor;
+				if (separation >= nClosest) return;
 				nClosest = separation;
 				Aim.SetXY(angle.ToVector()); Aim.Z = (point.Z - pos.Z) / distance;
-				targetactor = nullptr;
+				targetactor = actor;
 				if (plActor->gameplayEntity) { plActor->gameplayEntity->target = actor; GC::WriteBarrier(plActor->gameplayEntity, actor); }
 			});
 		if (pWeaponTrack->thingAngle > 0)
@@ -621,7 +623,10 @@ bool WeaponCanStow(DBloodPlayer* player)
 	// These native idle assets distinguish a completed action from an
 	// intermediate reload/raise stage whose timer happens to have reached zero.
 	for (int idle : {kQAVFORKIDLE, kQAVLITEIDLE, kQAVCANIDLE, kQAVSHOTI1, kQAVSHOTI2, kQAVSHOTI3,
-		kQAV2SHOTI, kQAVTOMIDLE, kQAV2TOMIDLE})
+		kQAV2SHOTI, kQAVTOMIDLE, kQAV2TOMIDLE, kQAVFLARIDLE, kQAVFLAR2I,
+		kQAVBUNIDLE, kQAVPROXIDLE, kQAVREMIDLE1, kQAVREMIDLE2,
+		kQAVSGUNIDL1, kQAVSGUNIDL2, kQAV2SGUNIDL, kQAVNAPIDLE, kQAV2NAPIDLE,
+		kQAVSTAFIDL1, kQAVVDIDLE1, kQAVBSTIDLE})
 		if (player->weaponQav == qavGetCorrectID(idle)) return true;
 	return false;
 }
@@ -1710,9 +1715,10 @@ void FireVoodoo(int nTrigger, DBloodPlayer* pPlayer)
 		actDamageSprite(actor, actor, kDamageBullet, 1 << 4);
 		return;
 	}
-	DBloodActor* targetactor = pPlayer->voodooTarget;
+	DCoreActor* targetactor = pPlayer->voodooTarget;
+	auto nativeTarget = dyn_cast<DBloodActor>(targetactor);
 	if (!targetactor) return;
-	if (!gGameOptions.bFriendlyFire && IsTargetTeammate(pPlayer, targetactor))
+	if (!gGameOptions.bFriendlyFire && nativeTarget && IsTargetTeammate(pPlayer, nativeTarget))
 		return;
 	switch (nTrigger)
 	{
@@ -1720,7 +1726,7 @@ void FireVoodoo(int nTrigger, DBloodPlayer* pPlayer)
 	{
 		sfxPlay3DSound(actor, 460, 2, 0);
 		fxSpawnBlood(targetactor, 17 << 4);
-		int nDamage = actDamageSprite(actor, targetactor, kDamageSpirit, 17 << 4);
+		int nDamage = actDamageActor(actor, targetactor, kDamageSpirit, 17 << 4);
 		UseAmmo(pPlayer, 9, nDamage / 4);
 		break;
 	}
@@ -1728,8 +1734,8 @@ void FireVoodoo(int nTrigger, DBloodPlayer* pPlayer)
 	{
 		sfxPlay3DSound(actor, 460, 2, 0);
 		fxSpawnBlood(targetactor, 17 << 4);
-		int nDamage = actDamageSprite(actor, targetactor, kDamageSpirit, 9 << 4);
-		if (targetactor->IsPlayerActor())
+		int nDamage = actDamageActor(actor, targetactor, kDamageSpirit, 9 << 4);
+		if (nativeTarget && nativeTarget->IsPlayerActor())
 			WeaponLower(getPlayer(targetactor->spr.type - kDudePlayer1));
 		UseAmmo(pPlayer, 9, nDamage / 4);
 		break;
@@ -1738,7 +1744,7 @@ void FireVoodoo(int nTrigger, DBloodPlayer* pPlayer)
 	{
 		sfxPlay3DSound(actor, 463, 2, 0);
 		fxSpawnBlood(targetactor, 17 << 4);
-		int nDamage = actDamageSprite(actor, targetactor, kDamageSpirit, 49 << 4);
+		int nDamage = actDamageActor(actor, targetactor, kDamageSpirit, 49 << 4);
 		UseAmmo(pPlayer, 9, nDamage / 4);
 		break;
 	}
@@ -1746,8 +1752,8 @@ void FireVoodoo(int nTrigger, DBloodPlayer* pPlayer)
 	{
 		sfxPlay3DSound(actor, 460, 2, 0);
 		fxSpawnBlood(targetactor, 17 << 4);
-		int nDamage = actDamageSprite(actor, targetactor, kDamageSpirit, 11 << 4);
-		if (targetactor->IsPlayerActor())
+		int nDamage = actDamageActor(actor, targetactor, kDamageSpirit, 11 << 4);
+		if (nativeTarget && nativeTarget->IsPlayerActor())
 		{
 			DBloodPlayer* pOtherPlayer = getPlayer(targetactor->spr.type - kDudePlayer1);
 			pOtherPlayer->blindEffect = 128;
@@ -1777,9 +1783,10 @@ void AltFireVoodoo(int nTrigger, DBloodPlayer* pPlayer)
 			{
 				for (int i = 0; i < pPlayer->aimTargetsCount; i++)
 				{
-					DBloodActor* targetactor = pPlayer->aimTargets[i];
+					DCoreActor* targetactor = pPlayer->aimTargets[i];
+					auto nativeTarget = dyn_cast<DBloodActor>(targetactor);
 					if (!targetactor) continue;
-					if (!gGameOptions.bFriendlyFire && IsTargetTeammate(pPlayer, targetactor))
+					if (!gGameOptions.bFriendlyFire && nativeTarget && IsTargetTeammate(pPlayer, nativeTarget))
 						continue;
 					double nDist = (targetactor->spr.pos.XY() - pPlayer->GetActor()->spr.pos.XY()).Length();
 					if (nDist > 0 && nDist < 3200)
@@ -1788,9 +1795,9 @@ void AltFireVoodoo(int nTrigger, DBloodPlayer* pPlayer)
 						int v8 = pPlayer->AmmoAmounts()[9] << 1;
 						int nDamage = (v8 + Random(vc)) << 4;
 						nDamage = int((nDamage * ((3200 - nDist) + 1/16.)) / 3200);
-						nDamage = actDamageSprite(actor, targetactor, kDamageSpirit, nDamage);
+						nDamage = actDamageActor(actor, targetactor, kDamageSpirit, nDamage);
 
-						if (targetactor->IsPlayerActor())
+						if (nativeTarget && nativeTarget->IsPlayerActor())
 						{
 							DBloodPlayer* pOtherPlayer = getPlayer(targetactor->spr.type - kDudePlayer1);
 							if (!pOtherPlayer->godMode || !powerupCheck(pOtherPlayer, kPwUpDeathMask))
@@ -1813,9 +1820,10 @@ void AltFireVoodoo(int nTrigger, DBloodPlayer* pPlayer)
 			int v4 = pPlayer->AmmoAmounts()[9] - (pPlayer->AmmoAmounts()[9] / nCount) * nCount;
 			for (int i = 0; i < pPlayer->aimTargetsCount; i++)
 			{
-				DBloodActor* targetactor = pPlayer->aimTargets[i];
+				DCoreActor* targetactor = pPlayer->aimTargets[i];
+				auto nativeTarget = dyn_cast<DBloodActor>(targetactor);
 				if (!targetactor) continue;
-				if (!gGameOptions.bFriendlyFire && IsTargetTeammate(pPlayer, targetactor))
+				if (!gGameOptions.bFriendlyFire && nativeTarget && IsTargetTeammate(pPlayer, nativeTarget))
 					continue;
 				if (v4 > 0)
 					v4--;
@@ -1826,9 +1834,9 @@ void AltFireVoodoo(int nTrigger, DBloodPlayer* pPlayer)
 					int v8 = pPlayer->AmmoAmounts()[9] << 1;
 					int nDamage = (v8 + Random2(vc)) << 4;
 					nDamage = int((nDamage * ((3200 - nDist) + 1/16.)) / 3200);
-					nDamage = actDamageSprite(actor, targetactor, kDamageSpirit, nDamage);
+					nDamage = actDamageActor(actor, targetactor, kDamageSpirit, nDamage);
 					UseAmmo(pPlayer, 9, nDamage);
-					if (targetactor->IsPlayerActor())
+					if (nativeTarget && nativeTarget->IsPlayerActor())
 					{
 						DBloodPlayer* pOtherPlayer = getPlayer(targetactor->spr.type - kDudePlayer1);
 						if (!pOtherPlayer->godMode || !powerupCheck(pOtherPlayer, kPwUpDeathMask))
@@ -2011,7 +2019,9 @@ void FireLifeLeech(int nTrigger, DBloodPlayer* pPlayer)
 	auto missileActor = playerFireMissile(pPlayer, 0, pPlayer->aim + DVector3(r1, r2, r3), 315);
 	if (missileActor)
 	{
-		missileActor->SetTarget(pPlayer->aimTarget);
+		// Native homing still consumes Blood state. Foreign receivers use the
+		// common launch vector until their homing controller is generalized.
+		missileActor->SetTarget(dyn_cast<DBloodActor>(pPlayer->aimTarget.Get()));
 		missileActor->spr.Angles.Yaw = ((nTrigger == 2) ? DAngle180 : nullAngle);
 	}
 	if (checkAmmo2(pPlayer, 8, 1))
@@ -2619,6 +2629,13 @@ void WeaponProcess(DBloodPlayer* pPlayer) {
 	}
 	if (pPlayer->newWeapon)
 	{
+		// Scripted/shared inventory requests must respect the same selectable
+		// set as native cycling. Beast hands are raised by transformation only.
+		if (unsigned(pPlayer->newWeapon) >= countof(weaponModes) || weaponModes[pPlayer->newWeapon].update <= 0)
+		{
+			pPlayer->newWeapon = kWeapNone;
+			return;
+		}
 		if (pPlayer->isUnderwater && BannedUnderwater(pPlayer->newWeapon) && !checkLitSprayOrTNT(pPlayer) && !VanillaMode()) // skip banned weapons when underwater and using next/prev weapon key inputs
 		{
 			if (prevNewWeaponVal == WeaponSel_Next || prevNewWeaponVal == WeaponSel_Prev) // if player switched weapons
@@ -2837,7 +2854,11 @@ void WeaponProcess(DBloodPlayer* pPlayer) {
 			{
 			}
 			pPlayer->voodooTarget = pPlayer->aimTarget;
-			if (pPlayer->voodooTarget == nullptr || pPlayer->voodooTarget->spr.statnum != kStatDude)
+			Superset::TargetInfo target;
+			auto nativeTarget = dyn_cast<DBloodActor>(pPlayer->voodooTarget.Get());
+			if (pPlayer->voodooTarget == nullptr ||
+				(nativeTarget ? nativeTarget->spr.statnum != kStatDude :
+					!Superset::GameplayTarget(pPlayer->voodooTarget, target) || !target.alive))
 				i = 4;
 			StartQAV(pPlayer, kQAVVDFIRE1 + i, nClientFireVoodoo);
 			return;
@@ -3052,6 +3073,21 @@ void teslaHit(DBloodActor* missileactor, int a2)
 	actHitcodeToData(a2, &gHitInfo, &actor);
 	if (a2 == 3 && actor && actor->spr.statnum == kStatDude)
 		v4 = false;
+	if (Superset::IsActive())
+	{
+		Superset::TargetInfo direct;
+		if (a2 == 3 && Superset::GameplayTarget(gHitInfo.hitActor, direct) && direct.enemy) v4 = false;
+		Superset::ForEachGameplayTarget([&](const Superset::TargetInfo& target)
+		{
+			auto hitactor = target.actor;
+			// Native Blood receivers below already use their original reactions.
+			if (dyn_cast<DBloodActor>(hitactor) || !target.alive ||
+				!sectorMap[hitactor->sectno()] || !CheckProximity(hitactor, mpos, pSector, nDist)) return;
+			int length = int((mpos.XY() - hitactor->spr.pos.XY()).Length());
+			int nDamage = ClipLow((nDist - length + 20) >> 1, 10);
+			Superset::ApplyHealthDamage(hitactor, {nDamage << 4, Superset::DamageKind::Electric}, owneractor);
+		});
+	}
 	BloodStatIterator it(kStatDude);
 	while (auto hitactor = it.Next())
 	{

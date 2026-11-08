@@ -27,14 +27,15 @@ Damage BloodVectorDamage(int vectorType, bool playerTarget);
 
 // Health only: no implicit impulse, ignition, freezing or shrinking. True means
 // the receiver handled the request, including native immunity/rejection.
-// Native Blood currently accepts its seven categories and Blood/environmental
-// sources. Cold and sources without a Blood identity need explicit adapters.
-bool ApplyHealthDamage(DCoreActor* target, Damage damage, DCoreActor* source);
+// Native Blood accepts its seven categories and retains native resistance.
+// Cold health damage needs an explicit native Blood mapping. Optional applied
+// measures accepted Q4 health damage, including Duke's deferred native queue.
+bool ApplyHealthDamage(DCoreActor* target, Damage damage, DCoreActor* source, Units::Health* applied = nullptr);
 bool ReadDukeHitDamage(Duke3d::DDukeActor* hitter, Damage& damage);
 bool ApplyDukeHealthHit(DCoreActor* target, Duke3d::DDukeActor* hitter, DCoreActor* source);
 
-// Duke receivers handle Physical and Heat through the native onHit path.
-// Unsupported categories return false instead of acquiring invented reactions.
+// Duke receivers accept shared health categories through the native onHit path.
+// These payloads carry no weapon-specific status reaction or implicit impulse.
 bool PrepareDukeHit(Duke3d::DDukeActor* hitter, Damage damage, bool impulse = true);
 bool ApplyDukeHealthDamage(Duke3d::DDukeActor* target, Damage damage, DCoreActor* source);
 bool AccumulateDukeHit(Duke3d::DDukeActor* target, Duke3d::DDukeActor* hitter);

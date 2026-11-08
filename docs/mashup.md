@@ -1,12 +1,19 @@
 # Blood–Duke Superset
 
-## Shared runtime slice — rules revision 16
+## Shared runtime slice — rules revision 17
 
 The current architecture and migration limits are recorded in
 [superset-migration.md](superset-migration.md). Superset now owns a level registry,
 imported environment/interaction bindings, stable entity identities and lifecycle,
 and one combined weapon/ammo inventory. Both original map formats remain usable.
 The original whole-map world phase and player pose adapters remain temporary.
+
+Combat target queries and damage receivers are shared by actor capability,
+including native enemies outside the import registry. Blood missile contacts,
+Tesla and Voodoo attacks can reach foreign receivers; burning advances on both
+map adapters. This is shared infrastructure, not a Pig Cop-specific damage patch.
+Beast Hands no longer enter ordinary weapon-bank cycling, fixing the reported
+divide-by-zero crash. Start a new game with revision 17; older saves are rejected.
 
 Both shotguns can be owned in bank 3; press 3 again to cycle them. Next/previous
 also traverses the combined banks. Their ammunition and Blood alternate fire
@@ -28,6 +35,7 @@ from the earlier paired-enemy diagnostic prototype discussed below.
 ```powershell
 ./tools/check-superset-level.ps1 -DukeGrp D:/dos/duke3D/duke3d.grp -BloodRff D:/prog/isoraze/build-isoraze/run/blood-data/BLOOD.RFF
 ./tools/check-superset-arsenal.ps1 -DukeGrp D:/dos/duke3D/duke3d.grp -BloodRff D:/prog/isoraze/build-isoraze/run/blood-data/BLOOD.RFF
+./tools/check-superset-blood-combat.ps1 -DukeGrp D:/dos/duke3D/duke3d.grp -BloodRff D:/prog/isoraze/build-isoraze/run/blood-data/BLOOD.RFF
 ```
 
 The sections below also describe earlier adapter milestones; their remaining

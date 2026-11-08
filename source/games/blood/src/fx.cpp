@@ -265,7 +265,7 @@ void CFX::fxProcess(void)
 //
 //---------------------------------------------------------------------------
 
-void fxSpawnBlood(DBloodActor* actor, int)
+void fxSpawnBlood(DCoreActor* actor, int)
 {
 	if (!actor->insector())
 		return;

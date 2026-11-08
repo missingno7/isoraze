@@ -225,6 +225,8 @@ DBloodActor* actSpawnPickup(sectortype* sector, const DVector3& pos, int type);
 bool actHealDude(DBloodActor* pXDude, int a2, int a3);
 void actKillDude(DBloodActor* a1, DBloodActor* pSprite, DAMAGE_TYPE a3, int a4);
 int actDamageSprite(DBloodActor* pSource, DBloodActor* pTarget, DAMAGE_TYPE damageType, int damage, int dudeDamageFactor = -1);
+// Weapon/contact receiver boundary; returns health points actually accepted.
+int actDamageActor(DBloodActor* source, DCoreActor* target, DAMAGE_TYPE kind, int amount);
 void actHitcodeToData(int a1, HitInfo *pHitInfo, DBloodActor **actor, walltype **a7 = nullptr);
 void actAirDrag(DBloodActor *pSprite, fixed_t drag);
 void actExplodeSprite(DBloodActor *pSprite);

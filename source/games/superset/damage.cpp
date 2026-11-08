@@ -58,7 +58,7 @@ Damage BloodVectorDamage(int vectorType, bool playerTarget)
 	return damage;
 }
 
-bool ApplyHealthDamage(DCoreActor* target, Damage damage, DCoreActor* source)
+static bool ApplyHealthDamageImpl(DCoreActor* target, Damage damage, DCoreActor* source)
 {
 	if (!IsActive() || !target || (target->ObjectFlags & OF_EuthanizeMe) ||
 		(source && (source->ObjectFlags & OF_EuthanizeMe)) ||
@@ -95,6 +95,29 @@ bool ApplyHealthDamage(DCoreActor* target, Damage damage, DCoreActor* source)
 		if (HasBloodMovement(player)) return ApplyCalebDamage(player, damage, source);
 	}
 	return ApplyDukeHealthDamage(duke, damage, source);
+}
+
+bool ApplyHealthDamage(DCoreActor* target, Damage damage, DCoreActor* source, Units::Health* applied)
+{
+	// Damage-dependent ammo/healing needs the accepted amount, including Duke's
+	// deferred hit queue. Measuring only CON health here would report zero.
+	auto remaining = [&]() -> Units::Health
+	{
+		auto blood = dyn_cast<Blood::DBloodActor>(target);
+		if (!blood && HasBloodEnemy(target)) blood = BloodState(target);
+		if (auto duke = dyn_cast<Duke3d::DDukeActor>(target))
+		{
+			if (duke->isPlayer() && HasBloodMovement(Duke3d::getPlayer(duke->PlayerIndex()))) blood = BloodState(target);
+			if (blood && blood->hasX()) return max(0, int(blood->xspr.health));
+			return max<Units::Health>(0, Units::FromDukeHealth(duke->spr.extra - max(0, int(duke->hitextra))) - duke->supersetDamageRemainder);
+		}
+		if (blood && blood->hasX()) return max(0, int(blood->xspr.health));
+		return 0;
+	};
+	auto before = applied ? remaining() : 0;
+	bool accepted = ApplyHealthDamageImpl(target, damage, source);
+	if (applied) *applied = accepted ? max<Units::Health>(0, before - remaining()) : 0;
+	return accepted;
 }
 
 bool ReadDukeHitDamage(Duke3d::DDukeActor* hitter, Damage& damage)
@@ -135,7 +158,7 @@ DEFINE_ACTION_FUNCTION(DCoreActor, ApplySharedDukeHealthHit)
 
 bool PrepareDukeHit(Duke3d::DDukeActor* hitter, Damage damage, bool impulse)
 {
-	if ((damage.kind != DamageKind::Physical && damage.kind != DamageKind::Heat) || damage.amount < 0 ||
+	if (unsigned(damage.kind) > unsigned(DamageKind::Cold) || damage.amount < 0 ||
 		damage.amount > Units::FromDukeHealth(INT16_MAX)) return false;
 	hitter->supersetHitDamage = damage.amount;
 	hitter->supersetHitKind = uint8_t(damage.kind);
@@ -453,6 +476,36 @@ bool NativeDeath(Duke3d::DDukeActor* owner, Duke3d::DDukeActor* hitter)
 	while (auto actor = after.Next()) if (!previous.Contains(actor)) actor->Destroy();
 	return pass;
 }
+}
+
+CCMD(superset_receiver_check)
+{
+	if (!IsDukeMap() || gamestate != GS_LEVEL || numplayers != 1) return;
+	auto source = Duke3d::getPlayer(myconnectindex)->GetActor();
+	bool pass = true;
+	for (const char* name : {"DukePigCop", "DukeLizTrooper", "DukeLizMan", "DukeOctabrain"})
+	{
+		auto target = Duke3d::CreateActor(source->sector(), source->spr.pos, PClass::FindActor(name),
+			0, DVector2(1, 1), nullAngle, 0, 0, source, STAT_MISC);
+		if (!target) { pass = false; continue; }
+		ChangeActorStat(target, ProbeStat);
+		target->spr.cstat = CSTAT_SPRITE_INVISIBLE;
+		target->spr.extra = 100;
+		TargetInfo info;
+		bool found = false;
+		ForEachGameplayTarget([&](const TargetInfo& candidate) { found |= candidate.actor == target && candidate.alive; });
+		pass &= !target->gameplayEntity && GameplayTarget(target, info) && info.alive && found;
+		for (int kind = 0; kind <= int(DamageKind::Cold); ++kind)
+		{
+			Units::Health applied = -1;
+			pass &= ApplyHealthDamage(target, {24, DamageKind(kind)}, source, &applied) && applied == 24;
+			Duke3d::fi.ifhitbyweapon(target);
+			pass &= Units::FromDukeHealth(target->spr.extra) - target->supersetDamageRemainder == 1600 - 24 * (kind + 1);
+			pass &= !target->supersetBurnTime && !target->supersetFreezeTime && target->spr.pal != 1;
+		}
+		target->Destroy();
+	}
+	Printf("Superset generic receivers: %s (four native enemy classes outside import registry, eight categories, exact receipts, no implicit status).\n", pass ? "PASS" : "FAIL");
 }
 
 CCMD(superset_damage_check)

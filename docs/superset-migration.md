@@ -45,7 +45,7 @@ explicit gameplay decision. Player pose compatibility views and unmigrated
 content remain temporary adapters until their operations use authoritative state
 directly; they must not be described as completed migration.
 
-## Implemented vertical slice (rules revision 16)
+## Implemented vertical slice (rules revision 17)
 
 | State / operation | Authority and implementation |
 | --- | --- |
@@ -88,6 +88,42 @@ and source game do not select another policy. Both shotguns remain owned in
 bank 3 and retain separate ammo; repeated 3 cycles them. Native QAV/weapon
 controllers finish pending actions before a cross-controller handoff.
 
+### Shared combat receiver fixes
+
+Gameplay target queries now cover native Blood and Duke enemy receivers even
+outside the imported-entity registry. They do not require a Pig Cop archetype,
+replacement identity or particular map format. Blood autoaim, including missile
+launch vectors and Voodoo single/area target lists, can select those receivers.
+Target references remain ordinary GC-traced and serialized common actor pointers.
+Native homing still narrows its target to Blood state; foreign targets receive
+the common launch vector without native homing or predictive leading.
+
+Duke health receivers accept every shared damage category with their ordinary
+default health response. Existing heat-factor overrides remain supported.
+Blood receivers keep native resistances. Health damage does not implicitly add
+ignition, electrical stun, freezing, shrinking or knockback. An optional damage
+receipt measures accepted Q4 damage, including Duke's deferred native hit queue;
+Voodoo uses it for its original damage-dependent ammo consumption.
+
+On Blood maps, native Blood missile impacts retain the common collision target
+instead of dropping it or casting it to a Blood actor. Native impact algorithms
+route health and ignition through the receiver boundary while retaining their
+random rolls, visual/audio effects and projectile lifetime. Spray, Tesla primary
+and area alternate fire, Spirit attacks and explosion health damage use these
+boundaries. Shared burning advances once per world step on either map adapter
+and keeps its saved source, remaining clocks and visual schedule.
+
+This fixes the reported E3M1 immunity without adding weapon/enemy pair rules.
+The separately saved crash report identifies C0000094 in Blood `WeaponProcess`:
+shared bank cycling exposed Beast Hands, whose native selectable-mode count is
+zero. Beast Hands are excluded from ordinary shared selection, and the native
+selection boundary rejects invalid/zero-mode requests before indexing/modulo.
+Native transformation remains its own controller operation. Safe stow detection
+also recognizes the remaining native Blood idle QAVs.
+
+Revision 17 saves include common target references that older binaries cannot
+safely interpret. Start a new game; revision 16 saves are rejected explicitly.
+
 ## Explicit remaining migration boundaries
 
 - The frontend still delegates the original whole-map mechanism/world phase to
@@ -107,9 +143,19 @@ controllers finish pending actions before a cross-controller handoff.
   Existing native VM array fields remain for original games/older external
   scripts; Superset internal code uses accessors. External scripts writing
   those legacy fields directly need migration.
-- Shared health dispatch and hitscan targeting cross actual actor classes.
-  Typed seekers, area attacks and all cross-enemy status responses are not
-  comprehensively migrated. Existing paired-enemy freeze/thaw/fire behavior is
+- Shared health dispatch and targeting cross actual actor classes. Foreign
+  explosion knockback still needs a mass/impulse adapter; Blood's world-vector
+  impulse cannot be written into Duke's forward-speed field. Voodoo's native
+  player blindness/holster effects remain specialized to Blood players.
+  Blood weapons on a Duke-world controller still expose the earlier limited
+  weapon/projectile slice; native homing, placed Life Leech targeting and all
+  cross-enemy status responses are not comprehensively migrated.
+  Voodoo alternate fire retains Blood's sequential ammo budget. A common
+  nearest-first target order versus compatibility ordering remains an open
+  gameplay decision; eligibility does not guarantee every target receives part
+  of that budget. The projectile regression isolates stock innocents for this
+  reason rather than changing the attack's ammo rules implicitly.
+  Existing paired-enemy freeze/thaw/fire behavior is
   preserved; it is not proof that the new direct axe zombie has every status
   capability yet.
 - Foreign Pig Cop CON intentionally stops on unsupported map-specific commands.
@@ -136,6 +182,30 @@ and shrink responses of individual enemy types still need explicit gameplay
 rules.
 
 ## Focused verification
+
+`tools/check-superset-blood-combat.ps1` exercises actual native spray, Tesla and
+Voodoo primary/alternate input and a native TNT explosion in stock E1M1 and
+E3M1 against a foreign actor,
+including burning after removing projectile contacts and after save/load/GC,
+Voodoo ammo receipts, ordinary weapon stow and the all-weapons Beast-bank crash
+trigger. A Duke-map receiver matrix checks Pig Cop, Trooper, Enforcer and
+Octabrain outside the import registry across all eight shared health categories,
+exact fractional receipts and absence of implicit status changes.
+
+Revision 17 verification artifacts (2026-11-08, under `build-mashup/checks`):
+
+- `blood-combat-20261108T181947367`: E1M1/E3M1 attacks, TNT, isolated burning,
+  saved foreign targeting, Voodoo ammo and the four-class receiver matrix.
+- `level-20261108T180551062`: both format imports, source events, native doors,
+  once-only death/pickup, save/GC and replacement choices.
+- `arsenal-20261108T180959414`: both formats, all pickup-switch policies,
+  native attacks, pending selection and saved weapon banks.
+- `blood-map-20261108T181357640`: native Blood combat, shared health/VM,
+  events, effects, queues and save/GC cleanup.
+- `freeze-20261108T181653639`: both existing paired-enemy freeze profiles,
+  paused AI/SEQ, save/GC, shatter, thaw and fire/extinguish interactions.
+- `runtime-20261108T181653662`: original Duke E1L1/E2L1/E3L1/E4L1 and Blood
+  E1M1, native flare/spray, saves and reloads with sound enabled.
 
 `tools/check-superset-level.ps1` loads original E1M1/E1L1, imports native source
 fixtures through the same object boundary, replaces enemies and pickups both

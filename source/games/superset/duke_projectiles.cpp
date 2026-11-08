@@ -376,6 +376,7 @@ CCMD(superset_duke_projectile_check)
 		// Select an existing open, dry room; do not alter map geometry or scale.
 		double top, bottom; Blood::GetActorExtents(source, &top, &bottom);
 		double feet = bottom - source->spr.pos.Z, eye = source->spr.pos.Z - player->zView;
+		double weapon = source->spr.pos.Z - player->zWeapon;
 		auto cstat = source->spr.cstat; source->spr.cstat &= ~CSTAT_SPRITE_BLOCK_ALL;
 		bool found = false;
 		for (auto& candidate : sector)
@@ -400,7 +401,17 @@ CCMD(superset_duke_projectile_check)
 			for (int n = 0; n < 8; ++n)
 			{
 				HitInfoBase hit {}; auto direction = DAngle::fromDeg(n * 45).ToVector();
+				auto flight = DVector3(center, floor - feet - weapon);
+				auto flightSector = &candidate;
+				CollisionBase collision;
+				Blood::ClipMove(flight, &flightSector, direction * 128, 8, 4, 4, CLIPMASK0, collision, 1);
+				if ((flight.XY() - center).Length() < 120) { clear = false; break; }
 				hitscan(origin, &candidate, DVector3(direction * 1024, 0), hit, CLIPMASK1);
+				if (!hit.hitWall || (hit.hitpos.XY() - center).Length() < 128) { clear = false; break; }
+				// Eye-height clearance alone can select a window above a low wall:
+				// native Blood missiles leave the lower weapon origin.
+				hit = {};
+				hitscan(DVector3(center, floor - feet - weapon), &candidate, DVector3(direction * 1024, 0), hit, CLIPMASK1);
 				if (!hit.hitWall || (hit.hitpos.XY() - center).Length() < 128) { clear = false; break; }
 			}
 			if (!clear) continue;
