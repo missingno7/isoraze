@@ -28,6 +28,11 @@ still uses its material metadata; the local test data lacks `SURFACE.DAT`, so
 Blood targets retain the original unknown-material response. Duke transporters
 and breakable-wall reactions for foreign projectiles remain pending.
 
+Caleb's Duke-map controller publishes the consumed centering latch back to the
+main input state. Mouse look cancels recentering normally; explicit centering
+and saved view angles remain supported. This correction keeps revision-18 saves
+compatible.
+
 Voodoo alternate fire preserves original target ordering where possible and
 spends its ammo sequentially. Foreign enemies are eligible through the common
 target list; later targets can receive no damage if earlier ones exhaust it.

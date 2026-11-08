@@ -17,6 +17,7 @@
 #include "status.h"
 #include "level.h"
 #include "c_dispatch.h"
+#include "gameinput.h"
 
 namespace Blood { void SerializeSequences(FSerializer& arc); void SerializeEvents(FSerializer& arc); }
 
@@ -293,6 +294,10 @@ bool TickBloodMovement(DCorePlayer* player)
 	auto flags = body->spr.cstat;
 	body->spr.cstat &= ~CSTAT_SPRITE_BLOCK_ALL;
 	Blood::playerProcess(blood, &world);
+	// Input collection carries the authoritative player's centering latch
+	// into later packets. Blood consumes/clears it on this controller view;
+	// publish that result too, otherwise mouse look is pulled level again.
+	duke->cmd.ucmd.actions = (duke->cmd.ucmd.actions & ~SB_CENTERVIEW) | (blood->cmd.ucmd.actions & SB_CENTERVIEW);
 	// Native enemy SEQ attacks must see the single physical player collider.
 	body->spr.cstat = flags;
 	AdvanceBloodSequences();
@@ -379,6 +384,27 @@ void SerializeBloodControllerState(FSerializer& arc)
 				Blood::playerSetRace(blood, blood->lifeMode);
 				HideStateActor(blood->GetActor());
 			}
+}
+
+CCMD(superset_view_check)
+{
+	if (!IsActive() || gamestate != GS_LEVEL || numplayers != 1) return;
+	if (argv.argc() == 3 && !stricmp(argv[1], "mouse"))
+	{
+		gameInput.MouseAddToPos(0, float(atof(argv[2])));
+		return;
+	}
+	if (argv.argc() == 2 && !stricmp(argv[1], "center"))
+	{
+		gameInput.SendAction(SB_CENTERVIEW);
+		return;
+	}
+	auto player = PlayerArray[myconnectindex];
+	auto blood = BloodState(player->GetActor());
+	Printf("Superset view: clock=%d body=%.6f native=%.6f camera=%.6f offset=%.6f center=%d input=%.6f.\n",
+		PlayClock, player->GetActor()->spr.Angles.Pitch.Degrees(), blood ? blood->spr.Angles.Pitch.Degrees() : 0.,
+		player->CameraAngles.Pitch.Degrees(), player->ViewAngles.Pitch.Degrees(),
+		!!(player->cmd.ucmd.actions & SB_CENTERVIEW), player->cmd.ucmd.ang.Pitch.Degrees());
 }
 
 CCMD(superset_movement_check)

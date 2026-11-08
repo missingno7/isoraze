@@ -259,6 +259,15 @@ implied by the runtime change.
 
 ## Focused verification
 
+`tools/check-superset-view.ps1` injects real mouse deltas through `GameInput` and
+checks that upward/downward pitch stays fixed after input stops. It also checks
+intentional centering and view/input restoration after save/load/GC. Coverage
+includes Caleb on Duke maps with synchronized and unsynchronized input, Duke's
+controller and Blood maps (`view-20261108T202518456`, `build-mashup-dev/checks`).
+The controller publishes Blood's consumed `SB_CENTERVIEW` bit to the primary
+input state, preventing input collection from continually resending a stale
+centering request. This fix does not change the revision-18 save schema.
+
 `tools/check-superset-projectile-runtime.ps1` collects native flare weapon/ammo
 pickups into the common inventory and drives
 native primary/alternate input in Blood E3M1 and Duke E1L1 against both real
