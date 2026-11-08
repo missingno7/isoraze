@@ -33,6 +33,12 @@ main input state. Mouse look cancels recentering normally; explicit centering
 and saved view angles remain supported. This correction keeps revision-18 saves
 compatible.
 
+Caleb's airborne SE 7 contacts now include a complete trigger-window crossing
+between updates. Arrival uses his actual eye offset. This fixes the E1L1 roof
+shaft without changing his size or fall physics. Grounded touchplates and their
+moving floors/linked activators are verified alongside floor transporters,
+switches, lifts and water transitions for both characters.
+
 Voodoo alternate fire preserves original target ordering where possible and
 spends its ammo sequentially. Foreign enemies are eligible through the common
 target list; later targets can receive no damage if earlier ones exhaust it.

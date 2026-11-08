@@ -46,6 +46,14 @@ cl_nostartscreens=true
         'superset_navigation pose 5', 'wait 4', 'superset_navigation check teleport 6 128 0 none',
         'superset_navigation pose 2', 'wait 30', 'superset_navigation check cooldown 2 128 0 cooldown',
         'superset_navigation pose 5', 'wait 4', 'superset_navigation check repeat 6 128 0 none',
+        'superset_navigation pose 12', 'wait 16', '+Move_Forward', 'wait 20', '-Move_Forward', 'wait 4',
+        'superset_navigation check walk-teleport 6 128 0 none',
+        'superset_navigation pose 13', 'wait 12', '+Jump', '+Move_Forward', 'wait 8', '-Move_Forward', '-Jump', 'wait 2',
+        'superset_navigation check touch-air 14 120 0 touch-air',
+        'wait 60', 'superset_navigation check touch-ground 14 128 0 touch',
+        'save touchplate', 'superset_navigation pose 13', 'wait 12', '+Move_Forward', 'wait 20', '-Move_Forward', 'wait 4',
+        'superset_navigation check touch-once 14 128 0 touch',
+        'load touchplate', 'wait 12', 'gc full', 'superset_navigation check touch-restored 14 128 0 touch',
         'superset_navigation pose 9', 'wait 4', '+Open', 'wait 30', '-Open', 'wait 24',
         'superset_navigation check locked 9 128 0 locked',
         'superset_navigation key', '+Open', 'wait 30', '-Open', 'wait 80',
@@ -85,7 +93,7 @@ cl_nostartscreens=true
     } finally { $process.Dispose() }
     $results = @(Select-String -LiteralPath $log -Pattern '^Superset navigation .*: (PASS|FAIL)')
     $results | ForEach-Object { Write-Output $_.Line }
-    if ($results.Count -ne 11 -or ($results | Where-Object { $_.Line -match ': FAIL' })) {
+    if ($results.Count -ne 16 -or ($results | Where-Object { $_.Line -match ': FAIL' })) {
         throw "$player navigation checks failed; inspect $log"
     }
     Write-Output "${player}: PASS (native map input, animations, portals and save/load)"

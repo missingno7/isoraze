@@ -193,9 +193,10 @@ safely interpret. Start a new game; revision 16 saves are rejected explicitly.
   is 40). Duke's native autoaim also excludes targets within 32 world units.
   Tests found that a short Pig Cop at point-blank distance can sit below Caleb's
   unpitched shot. This is a compatibility decision for a future aim profile;
-  neither map scale nor the native cutoff is silently changed here. Complete
-  cross-controller room-link/transport support also remains beyond the door
-  interaction slice.
+  neither map scale nor the native cutoff is silently changed here. Airborne
+  SE 7 player transfers now use swept contact and character-aware arrival;
+  foreign-object transports and comprehensive cross-controller room links
+  still require further work.
 
 ## Shared projectile phase (revision 18)
 
@@ -258,6 +259,26 @@ responses still need explicit gameplay rules; no ammo or armor equivalence is
 implied by the runtime change.
 
 ## Focused verification
+
+`tools/check-superset-air-transports.ps1` checks the actual Atomic E1L1 rooftop
+shaft for both characters. Caleb could move his eye from -300.749939 to
+-251.071112 in one update, skipping SE 7's entire (-300, -252) activation band.
+Superset provides the player's swept height-band contact; the native Duke map
+controller still owns the sensor dimensions, pairing, conditions and transfer.
+The airborne arrival converts from eye to feet using the actual character
+offset, with one Build Z unit of clearance to avoid a boundary return teleport.
+Caleb's native size and fall physics remain intact. Pending crossing history
+serializes; old revision-18 saves initialize missing history at the current eye.
+Checks cover the reproduced roof fall, faster fall, slow arrival clearance and
+eight save/load/GC timings, including a saved pending crossing.
+
+The navigation fixture now includes natural walking into a floor transporter
+and a native touchplate. Both characters must pass over the plate while airborne
+without firing it, then activate it on landing. Its original moving floor,
+single-use state and linked activator/door must work and restore after save/GC.
+Existing switch, lift, cooldown, water and exit-clock checks remain in that run.
+Verified artifacts under `build-mashup-dev/checks`:
+`air-transports-20261108T204926685` and `navigation-20261108T204455506`.
 
 `tools/check-superset-view.ps1` injects real mouse deltas through `GameInput` and
 checks that upward/downward pitch stays fixed after input stops. It also checks

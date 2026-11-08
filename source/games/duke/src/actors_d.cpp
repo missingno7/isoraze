@@ -37,6 +37,7 @@ This file contains parts of DukeGDX by Alexander Makarov-[M210] (m210-2007@mail.
 #include "ns.h"
 #include "global.h"
 #include "games/superset/damage.h"
+#include "games/superset/superset.h"
 #include "serializer.h"
 #include "dukeactor.h"
 #include "texturemanager.h"
@@ -342,17 +343,23 @@ void movetransports_d(void)
 					}
 					else if (!(sectlotag == ST_1_ABOVE_WATER && p->on_ground == 1)) break;
 
-					if (onfloorz == 0 && fabs(act->spr.pos.Z - act2->getOffsetZ()) < 24)
+					if (onfloorz == 0 && Superset::PlayerTouchesHeightBand(p, act->sector(), act->spr.pos.Z, 24))
 					{
 						if ((p->jetpack_on == 0) || (p->jetpack_on && (!!(p->cmd.ucmd.actions & SB_JUMP) || p->cmd.ucmd.vel.Z > 0)) ||
 							(p->jetpack_on && (!!(p->cmd.ucmd.actions & SB_CROUCH) || p->cmd.ucmd.vel.Z < 0)))
 						{
 							act2->spr.pos += Owner->spr.pos.XY() - act->spr.pos.XY();
 							act2->backupvec2();
+							// The destination is expressed at eye height. Keep Caleb's
+							// actual offset and clear the sensor by one Build Z unit,
+							// avoiding a round trip from floating-point boundary error.
+							const bool bloodMovement = Superset::HasBloodMovement(p);
+							const double eyeHeight = bloodMovement ? -act2->viewzoffset : gs.playerheight;
+							const double clearance = 24 + (bloodMovement ? 1. / 256. : 0.);
 
 							if (p->jetpack_on && (!!(p->cmd.ucmd.actions & SB_JUMP) || p->jetpack_on < 11))
-								act2->spr.pos.Z = Owner->spr.pos.Z - 24 + gs.playerheight;
-							else act2->spr.pos.Z = Owner->spr.pos.Z + 24 + gs.playerheight;
+								act2->spr.pos.Z = Owner->spr.pos.Z - clearance + eyeHeight;
+							else act2->spr.pos.Z = Owner->spr.pos.Z + clearance + eyeHeight;
 							act2->backuppos();
 
 							ChangeActorSect(act2, Owner->sector());

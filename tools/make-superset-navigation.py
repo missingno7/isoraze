@@ -19,10 +19,10 @@ def make_map(path):
         walls[a * 4 + 1][3:5] = [b * 4 + 3, b]
         walls[b * 4 + 3][3:5] = [a * 4 + 1, a]
 
-    def sprite(sector, tile, lotag, hitag):
+    def sprite(sector, tile, lotag, hitag, z=None):
         start, floor, _, _ = sectors[sector]
         x = (walls[start][0] + walls[start + 1][0]) // 2
-        sprites.append(struct.pack('<iiiHhbBBBBBbbhhhhhhhhhh', x, 2048, floor * 256,
+        sprites.append(struct.pack('<iiiHhbBBBBBbbhhhhhhhhhh', x, 2048, (floor if z is None else z) * 256,
                                    0, tile, 0, 0, 32, 0, 32, 32, 0, 0,
                                    sector, 0, 0, -1, 0, 0, 0, lotag, hitag, 0))
 
@@ -48,6 +48,18 @@ def make_map(path):
     link(10, 11)
     walls[9 * 4][5:] = [130, 900]  # blue access switch, north wall
     sprite(10, 2, 900, 0)  # native activator controls the second door
+
+    room(28672, 32768)  # walk naturally into the floor transporter
+    link(12, 5)
+    room(77824, 81920)
+    room(81920, 86016)  # native touchplate, eight-unit depression
+    room(86016, 88064, ceiling=128, tag=20)
+    room(88064, 92160)
+    link(13, 14)
+    link(14, 15)
+    link(15, 16)
+    sprite(14, 3, 950, 1, z=120)
+    sprite(15, 2, 950, 0)
 
     data = bytearray(struct.pack('<iiiihhH', 7, 3584, 2048, 88 * 256, 0, 0, len(sectors)))
     for n, (start, floor, ceiling, tag) in enumerate(sectors):

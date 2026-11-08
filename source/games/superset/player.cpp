@@ -230,6 +230,21 @@ bool HasBloodMovement(DCorePlayer* player)
 	return CalebSelected() && duke && duke->bloodMovement && duke->bloodCombat != nullptr;
 }
 
+bool PlayerTouchesHeightBand(DCorePlayer* player, sectortype* sector, double height, double halfWidth)
+{
+	const double current = player->GetActor()->getOffsetZ();
+	if (fabs(height - current) < halfWidth) return true;
+	if (!HasBloodMovement(player)) return false;
+	auto blood = NativePlayer(player);
+	// Blood's unrestricted fall speed can skip an entire narrow sensor
+	// band in one step. Include that actual crossing without slowing Caleb.
+	// Require the previous horizontal point to be inside this sensor's sector.
+	auto state = blood->GetActor();
+	if (state->sector() != sector || !inside(state->opos.X, state->opos.Y, sector)) return false;
+	const double previous = blood->ozView;
+	return (previous <= height - halfWidth && current >= height + halfWidth) || (previous >= height + halfWidth && current <= height - halfWidth);
+}
+
 bool PrepareBloodMovement(DCorePlayer* player)
 {
 	if (!IsDukeMap() || !CalebSelected()) return false;
@@ -373,6 +388,15 @@ void SerializeBloodControllerState(FSerializer& arc)
 		SerializeProjectileOptions(arc);
 		Blood::SerializeSequences(arc);
 		Blood::SerializeEvents(arc);
+		for (auto player : PlayerArray) if (HasBloodMovement(player))
+		{
+			auto blood = NativePlayer(player);
+			// Preserve a crossing pending at the transport phase across a save.
+			// Older saves have no sweep history: start at the current eye.
+			if (arc.isReading()) blood->ozView = blood->zView;
+			FStringf key("previous_eye_%d", player->pnum);
+			arc(key.GetChars(), blood->ozView);
+		}
 		arc.EndObject();
 	}
 	if (arc.isReading())
@@ -384,6 +408,40 @@ void SerializeBloodControllerState(FSerializer& arc)
 				Blood::playerSetRace(blood, blood->lifeMode);
 				HideStateActor(blood->GetActor());
 			}
+}
+
+CCMD(superset_map_contact_check)
+{
+	if (!IsDukeMap() || gamestate != GS_LEVEL || numplayers != 1) return;
+	auto duke = Duke3d::getPlayer(myconnectindex);
+	auto body = duke->GetActor();
+	if (argv.argc() >= 4 && !stricmp(argv[1], "drop"))
+	{
+		int index = atoi(argv[2]);
+		if (index < 0 || index >= int(sector.Size())) return;
+		auto sec = &sector[index];
+		Duke3d::DDukeActor* marker = nullptr;
+		Duke3d::DukeStatIterator it(STAT_TRANSPORT);
+		while (auto actor = it.Next()) if (actor->sector() == sec) { marker = actor; break; }
+		if (!marker) return;
+		DVector3 feet(marker->spr.pos.XY(), atof(argv[3]));
+		double speed = argv.argc() == 5 ? atof(argv[4]) : 0.;
+		ChangeActorSect(body, sec); body->spr.pos = feet; body->vel = {0, 0, speed};
+		duke->vel = {0, 0, speed}; duke->on_ground = 0;
+		duke->setCursector(sec); duke->transporter_hold = duke->jumping_counter = duke->jetpack_on = 0;
+		if (HasBloodMovement(duke))
+		{
+			auto blood = NativePlayer(duke); auto state = blood->GetActor();
+			ChangeActorSect(state, sec);
+			state->spr.pos = {feet.XY(), state->spr.pos.Z + feet.Z - FeetZ(state)};
+			state->vel = {0, 0, speed}; state->spr.flags |= 4;
+			state->xspr.height = int(max(0., sec->floorz - feet.Z));
+			Blood::playerResetInertia(blood); Publish(duke, blood); state->backuploc();
+		}
+		body->backuploc();
+	}
+	Printf("Superset map contact: clock=%d sector=%d feet=%.6f eye=%.6f velocity=%.6f ground=%d hold=%d.\n",
+		PlayClock, sectindex(body->sector()), body->spr.pos.Z, body->getOffsetZ(), duke->vel.Z, duke->on_ground, duke->transporter_hold);
 }
 
 CCMD(superset_view_check)
@@ -619,7 +677,7 @@ CCMD(superset_incoming_check)
 // doors, switches, lifts and transports still run through input/world ticks.
 CCMD(superset_navigation)
 {
-	if (!IsDukeMap() || sector.Size() != 12 || sector[0].hitag != 32123 || argv.argc() < 2)
+	if (!IsDukeMap() || sector.Size() != 17 || sector[0].hitag != 32123 || argv.argc() < 2)
 	{
 		Printf("Superset navigation: requires the generated navigation fixture.\n");
 		return;
@@ -629,11 +687,13 @@ CCMD(superset_navigation)
 	if (!stricmp(argv[1], "pose") && argv.argc() == 3)
 	{
 		int n = atoi(argv[2]);
-		if (n < 0 || n >= int(sector.Size()) || n == 1 || n == 10) return;
+		if (n < 0 || n >= int(sector.Size()) || n == 1 || n == 10 || n == 15) return;
 		auto sec = &sector[n];
 		auto first = sec->walls.Data();
 		DVector3 feet((first[0].pos.X + first[1].pos.X) / 2., 128., sec->floorz);
 		if (n == 0) feet.X = first[1].pos.X - 32.;
+		if (n == 12) feet.X = first[1].pos.X - 32.;
+		if (n == 13) feet.X = first[1].pos.X - 8.;
 		if (n == 9) feet.Y = 24.;
 		ChangeActorSect(body, sec);
 		body->spr.pos = feet;
@@ -676,6 +736,15 @@ CCMD(superset_navigation)
 		if (!stricmp(argv[6], "locked")) pass &= sector[10].ceilingz == 128 && duke->access_incs == 0;
 		if (!stricmp(argv[6], "key")) pass &= duke->got_access == 0 && duke->access_incs == 0 && sector[10].ceilingz == 0;
 		if (!stricmp(argv[6], "clock")) { pass &= duke->timebeforeexit < 26 * 8 && duke->timebeforeexit > 1; duke->timebeforeexit = 0; }
+		if (!stricmp(argv[6], "touch-air")) pass &= !duke->on_ground && sector[15].ceilingz == 128;
+		if (!stricmp(argv[6], "touch"))
+		{
+			bool plate = false;
+			Duke3d::DukeSectIterator it(&sector[14]);
+			while (auto actor = it.Next()) if (actor->GetClass() == PClass::FindActor("DukeTouchPlate"))
+				plate = actor->counter == 1 && actor->temp_data[0] == 1 && actor->spr.hitag == 0;
+			pass &= plate && sector[15].ceilingz == 0 && duke->on_ground && fabs(body->spr.pos.Z - sec->floorz) < 1.;
+		}
 		Printf("Superset navigation %s: %s (sector=%d floor=%.2f ceiling=%.2f feet=%.2f health=%d hold=%d warp=%d access=%d keys=%d).\n",
 			argv[2], pass ? "PASS" : "FAIL", sectindex(body->sector()), sec->floorz, sec->ceilingz,
 			body->spr.pos.Z, body->spr.extra, duke->transporter_hold, duke->on_warping_sector, duke->access_incs, duke->got_access);
