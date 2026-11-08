@@ -209,9 +209,18 @@ struct ProjectileWorldServices
 {
 	virtual ~ProjectileWorldServices() = default;
 	virtual DCoreActor* CollisionOwner(DBloodActor* missile) = 0;
+	virtual DCoreActor* CollisionBody(DBloodActor* source) = 0;
+	virtual void VerticalRange(const DVector3& pos, sectortype* sector, double* ceiling, CollisionBase& ceilingHit,
+		double* floor, CollisionBase& floorHit, double radius) = 0;
 	virtual void CheckRoomLink(DBloodActor* missile) = 0;
+	virtual bool WallImpact(DBloodActor* missile, walltype* wall) = 0;
+	virtual void ExplosionWallImpact(DBloodActor* explosion, walltype* wall) = 0;
+	// Compatibility with map providers whose remaining touch paths are typed.
+	virtual bool NonBlockingMissiles() const { return false; }
 };
 int actMoveMissile(DBloodActor* actor, THitInfo<DCoreActor>& hit, ProjectileWorldServices* world = nullptr);
+void actProcessMissile(DBloodActor* actor, ProjectileWorldServices* world = nullptr);
+bool actMissileWallImpact(DBloodActor* actor, walltype* wall);
 DBloodActor* actSpawnMissile(DBloodActor* source, sectortype* sector, const DVector3& pos, const DVector3& direction, int type);
 void fxSpawnFlameLick(DCoreActor* actor, const DVector3& velocity);
 void actProcessDudeMovement(DBloodActor* actor, MovementWorldServices* world = nullptr);
@@ -232,6 +241,8 @@ void actAirDrag(DBloodActor *pSprite, fixed_t drag);
 void actExplodeSprite(DBloodActor *pSprite);
 void actActivateGibObject(DBloodActor *actor);
 void actProcessSprites(void);
+void actCheckFlares();
+void actProcessExplosions(ProjectileWorldServices* world = nullptr);
 DBloodActor* actSpawnSprite(sectortype* pSector, const DVector3& pos, int nStat, bool a6);
 DBloodActor* actSpawnDude(DBloodActor* pSource, int nType, double dist);
 DBloodActor * actSpawnSprite(DBloodActor *pSource, int nStat);

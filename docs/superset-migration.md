@@ -66,7 +66,7 @@ explicit gameplay decision. Player pose compatibility views and unmigrated
 content remain temporary adapters until their operations use authoritative state
 directly; they must not be described as completed migration.
 
-## Implemented vertical slice (rules revision 17)
+## Implemented runtime slice (rules revision 18)
 
 | State / operation | Authority and implementation |
 | --- | --- |
@@ -78,6 +78,8 @@ directly; they must not be described as completed migration.
 | Transform / collision / health | The one real native actor. Blood uses native Q4 health; Duke uses its native points plus the existing fractional remainder, exposed through the shared health/target API. No second controller body or reconciliation for migrated enemies. |
 | Enemy implementation | Real axe zombie or Pig Cop. Native AI/SEQ or CON/animation runs as a component; a foreign Pig Cop uses native wakeup and an explicit safe CON service. |
 | Map events | Source Blood sprite anchors retain TX/command/trigger state. Common death/pickup emits through these original event nodes. Native sector interaction bindings invoke Blood or Duke door algorithms. |
+| Blood projectiles / explosions | Frontend-owned phases invoke one native mover, impact, explosion and callback implementation on either map import. Environment bindings provide vertical geometry, Blood room links and Blood wall events. Duke transports/breakable-wall effects remain pending. |
+| Attached projectiles | One saved common target reference. Attachment updates run after all enemy components, and removal commits before saves/GC. Typed Blood AI accesses narrow that reference safely. |
 
 Import decodes supported source actors before applying `superset_replacement`
 (0 original, 1 opposite game, 2 deterministic seeded mixture). The policy and
@@ -195,24 +197,57 @@ safely interpret. Start a new game; revision 16 saves are rejected explicitly.
   cross-controller room-link/transport support also remains beyond the door
   interaction slice.
 
+## Shared projectile phase (revision 18)
+
+Superset takes over the Blood missile/explosion phase boundaries without running
+a second world ticker or clock. The secondary Duke-map Blood-object phase calls
+those same frontend operations. The old custom spray-only mover/impact path is
+removed. Native launch velocity, QAV/SEQ/events, random damage, sounds and burst
+callbacks remain concrete Blood implementations. Burst children retain their
+attacker after the parent projectile is removed.
+
+`ProjectileWorldServices` binds at frontend setup. Blood bindings keep native
+depth/sky/room-link vertical queries, room transfers, vector-triggered masked
+walls and explosion wall events. Duke bindings query the common geometry without
+interpreting its tags or pointers as Blood metadata. Their transporter and
+breakable-wall operations are explicitly unimplemented. The compatibility rule
+that foreign Blood missiles stay nonblocking outside their own movement phase
+also remains until Duke's typed touch paths migrate.
+
+The ordinary flare gun and its weapon/ammo pickups are enabled on both map
+imports, using the existing shared pickup-switch policy. Health damage and ignition
+use the existing receiver APIs. Vertical contact with a gameplay body preserves
+the body reference rather than degrading to a floor/ceiling hit; this handles
+feet-origin Duke actors using the same collision path as other receivers. A
+flare's target lives in one GC-aware reference, shared with native specialized
+accessors. Attachments follow after both enemy component phases, survive reload,
+and disappear when the target dies or is removed. Native Blood material rules
+remain intact: unknown/non-flesh surfaces do not become flesh automatically.
+The local Blood data lacks `SURFACE.DAT` both loose and inside its RFF; the
+regression records that limitation and requires trace evidence of unknown
+material when attachment cannot be asserted for a Blood target.
+
+This is the first scheduling extraction, not a completed common actor runtime.
+Native Duke projectile updates, things/proximity/traps, the remaining enemy
+phases and player pose adapters still require migration.
+
 ## Next implementation milestone
 
 Extract gameplay update phases from the native whole-game tickers and give
-Superset ownership of their scheduling. Blood's `actProcessSprites` currently
-combines proximity sensors, things, missiles, explosions, traps, enemy movement,
-AI, flares and FX. Duke's ticker combines transports, player input, native
+Superset ownership of their scheduling. Blood's `actProcessSprites` still
+combines proximity sensors, things, traps, enemy movement, AI and FX, with
+missile/explosion hooks owned by the frontend and attachments deferred until all
+enemy components finish. Duke's ticker combines transports, player input, native
 actor thinking and the secondary Blood-object phase. Separate mechanism work
 from object work at these actual boundaries, preserving native phase ordering
 and the one shared clock during the migration.
 
-The first end-to-end acceptance case is the same ordinary Blood flare-gun
-component running on Blood and Duke imports through a common projectile update
-and impact path. Preserve its native timing, effects and saved lifetime. This
-replaces the spray-only Duke-map missile path and creates the foundation for
-the remaining missile families, explosions and placed objects. Environment
-bindings handle map interactions; no new per-map weapon implementation is the
-destination. Remove each temporary selection restriction when that component
-passes the same combat and save/load checks on both imports.
+The first acceptance case, the ordinary Blood flare gun on both imports, now
+passes. Complete foreign-projectile environment operations next, then validate
+the remaining missile families and extract reusable thing physics for thrown
+and placed objects. Remove each temporary selection restriction when that
+component passes the same combat and save/load checks on both imports. A new
+per-map weapon implementation is not the destination.
 
 Move Caleb's controller onto authoritative common actor state as part of the
 runtime extraction, replacing player pose reconciliation. Migrate direct-actor
@@ -223,6 +258,28 @@ responses still need explicit gameplay rules; no ammo or armor equivalence is
 implied by the runtime change.
 
 ## Focused verification
+
+`tools/check-superset-projectile-runtime.ps1` collects native flare weapon/ammo
+pickups into the common inventory and drives
+native primary/alternate input in Blood E3M1 and Duke E1L1 against both real
+enemy sources. It checks health/ignition/ammo, exactly one movement step per
+four shared clocks, saved live flight, saved moving attachment references,
+detachment on death/destruction, full GC and offscreen event expiry. Material
+trace assertions distinguish missing local Blood material data from a broken
+flesh attachment. It uses a separate `build-mashup-dev` executable by default,
+so the user's stable play session is not rebuilt or replaced.
+
+Revision 18 verification artifacts (2026-11-08, `build-mashup-dev/checks`):
+
+- `projectile-runtime-20261108T200550291`: actual native flare weapon/ammo
+  pickups, primary/alternate attacks against both enemy sources in E3M1/E1L1,
+  single-step flight, saved attachment, death/destruction/GC and event expiry.
+- `arsenal-20261108T200203419`: both formats, combined banks, all pickup-switch
+  policies, native actions, pending selection, save/load and bank order.
+- `blood-combat-20261108T195625015`: spray/Tesla/Voodoo/TNT on Blood maps,
+  burning/save/load and all-category native Duke receiver matrix.
+- `runtime-20261108T195932249`: original Duke E1L1/E2L1/E3L1/E4L1 and Blood
+  E1M1 startup/save/load, native Blood flare/spray, sound enabled.
 
 `tools/check-superset-blood-combat.ps1` exercises actual native spray, Tesla and
 Voodoo primary/alternate input and a native TNT explosion in stock E1M1 and

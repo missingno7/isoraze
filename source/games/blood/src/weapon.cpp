@@ -3060,7 +3060,7 @@ void WeaponProcess(DBloodPlayer* pPlayer) {
 //
 //---------------------------------------------------------------------------
 
-void teslaHit(DBloodActor* missileactor, int a2)
+void teslaHit(DBloodActor* missileactor, DCoreActor* directTarget)
 {
 	auto mpos = missileactor->spr.pos;
 	int nDist = 300;
@@ -3069,14 +3069,13 @@ void teslaHit(DBloodActor* missileactor, int a2)
 	const bool newSectCheckMethod = !cl_bloodvanillaexplosions && !VanillaMode(); // use new sector checking logic
 	auto sectorMap = GetClosestSpriteSectors(pSector, mpos.XY(), nDist, nullptr, newSectCheckMethod);
 	bool v4 = true;
-	DBloodActor* actor = nullptr;
-	actHitcodeToData(a2, &gHitInfo, &actor);
-	if (a2 == 3 && actor && actor->spr.statnum == kStatDude)
+	auto actor = dyn_cast<DBloodActor>(directTarget);
+	if (actor && actor->spr.statnum == kStatDude)
 		v4 = false;
 	if (Superset::IsActive())
 	{
 		Superset::TargetInfo direct;
-		if (a2 == 3 && Superset::GameplayTarget(gHitInfo.hitActor, direct) && direct.enemy) v4 = false;
+		if (Superset::GameplayTarget(directTarget, direct) && direct.enemy) v4 = false;
 		Superset::ForEachGameplayTarget([&](const Superset::TargetInfo& target)
 		{
 			auto hitactor = target.actor;

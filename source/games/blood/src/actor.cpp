@@ -3844,23 +3844,26 @@ void actHitcodeToData(int a1, HitInfo* pHitInfo, DBloodActor** pActor, walltype*
 //
 //---------------------------------------------------------------------------
 
-static void actImpactMissile(DBloodActor* missileActor, int hitCode)
+static void actImpactMissile(DBloodActor* missileActor, int hitCode, const HitInfoBase& hit)
 {
 	if (Superset::IsActive() && superset_trace_blood_impacts > 0)
 	{
 		superset_trace_blood_impacts = int(superset_trace_blood_impacts) - 1;
-		Printf("Superset Blood impact: missile=%d code=%d target=%s wall=%d pos=(%.2f,%.2f,%.2f) sector=%d.\n",
-			missileActor->spr.type, hitCode, gHitInfo.hitActor ? gHitInfo.hitActor->GetClass()->TypeName.GetChars() : "none",
-			gHitInfo.hitWall ? wall.IndexOf(gHitInfo.hitWall) : -1,
-			missileActor->spr.pos.X, missileActor->spr.pos.Y, missileActor->spr.pos.Z, missileActor->sectno());
+		Printf("Superset Blood impact: missile=%d code=%d target=%s wall=%d pos=(%.2f,%.2f,%.2f) sector=%d surface=%d.\n",
+			missileActor->spr.type, hitCode, hit.hitActor ? hit.hitActor->GetClass()->TypeName.GetChars() : "none",
+			hit.hitWall ? wall.IndexOf(hit.hitWall) : -1,
+			missileActor->spr.pos.X, missileActor->spr.pos.Y, missileActor->spr.pos.Z, missileActor->sectno(),
+			hit.hitActor ? int(GetExtInfo(hit.hitActor->spr.spritetexture()).surftype) : -1);
 	}
 	auto missileOwner = missileActor->GetOwner();
 
 	DBloodActor* actorHit = nullptr;
 	walltype* pWallHit = nullptr;
 
-	actHitcodeToData(hitCode, &gHitInfo, &actorHit, &pWallHit);
-	auto target = hitCode == 3 ? gHitInfo.hitActor : nullptr;
+	auto target = hitCode == 3 ? hit.hitActor : nullptr;
+	actorHit = dyn_cast<DBloodActor>(target);
+	if (hitCode == 0 || hitCode == 4) pWallHit = hit.hitWall;
+	Superset::ObserveProjectileImpact(missileActor, target);
 	const bool foreign = Superset::IsActive() && target && !actorHit;
 	// Keep native impact algorithms and their random rolls, sounds, sequences
 	// and projectile lifetime. Only health/ignition cross the receiver boundary.
@@ -3926,7 +3929,7 @@ static void actImpactMissile(DBloodActor* missileActor, int hitCode)
 
 		break;
 	case kMissileTeslaAlt:
-		teslaHit(missileActor, hitCode);
+		teslaHit(missileActor, target);
 		switch (hitCode)
 		{
 		case 0:
@@ -4022,12 +4025,14 @@ static void actImpactMissile(DBloodActor* missileActor, int hitCode)
 				damageTarget(kDamageBullet, nDamage);
 			}
 
-			if (actorHit && GetExtInfo(actorHit->spr.spritetexture()).surftype == kSurfFlesh)
+			Superset::TargetInfo receiver;
+			bool sharedFlesh = foreign && Superset::GameplayTarget(target, receiver) && receiver.enemy;
+			if (sharedFlesh || (actorHit && GetExtInfo(actorHit->spr.spritetexture()).surftype == kSurfFlesh))
 			{
 				missileActor->spr.setspritetexture(aTexIds[kTexFLESHHIT]);
-				missileActor->SetTarget(actorHit);
-				missileActor->xspr.TargetPos.Z = (missileActor->spr.pos.Z - actorHit->spr.pos.Z);
-				missileActor->xspr.goalAng = (missileActor->spr.pos.XY() - actorHit->spr.pos.XY()).Angle() - actorHit->spr.Angles.Yaw;
+				missileActor->SetTarget(target);
+				missileActor->xspr.TargetPos.Z = (missileActor->spr.pos.Z - target->spr.pos.Z);
+				missileActor->xspr.goalAng = (missileActor->spr.pos.XY() - target->spr.pos.XY()).Angle() - target->spr.Angles.Yaw;
 				missileActor->xspr.state = 1;
 				actPostSprite(missileActor, kStatFlare);
 				missileActor->spr.cstat &= ~CSTAT_SPRITE_BLOCK_ALL;
@@ -4835,9 +4840,8 @@ void MoveDude(DBloodActor* actor, MovementWorldServices* world)
 			if (hitActor->spr.statnum == kStatProjectile && !(hitActor->spr.flags & 32) && actor != Owner)
 			{
 				auto hitInfo = gHitInfo;
-				gHitInfo.hitActor = actor;
-				actImpactMissile(hitActor, 3);
-				gHitInfo = hitInfo;
+				hitInfo.hitActor = actor;
+				actImpactMissile(hitActor, 3, hitInfo);
 			}
 #ifdef NOONE_EXTENSIONS
 			if (!gModernMap && hitActor->hasX() && hitActor->xspr.Touch && !hitActor->xspr.state && !hitActor->xspr.isTriggered)
@@ -5252,6 +5256,14 @@ void MoveDude(DBloodActor* actor, MovementWorldServices* world)
 //
 //---------------------------------------------------------------------------
 
+bool actMissileWallImpact(DBloodActor* actor, walltype* wall)
+{
+	if (!wall->hasX() || !wall->xw().triggerVector) return false;
+	auto owner = actor->GetOwner();
+	trTriggerWall(wall, kCmdWallImpact, owner ? owner : actor);
+	return !(wall->cstat & CSTAT_WALL_BLOCK_HITSCAN);
+}
+
 int actMoveMissile(DBloodActor* actor, THitInfo<DCoreActor>& hitInfo, ProjectileWorldServices* world)
 {
 	auto Owner = actor->GetOwner();
@@ -5330,21 +5342,12 @@ int actMoveMissile(DBloodActor* actor, THitInfo<DCoreActor>& hitInfo, Projectile
 		if (cliptype == 4)
 		{
 			walltype* pWall = clipmoveresult.hitWall;
-			if (!world && pWall->hasX())
+			if (world ? world->WallImpact(actor, pWall) : actMissileWallImpact(actor, pWall))
 			{
-				XWALL* pXWall = &pWall->xw();
-				if (pXWall->triggerVector)
-				{
-					trTriggerWall(pWall, kCmdWallImpact, Owner? Owner : actor);
-					if (!(pWall->cstat & CSTAT_WALL_BLOCK_HITSCAN))
-					{
-						cliptype = -1;
-						if (i-- > 0)
-							continue;
-						cliptype = 0;
-						break;
-					}
-				}
+				cliptype = -1;
+				if (i-- > 0) continue;
+				cliptype = 0;
+				break;
 			}
 		}
 		if (cliptype >= 0 && cliptype != 3)
@@ -5356,8 +5359,9 @@ int actMoveMissile(DBloodActor* actor, THitInfo<DCoreActor>& hitInfo, Projectile
 			pSector2 = pSector;
 		}
 		double ceilZ, floorZ;
-		Collision ceilColl, floorColl;
-		GetZRangeAtXYZ(ppos, pSector2, &ceilZ, &ceilColl, &floorZ, &floorColl, actor->clipdist, CLIPMASK0);
+		TCollision<DCoreActor> ceilColl, floorColl;
+		if (world) world->VerticalRange(ppos, pSector2, &ceilZ, ceilColl, &floorZ, floorColl, actor->clipdist);
+		else GetZRangeAtXYZ(ppos, pSector2, &ceilZ, &ceilColl, &floorZ, &floorColl, actor->clipdist, CLIPMASK0);
 		GetActorExtents(actor, &top, &bottom);
 		top += vel.Z;
 		bottom += vel.Z;
@@ -5372,6 +5376,19 @@ int actMoveMissile(DBloodActor* actor, THitInfo<DCoreActor>& hitInfo, Projectile
 			actor->hit.ceilhit = ceilColl;
 			vel.Z += std::max(ceilZ - top, 0.);
 			cliptype = 1;
+		}
+		if (world && (cliptype == 1 || cliptype == 2))
+		{
+			// A feet-origin actor can be returned as vertical support before
+			// clipmove reports its side. Preserve that common body contact so
+			// impact damage/effects do not turn into an anonymous floor hit.
+			auto& vertical = cliptype == 1 ? ceilColl : floorColl;
+			Superset::TargetInfo receiver;
+			if (vertical.type == kHitSprite && Superset::GameplayTarget(vertical.hitActor, receiver) && receiver.enemy)
+			{
+				hitInfo.hitActor = vertical.hitActor;
+				cliptype = 3;
+			}
 		}
 		actor->spr.pos = ppos.plusZ(vel.Z);
 		updatesector(ppos, &pSector);
@@ -5391,15 +5408,16 @@ int actMoveMissile(DBloodActor* actor, THitInfo<DCoreActor>& hitInfo, Projectile
 	return cliptype;
 }
 
-int MoveMissile(DBloodActor* actor)
+void actProcessMissile(DBloodActor* actor, ProjectileWorldServices* world)
 {
+	if (actor->spr.flags & 32) return;
+	viewBackupSpriteLoc(actor);
+	bool nonBlocking = world && world->NonBlockingMissiles();
+	if (nonBlocking) actor->spr.cstat |= CSTAT_SPRITE_BLOCK;
 	THitInfo<DCoreActor> hit {};
-	int code = actMoveMissile(actor, hit);
-	gHitInfo.hitActor = hit.hitActor;
-	gHitInfo.hitWall = hit.hitWall;
-	gHitInfo.hitSector = hit.hitSector;
-	gHitInfo.hitpos = hit.hitpos;
-	return code;
+	int code = actMoveMissile(actor, hit, world);
+	if (nonBlocking) actor->spr.cstat &= ~CSTAT_SPRITE_BLOCK_ALL;
+	if (code >= 0) actImpactMissile(actor, code, hit);
 }
 
 //---------------------------------------------------------------------------
@@ -5797,11 +5815,7 @@ static void actCheckProjectiles()
 	BloodStatIterator it(kStatProjectile);
 	while (auto actor = it.Next())
 	{
-		if (actor->spr.flags & 32)
-			continue;
-		viewBackupSpriteLoc(actor);
-		int hit = MoveMissile(actor);
-		if (hit >= 0) actImpactMissile(actor, hit);
+		actProcessMissile(actor);
 	}
 }
 
@@ -5812,7 +5826,7 @@ static void actCheckProjectiles()
 //---------------------------------------------------------------------------
 static TArray<walltype*> affectedXWalls; // keep this outside the function so that it only needs to be allocated once
 
-static void actCheckExplosion()
+void actProcessExplosions(ProjectileWorldServices* world)
 {
 	BloodStatIterator it(kStatExplosion);
 	while (auto actor = it.Next())
@@ -5846,7 +5860,8 @@ static void actCheckExplosion()
 
 		for (auto pWall : affectedXWalls)
 		{
-			trTriggerWall(pWall, kCmdWallImpact, Owner);
+			if (world) world->ExplosionWallImpact(actor, pWall);
+			else trTriggerWall(pWall, kCmdWallImpact, Owner);
 		}
 
 		BloodStatIterator it1(kStatDude);
@@ -6198,22 +6213,34 @@ void actCheckFlares()
 	{
 		if ((actor->spr.flags & 32) || !actor->hasX()) continue;
 
-		auto target = actor->GetTarget();
-		if (!target) continue;
+		auto target = actor->GetTargetActor();
+		if (!target)
+		{
+			if (Superset::IsActive())
+			{
+				GibSprite(actor, GIBTYPE_17, NULL, NULL);
+				actPostSprite(actor, kStatFree);
+			}
+			continue;
+		}
 
 		viewBackupSpriteLoc(actor);
-		if (target->spr.statnum == kMaxStatus)
+		if (target->spr.statnum == kMaxStatus || (target->ObjectFlags & OF_EuthanizeMe))
 		{
 			GibSprite(actor, GIBTYPE_17, NULL, NULL);
 			actPostSprite(actor, kStatFree);
+			continue;
 		}
-		if (target->hasX() && target->xspr.health > 0)
+		auto native = dyn_cast<DBloodActor>(target);
+		Superset::TargetInfo receiver;
+		bool alive = native ? native->hasX() && native->xspr.health > 0 : Superset::GameplayTarget(target, receiver) && receiver.alive;
+		if (alive)
 		{
 			DVector3 pos = target->spr.pos;
 			pos += (actor->xspr.goalAng + target->spr.Angles.Yaw).ToVector() * target->clipdist * 0.5;
 			pos.Z += actor->xspr.TargetPos.Z;
 			SetActor(actor, pos);
-			actor->vel = target->vel;
+			actor->vel = native ? native->vel : target->spr.pos - target->opos;
 		}
 		else
 		{
@@ -6237,11 +6264,11 @@ void actProcessSprites(void)
 
 	actCheckProximity();
 	actCheckThings();
-	actCheckProjectiles();
-	actCheckExplosion();
+	if (!gi->TickProjectileObjects()) actCheckProjectiles();
+	if (!gi->TickExplosionObjects()) actProcessExplosions();
 	actCheckTraps();
 	actProcessDudes();
-	actCheckFlares();
+	if (!gi->TickProjectileAttachments()) actCheckFlares();
 	aiProcessDudes();
 	gFX.fxProcess();
 }
@@ -6563,8 +6590,6 @@ void actBuildMissile(DBloodActor* spawned, DBloodActor* actor)
 
 DBloodActor* actFireMissile(DBloodActor* actor, double xyoff, double zoff, DVector3 dv, int nType)
 {
-	DBloodActor* result = nullptr;
-	if (Superset::FireBloodMissile(actor, xyoff, zoff, dv, nType, result)) return result;
 	assert(nType >= kMissileBase && nType < kMissileMax);
 	bool impact = false;
 	const MissileType* pMissileInfo = &missileInfo[nType - kMissileBase];
@@ -6574,24 +6599,56 @@ DBloodActor* actFireMissile(DBloodActor* actor, double xyoff, double zoff, DVect
 	double clipdist = pMissileInfo->fClipDist() + actor->clipdist;
 	vect += actor->spr.Angles.Yaw.ToVector() * clipdist;
 
-	int hit = HitScan(actor, vect.Z, DVector3(vect.XY() - actor->spr.pos.XY(), 0), CLIPMASK0, clipdist * 4); 
+	auto world = Superset::ProjectileEnvironment();
+	HitInfoBase contact {};
+	int hit;
+	if (world)
+	{
+		auto body = world->CollisionBody(actor);
+		auto sourceFlags = actor->spr.cstat;
+		auto bodyFlags = body ? body->spr.cstat : ESpriteFlags(0);
+		actor->spr.cstat &= ~CSTAT_SPRITE_BLOCK_ALL;
+		if (body) body->spr.cstat &= ~CSTAT_SPRITE_BLOCK_ALL;
+		hitscan({actor->spr.pos.XY(), vect.Z}, actor->sector(), {vect.XY() - actor->spr.pos.XY(), 0},
+			contact, CLIPMASK0, clipdist * 4, true);
+		actor->spr.cstat = sourceFlags;
+		if (body) body->spr.cstat = bodyFlags;
+		hit = -1;
+		if (contact.hitActor) hit = 3;
+		else if (auto wall = contact.hitWall)
+		{
+			hit = 0;
+			if (wall->twoSided())
+			{
+				double ceiling, floor;
+				calcSlope(wall->nextSector(), contact.hitpos, &ceiling, &floor);
+				if (contact.hitpos.Z > ceiling && contact.hitpos.Z < floor) hit = 4;
+			}
+		}
+		else if (contact.hitSector) hit = 1 + (vect.Z < contact.hitpos.Z);
+	}
+	else
+	{
+		hit = HitScan(actor, vect.Z, DVector3(vect.XY() - actor->spr.pos.XY(), 0), CLIPMASK0, clipdist * 4);
+		contact = gHitInfo;
+	}
 	if (hit != -1)
 	{
 		if (hit == 3 || hit == 0)
 		{
 			impact = true;
-			vect.SetXY(gHitInfo.hitpos.XY() - actor->spr.Angles.Yaw.ToVector() * 1);
+			vect.SetXY(contact.hitpos.XY() - actor->spr.Angles.Yaw.ToVector() * 1);
 		}
 		else
 		{
-			vect.SetXY(gHitInfo.hitpos.XY() - actor->spr.Angles.Yaw.ToVector() * pMissileInfo->fClipDist() * 2);
+			vect.SetXY(contact.hitpos.XY() - actor->spr.Angles.Yaw.ToVector() * pMissileInfo->fClipDist() * 2);
 		}
 	}
 	auto spawned = actSpawnMissile(actor, actor->sector(), vect, dv, nType);
 	if (!spawned) return nullptr;
 	if (impact)
 	{
-		actImpactMissile(spawned, hit);
+		actImpactMissile(spawned, hit, contact);
 		return nullptr;
 	}
 	return spawned;
@@ -6621,6 +6678,9 @@ DBloodActor* actSpawnMissile(DBloodActor* actor, sectortype* sector, const DVect
 	evPostActor(spawned, 600, kCallbackRemove);
 
 	actBuildMissile(spawned, actor);
+	if (auto world = Superset::ProjectileEnvironment(); world && world->NonBlockingMissiles())
+		spawned->spr.cstat &= ~CSTAT_SPRITE_BLOCK_ALL;
+	Superset::ObserveProjectileSpawn(spawned);
 
 	return spawned;
 }

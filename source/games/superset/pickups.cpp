@@ -14,6 +14,7 @@ namespace
 {
 struct PickupDefinition { const char* name; int type; };
 constexpr PickupDefinition pickups[] = {
+	{"flaregun", Blood::kItemWeaponFlarePistol}, {"flares", Blood::kItemAmmoFlares},
 	{"shotgun", Blood::kItemWeaponSawedoff}, {"tommy", Blood::kItemWeaponTommygun},
 	{"spraycan", Blood::kItemWeaponSprayCan}, {"sprayfuel", Blood::kItemAmmoSprayCan},
 	{"shells", Blood::kItemAmmoSawedoffFew}, {"shellbox", Blood::kItemAmmoSawedoffBox},

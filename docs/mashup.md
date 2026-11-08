@@ -1,19 +1,32 @@
 # Blood–Duke Superset
 
-## Shared runtime slice — rules revision 17
+## Shared runtime slice — rules revision 18
 
 The current architecture and migration limits are recorded in
 [superset-migration.md](superset-migration.md). Superset now owns a level registry,
 imported environment/interaction bindings, stable entity identities and lifecycle,
 and one combined weapon/ammo inventory. Both original map formats remain usable.
 The original whole-map world phase and player pose adapters remain temporary.
+The frontend now owns Blood missile, explosion and attachment phases on either
+map format. One native Blood missile/impact implementation replaces the old
+spray-only Duke-map path. The flare gun's primary and alternate fire are now
+selectable on Duke maps as well as Blood maps.
+`superset_spawn_pickup flaregun|flares` creates native pickups through the
+shared inventory policy.
 
 Combat target queries and damage receivers are shared by actor capability,
 including native enemies outside the import registry. Blood missile contacts,
 Tesla and Voodoo attacks can reach foreign receivers; burning advances on both
 map adapters. This is shared infrastructure, not a Pig Cop-specific damage patch.
 Beast Hands no longer enter ordinary weapon-bank cycling, fixing the reported
-divide-by-zero crash. Start a new game with revision 17; older saves are rejected.
+divide-by-zero crash. Start a new game with revision 18; older saves are rejected.
+
+Flare attachments hold one saved common actor reference and follow after both
+enemy component phases. Contacts with a Duke actor's vertical collision surface
+retain that actor as the damage/effect receiver. Native Blood flesh attachment
+still uses its material metadata; the local test data lacks `SURFACE.DAT`, so
+Blood targets retain the original unknown-material response. Duke transporters
+and breakable-wall reactions for foreign projectiles remain pending.
 
 Voodoo alternate fire preserves original target ordering where possible and
 spends its ammo sequentially. Foreign enemies are eligible through the common
@@ -40,6 +53,7 @@ from the earlier paired-enemy diagnostic prototype discussed below.
 ./tools/check-superset-level.ps1 -DukeGrp D:/dos/duke3D/duke3d.grp -BloodRff D:/prog/isoraze/build-isoraze/run/blood-data/BLOOD.RFF
 ./tools/check-superset-arsenal.ps1 -DukeGrp D:/dos/duke3D/duke3d.grp -BloodRff D:/prog/isoraze/build-isoraze/run/blood-data/BLOOD.RFF
 ./tools/check-superset-blood-combat.ps1 -DukeGrp D:/dos/duke3D/duke3d.grp -BloodRff D:/prog/isoraze/build-isoraze/run/blood-data/BLOOD.RFF
+./tools/check-superset-projectile-runtime.ps1 -DukeGrp D:/dos/duke3D/duke3d.grp -BloodRff D:/prog/isoraze/build-isoraze/run/blood-data/BLOOD.RFF
 ```
 
 The sections below also describe earlier adapter milestones; their remaining
@@ -60,9 +74,9 @@ burning/electrical attacks on Duke enemies, subject to explicit resistances.
 Superset will own the gameplay update pipeline for either map format. Loaders
 and environment/mechanism bindings preserve each map's native behavior; all
 gameplay objects use the common runtime. Current per-map weapon restrictions
-are migration debt. The next milestone extracts actor/projectile update phases
-from native whole-game tickers, with the same flare-gun component on both map
-formats as its first acceptance case. A completed weapon component is enabled
+are migration debt. The first extracted projectile phases run the same flare-gun
+component on both map formats. Further milestones extract the remaining actor
+phases and environment operations. A completed weapon component is enabled
 across imports rather than maintained as separate per-map implementations.
 
 Build shared capabilities as a superset: simpler behavior is a subset or

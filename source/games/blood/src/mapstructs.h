@@ -98,7 +98,7 @@ struct XSPRITE {
 		};
 	};
 
-	TObjPtr<DBloodActor*> target;           // target sprite
+	TObjPtr<DCoreActor*> target;           // one target reference, shared by projectile components
 	TObjPtr<DBloodActor*> burnSource;
 	
 	DVector3 TargetPos;

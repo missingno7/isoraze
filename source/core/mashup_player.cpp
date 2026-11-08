@@ -344,7 +344,7 @@ void PrepareCombat(DCorePlayer* player)
 	// their world adapters exist. Selection and QAV transitions remain native.
 	int weapon = blood->cmd.ucmd.getNewWeapon();
 	bool supported = weapon == Blood::kWeapPitchFork || (Superset::IsActive() &&
-		(weapon == Blood::kWeapShotgun || weapon == Blood::kWeapTommyGun || weapon == Blood::kWeapSpraycan));
+		(weapon == Blood::kWeapShotgun || weapon == Blood::kWeapTommyGun || weapon == Blood::kWeapSpraycan || weapon == Blood::kWeapFlareGun));
 	if (weapon && !supported && weapon != WeaponSel_Next && weapon != WeaponSel_Prev)
 		blood->cmd.ucmd.setNewWeapon(Blood::kWeapNone);
 	// Thrown cans need thing physics and blast/environment adapters first.
@@ -396,7 +396,7 @@ bool DrawCombat(DCorePlayer* player, double interpolation)
 	if (Superset::IsActive())
 	{
 		const char* name = blood->curWeapon == Blood::kWeapShotgun ? "Shotgun" : blood->curWeapon == Blood::kWeapTommyGun ? "Tommy gun" :
-			blood->curWeapon == Blood::kWeapSpraycan ? "Spray can (primary)" : "Pitchfork";
+			blood->curWeapon == Blood::kWeapSpraycan ? "Spray can (primary)" : blood->curWeapon == Blood::kWeapFlareGun ? "Flare gun" : "Pitchfork";
 		FString line = FStringf("Blood %s", name);
 		if (blood->weaponAmmo >= 0) line.AppendFormat("   Ammo %d", blood->AmmoAmounts()[blood->weaponAmmo]);
 		DrawText(twod, SmallFont, CR_WHITE, 6, 150, line.GetChars(), DTA_VirtualWidth, 320, DTA_VirtualHeight, 200, DTA_KeepRatio, true, TAG_DONE);

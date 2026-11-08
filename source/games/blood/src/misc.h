@@ -59,7 +59,7 @@ bool WeaponCanStow(DBloodPlayer* pPlayer);
 int WeaponUpgrade(DBloodPlayer* pPlayer, int newWeapon);
 void WeaponProcess(DBloodPlayer* pPlayer);
 void WeaponUpdateState(DBloodPlayer* pPlayer);
-void teslaHit(DBloodActor* pMissile, int a2);
+void teslaHit(DBloodActor* pMissile, DCoreActor* directTarget);
 void WeaponPrecache();
 
 struct ZONE {

@@ -55,15 +55,18 @@ public:
 		return ownerActor;
 	}
 
-	void SetTarget(DBloodActor* own)
+	void SetTarget(DCoreActor* own)
 	{
 		xspr.target = own;
 	}
 
 	DBloodActor* GetTarget()
 	{
-		return xspr.target;
+		// Native AI remains specialized; a common projectile target must never
+		// enter its typed actor/state accesses through an unchecked cast.
+		return dyn_cast<DBloodActor>(xspr.target.Get());
 	}
+	DCoreActor* GetTargetActor() { return xspr.target; }
 
 	bool ValidateTarget(const char* func)
 	{

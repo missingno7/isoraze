@@ -361,9 +361,11 @@ CCMD(superset_spawn_duke_projectile)
 
 CCMD(superset_duke_projectile_check)
 {
-	if (!IsBloodMap() || gamestate != GS_LEVEL || numplayers != 1 || argv.argc() != 2) return;
+	if (!IsActive() || gamestate != GS_LEVEL || numplayers != 1 || argv.argc() != 2) return;
+	if (!IsBloodMap() && stricmp(argv[1], "arena") && stricmp(argv[1], "faceclear")) return;
 	auto player = Blood::getPlayer(myconnectindex);
 	auto source = player->GetActor();
+	auto body = PlayerArray[myconnectindex]->GetActor();
 	auto pos = DVector3(source->spr.pos.XY(), player->zView);
 	if (!stricmp(argv[1], "environment")) { CheckEnvironment(player); return; }
 	if (!stricmp(argv[1], "guard")) { player->godMode = true; return; }
@@ -378,6 +380,7 @@ CCMD(superset_duke_projectile_check)
 		double feet = bottom - source->spr.pos.Z, eye = source->spr.pos.Z - player->zView;
 		double weapon = source->spr.pos.Z - player->zWeapon;
 		auto cstat = source->spr.cstat; source->spr.cstat &= ~CSTAT_SPRITE_BLOCK_ALL;
+		auto bodyCstat = body->spr.cstat; body->spr.cstat &= ~CSTAT_SPRITE_BLOCK_ALL;
 		bool found = false;
 		for (auto& candidate : sector)
 		{
@@ -418,9 +421,16 @@ CCMD(superset_duke_projectile_check)
 			source->spr.pos = DVector3(center, floor - feet);
 			ChangeActorSect(source, &candidate); source->vel = {};
 			source->backuploc(); Blood::playerResetInertia(player);
+			if (body != source)
+			{
+				body->spr.pos = DVector3(center, floor);
+				ChangeActorSect(body, &candidate); body->vel = {};
+				body->backuploc();
+			}
 			found = true; break;
 		}
 		source->spr.cstat = cstat;
+		body->spr.cstat = body == source ? cstat : bodyCstat;
 		Printf("Superset Duke projectile arena: %s.\n", found ? "PASS" : "FAIL");
 		return;
 	}
@@ -452,6 +462,7 @@ CCMD(superset_duke_projectile_check)
 		double distance = 0;
 		auto cstat = source->spr.cstat;
 		source->spr.cstat &= ~CSTAT_SPRITE_BLOCK_ALL;
+		auto bodyCstat = body->spr.cstat; body->spr.cstat &= ~CSTAT_SPRITE_BLOCK_ALL;
 		for (int n = 0; n < 4; ++n)
 		{
 			auto angle = DAngle::fromDeg(n * 90);
@@ -461,6 +472,9 @@ CCMD(superset_duke_projectile_check)
 			if (hit.hitWall && length > distance) { distance = length; source->spr.Angles.Yaw = angle; }
 		}
 		source->spr.cstat = cstat;
+		body->spr.cstat = body == source ? cstat : bodyCstat;
+		body->spr.Angles.Yaw = source->spr.Angles.Yaw;
+		PlayerArray[myconnectindex]->InitAngles();
 		player->InitAngles(); source->backuploc();
 		Printf("Superset Duke projectile clear path: %s (%.2f).\n", distance > 80 ? "PASS" : "FAIL", distance);
 		return;

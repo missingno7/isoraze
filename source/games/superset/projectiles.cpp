@@ -6,6 +6,7 @@
 #include "../blood/src/blood.h"
 #include "superset.h"
 #include "projectiles.h"
+#include "level.h"
 #include "damage.h"
 #include "enemies.h"
 #include "status.h"
@@ -33,94 +34,86 @@ Duke3d::DDukeActor* ProbeTarget()
 	return nullptr;
 }
 
-class DukeProjectileWorld final : public Blood::ProjectileWorldServices
+class CommonProjectileWorld : public Blood::ProjectileWorldServices
 {
 public:
+	DCoreActor* CollisionBody(Blood::DBloodActor* source) override
+	{
+		if (auto body = Mashup::WorldSoundActor(source)) return body;
+		return ResolveGameplayActor(source);
+	}
 	DCoreActor* CollisionOwner(Blood::DBloodActor* missile) override
 	{
-		auto owner = missile->GetOwner();
-		if (auto body = Mashup::WorldSoundActor(owner)) return body;
-		return owner;
+		return CollisionBody(missile->GetOwner());
+	}
+};
+class BloodProjectileWorld final : public CommonProjectileWorld
+{
+public:
+	void VerticalRange(const DVector3& pos, sectortype* sector, double* ceiling, CollisionBase& ceilingHit,
+		double* floor, CollisionBase& floorHit, double radius) override
+	{
+		Blood::GetZRangeAtXYZ(pos, sector, ceiling, &ceilingHit, floor, &floorHit, radius, CLIPMASK0);
+	}
+	void CheckRoomLink(Blood::DBloodActor* actor) override { Blood::CheckLink(actor); }
+	bool WallImpact(Blood::DBloodActor* actor, walltype* wall) override { return Blood::actMissileWallImpact(actor, wall); }
+	void ExplosionWallImpact(Blood::DBloodActor* actor, walltype* wall) override { Blood::trTriggerWall(wall, Blood::kCmdWallImpact, actor->GetOwner()); }
+};
+class DukeProjectileWorld final : public CommonProjectileWorld
+{
+public:
+	void VerticalRange(const DVector3& pos, sectortype* sector, double* ceiling, CollisionBase& ceilingHit,
+		double* floor, CollisionBase& floorHit, double radius) override
+	{
+		getzrange(pos, sector, ceiling, ceilingHit, floor, floorHit, radius, CLIPMASK0);
 	}
 	void CheckRoomLink(Blood::DBloodActor*) override
 	{
-		// Blood room links do not describe Duke map transports. Projectile
-		// transport variants need their own environment implementation.
+		// Duke transporter algorithms still need a common-object environment
+		// service. Never interpret their sectors as Blood room links.
 	}
+	bool WallImpact(Blood::DBloodActor*, walltype*) override { return false; }
+	void ExplosionWallImpact(Blood::DBloodActor*, walltype*) override {}
+	bool NonBlockingMissiles() const override { return true; }
 };
-
-void FlameImpact(Blood::DBloodActor* flame, DCoreActor* target)
-{
-	if (!target) return;
-	if (probeActive && target == ProbeTarget()) ++probeHits;
-	auto source = flame->GetOwner();
-	int clocks = (4 + clamp(int(superset_blood_difficulty), 0, 4)) * Units::ClocksPerStep;
-	Ignite(target, source, clocks);
-	if (auto duke = dyn_cast<Duke3d::DDukeActor>(target); duke && Duke3d::badguy(duke))
-		ApplyHealthDamage(duke, {8, DamageKind::Heat}, source);
-}
+BloodProjectileWorld bloodEnvironment;
+DukeProjectileWorld dukeEnvironment;
+Blood::ProjectileWorldServices* projectileEnvironment = nullptr;
 }
 
-bool FireBloodMissile(Blood::DBloodActor* source, double xyoff, double zoff, const DVector3& direction, int type, Blood::DBloodActor*& result)
+void BindProjectileEnvironment(bool bloodSource)
 {
-	if (!IsDukeMap()) return false;
-	// Do not fall through into Blood's typed collision path in a mixed world.
-	result = nullptr;
-	if (type != Blood::kMissileFlameSpray || direction.isZero()) return true;
-	auto body = Mashup::WorldSoundActor(source);
-	if (!body) return true;
-	auto& info = Blood::missileInfo[type - Blood::kMissileBase];
-	double distance = info.fClipDist() + source->clipdist;
-	auto forward = source->spr.Angles.Yaw.ToVector();
-	auto origin = source->spr.pos.plusZ(zoff) + (source->spr.Angles.Yaw + DAngle90).ToVector() * xyoff;
-	THitInfo<DCoreActor> hit {};
-	auto flags = body->spr.cstat;
-	body->spr.cstat &= ~CSTAT_SPRITE_BLOCK_ALL;
-	hitscan(origin, body->sector(), DVector3(forward * distance, 0), hit, CLIPMASK0, distance * 4, true);
-	body->spr.cstat = flags;
-	int hitCode = -1;
-	if (hit.hitActor) hitCode = 3;
-	else if (hit.hitWall)
-	{
-		hitCode = 0;
-		if (hit.hitWall->twoSided())
-		{
-			double ceil, floor;
-			calcSlope(hit.hitWall->nextSector(), hit.hitpos, &ceil, &floor);
-			if (hit.hitpos.Z > ceil && hit.hitpos.Z < floor) hitCode = 4;
-		}
-	}
-	else if (hit.hitSector) hitCode = 1 + (origin.Z < hit.hitpos.Z);
-	bool immediate = hitCode == 3 || hitCode == 0;
-	auto pos = origin + forward * distance;
-	if (hitCode >= 0) pos.SetXY(hit.hitpos.XY() - forward * (immediate ? 1. : info.fClipDist() * 2));
-	auto sector = body->sector();
-	updatesector(pos, &sector);
-	if (!sector) return true;
-	result = Blood::actSpawnMissile(source, sector, pos, direction, type);
-	if (result) result->spr.cstat &= ~CSTAT_SPRITE_BLOCK_ALL;
-	if (result && probeActive) ++probeShots;
-	if (result && immediate) FlameImpact(result, hit.hitActor);
-	return true;
+	// Source format is decoded once by the frontend; object updates use only
+	// the bound environment contract, with no per-map missile implementation.
+	projectileEnvironment = bloodSource ? static_cast<Blood::ProjectileWorldServices*>(&bloodEnvironment) : &dukeEnvironment;
 }
-
-void TickBloodProjectiles()
+Blood::ProjectileWorldServices* ProjectileEnvironment()
 {
-	if (!IsDukeMap()) return;
-	DukeProjectileWorld world;
+	return IsActive() ? projectileEnvironment : nullptr;
+}
+void ObserveProjectileSpawn(Blood::DBloodActor* actor)
+{
+	if (probeActive && actor->spr.type == Blood::kMissileFlameSpray) ++probeShots;
+}
+void ObserveProjectileImpact(Blood::DBloodActor* actor, DCoreActor* target)
+{
+	if (probeActive && actor->spr.type == Blood::kMissileFlameSpray && target == ProbeTarget()) ++probeHits;
+}
+void TickProjectileObjects()
+{
+	auto world = ProjectileEnvironment();
 	Blood::BloodStatIterator it(Blood::kStatProjectile);
-	while (auto actor = it.Next())
-	{
-		if ((actor->spr.flags & 32) || actor->spr.type != Blood::kMissileFlameSpray) continue;
-		actor->backuploc();
-		THitInfo<DCoreActor> hit {};
-		// Retain the native missile mover's cstat during its own query, while
-		// keeping foreign projectiles out of Duke's typed actor touch path.
-		actor->spr.cstat |= CSTAT_SPRITE_BLOCK;
-		int code = Blood::actMoveMissile(actor, hit, &world);
-		actor->spr.cstat &= ~CSTAT_SPRITE_BLOCK_ALL;
-		if (code == 3) FlameImpact(actor, hit.hitActor);
-	}
+	while (auto actor = it.Next()) Blood::actProcessMissile(actor, world);
+}
+void TickProjectileExplosions()
+{
+	Blood::actProcessExplosions(ProjectileEnvironment());
+}
+void TickProjectileAttachments()
+{
+	Blood::actCheckFlares();
+	// Commit detach/removal before the next save or collector pass.
+	Blood::actPostProcess();
 }
 
 bool Ignite(DCoreActor* target, DCoreActor* source, int clocks)
@@ -182,6 +175,92 @@ void TickStatusEffects()
 }
 
 int BloodDifficulty() { return clamp(int(superset_blood_difficulty), 0, 4); }
+
+// Integration fixtures use real runtime actors and native weapon callbacks.
+// They deliberately avoid holding targets in a status that suppresses damage.
+CCMD(superset_projectile_check)
+{
+	if (!IsActive() || gamestate != GS_LEVEL || numplayers != 1 || argv.argc() < 2) return;
+	constexpr int targetTag = 31041, flightTag = 31042;
+	auto source = BloodState(PlayerArray[myconnectindex]->GetActor());
+	if (!source) return;
+	if (!stricmp(argv[1], "equip"))
+	{
+		auto pos = source->spr.pos;
+		pos.Z = getflorzofslopeptr(source->sector(), pos);
+		Blood::actSpawnPickup(source->sector(), pos, Blood::kItemWeaponFlarePistol);
+		Blood::actSpawnPickup(source->sector(), pos, Blood::kItemAmmoFlares);
+		return;
+	}
+	if (!stricmp(argv[1], "isolate"))
+	{
+		Blood::BloodStatIterator blood(Blood::kStatDude);
+		while (auto actor = blood.Next()) if (!actor->IsPlayerActor())
+		{
+			Blood::seqKill(actor); Blood::evKillActor(actor);
+			actor->spr.cstat &= ~CSTAT_SPRITE_BLOCK_ALL;
+			Blood::actPostSprite(actor, Blood::kStatFree);
+		}
+		Duke3d::DukeSpriteIterator duke;
+		while (auto actor = duke.Next()) if (Duke3d::badguy(actor)) actor->Destroy();
+		return;
+	}
+	if (!stricmp(argv[1], "target") && argv.argc() == 3)
+	{
+		auto type = !stricmp(argv[2], "blood") ? Archetype::BloodAxeZombie : Archetype::DukePigcop;
+		auto pos = source->spr.pos + source->spr.Angles.Yaw.ToVector() * 96;
+		auto sector = source->sector(); updatesector(pos, &sector);
+		DCoreActor* target = nullptr;
+		if (sector)
+		{
+			pos.Z = getflorzofslopeptr(sector, pos);
+			int monsters = Duke3d::ud.monsters_off; Duke3d::ud.monsters_off = 0;
+			target = SpawnRuntimeEntity(type, sector, pos, source->spr.Angles.Yaw + DAngle180);
+			Duke3d::ud.monsters_off = monsters;
+		}
+		if (target)
+		{
+			target->spr.intowner = targetTag;
+			if (auto blood = dyn_cast<Blood::DBloodActor>(target)) blood->xspr.health = 16000;
+			if (auto duke = dyn_cast<Duke3d::DDukeActor>(target)) duke->spr.extra = 1000;
+		}
+		Printf("Superset shared projectile target: %s (%s).\n", target ? "PASS" : "FAIL", argv[2]);
+		return;
+	}
+	if (!stricmp(argv[1], "flight"))
+	{
+		auto player = Blood::getPlayer(myconnectindex);
+		auto heading = source->spr.Angles.Yaw.ToVector();
+		auto missile = Blood::actSpawnMissile(source, source->sector(),
+			DVector3(source->spr.pos.XY() + heading * 16, player->zWeapon), DVector3(heading, 0), Blood::kMissileFlareRegular);
+		if (missile) { missile->spr.intowner = flightTag; missile->vel = DVector3(heading * .25, 0); }
+		Printf("Superset shared projectile flight: %s.\n", missile ? "PASS" : "FAIL");
+		return;
+	}
+	if (!stricmp(argv[1], "kill") || !stricmp(argv[1], "destroy"))
+	{
+		ForEachGameplayTarget([&](const TargetInfo& target)
+		{
+			if (target.actor->spr.intowner != targetTag) return;
+			if (!stricmp(argv[1], "kill")) ApplyHealthDamage(target.actor, {100000, DamageKind::Physical}, source);
+			else
+			{
+				if (auto blood = dyn_cast<Blood::DBloodActor>(target.actor)) { Blood::seqKill(blood); Blood::evKillActor(blood); }
+				target.actor->Destroy();
+			}
+		});
+		return;
+	}
+	if (stricmp(argv[1], "clear")) return;
+	Blood::BloodSpriteIterator it;
+	while (auto actor = it.Next()) if (actor->GetOwner() == source &&
+		(actor->spr.statnum == Blood::kStatProjectile || actor->spr.statnum == Blood::kStatFlare || actor->spr.statnum == Blood::kStatExplosion))
+	{
+		Blood::seqKill(actor); Blood::evKillActor(actor);
+		actor->spr.cstat &= ~CSTAT_SPRITE_BLOCK_ALL;
+		Blood::actPostSprite(actor, Blood::kStatFree);
+	}
+}
 
 CCMD(superset_blood_combat_check)
 {

@@ -91,6 +91,11 @@ struct GameInterface
 	virtual void DrawBackground() = 0;
 	virtual void Render() = 0;
 	virtual void Ticker() = 0;
+	// A combined frontend can own this gameplay phase while a native map
+	// provider retains its update boundary. False keeps the original phase.
+	virtual bool TickProjectileObjects() { return false; }
+	virtual bool TickExplosionObjects() { return false; }
+	virtual bool TickProjectileAttachments() { return false; }
 	virtual int GetPlayerChecksum(int pnum) { return 0x12345678 + pnum; }
 	virtual const char *CheckCheatMode() { return nullptr; }
 	virtual const char* GenericCheat(int player, int cheat) = 0;

@@ -53,7 +53,7 @@ bool calebPlayer = false;
 bool bloodMap = false;
 FString bloodDataPath, dukeDataPath;
 constexpr int SaveSchema = 2;
-constexpr int RulesRevision = 17;
+constexpr int RulesRevision = 18;
 constexpr const char* SaveSignature = GAMENAME ".Superset";
 
 FString FingerprintPrimaryArchive()
@@ -104,6 +104,7 @@ public:
 
 	void app_init() override
 	{
+		BindProjectileEnvironment(bloodMap);
 		world->app_init();
 		InitRuntimeLevel();
 		if (const char* weapons = Args->CheckValue("-superset-weapons"))
@@ -222,6 +223,22 @@ public:
 	void Startup() override { world->Startup(); }
 	void DrawBackground() override { world->DrawBackground(); }
 	void Render() override { world->Render(); }
+	bool TickProjectileObjects() override
+	{
+		Superset::TickProjectileObjects();
+		return true;
+	}
+	bool TickExplosionObjects() override
+	{
+		TickProjectileExplosions();
+		return true;
+	}
+	bool TickProjectileAttachments() override
+	{
+		// Attachments follow after every enemy component has moved, including
+		// foreign CON components that run after the provider's actor phase.
+		return true;
+	}
 	void Ticker() override
 	{
 		int before = PlayClock;
@@ -233,8 +250,12 @@ public:
 			TickBloodMapDukePickups();
 			TickStatusEffects();
 		}
-		if (PlayClock != before) TickRuntimeLevel();
-		if (bloodMap && PlayClock != before) FinishDukeProjectileStep();
+		if (PlayClock != before)
+		{
+			TickRuntimeLevel();
+			Superset::TickProjectileAttachments();
+			if (bloodMap) FinishDukeProjectileStep();
+		}
 	}
 	int GetPlayerChecksum(int pnum) override { return world->GetPlayerChecksum(pnum); }
 	const char* CheckCheatMode() override { return world->CheckCheatMode(); }

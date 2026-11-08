@@ -344,7 +344,8 @@ void TickSharedObjects()
 	Mashup::RefreshBloodPlayerStates();
 	AdvanceBloodSequences();
 	TickBloodEnemies();
-	TickBloodProjectiles();
+	gi->TickProjectileObjects();
+	gi->TickExplosionObjects();
 	TickStatusEffects();
 	TickFreezeEffects();
 	Blood::gFX.fxProcess();

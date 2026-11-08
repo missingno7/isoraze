@@ -26,6 +26,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "build.h"
 #include "blood.h"
 #include "bloodactor.h"
+#include "games/superset/superset.h"
 
 BEGIN_BLD_NS
 
@@ -109,7 +110,9 @@ void FlareBurst(DBloodActor* actor, sectortype*) // 2
 		spawnedactor->spr.scale = DVector2(0.5, 0.5);
 		spawnedactor->spr.type = kMissileFlareAlt;
 		spawnedactor->clipdist = 0.5;
-		spawnedactor->SetOwner(actor);
+		// Shared child projectiles retain their attacker when the burst's
+		// parent is removed. The original game keeps its native owner chain.
+		spawnedactor->SetOwner(Superset::IsActive() ? actor->GetOwner() : actor);
 		auto spAngVec = DAngle::fromBam(i << 29).ToVector().Rotated90CW() * nRadius;
 		if (i & 1) spAngVec *= 0.5;
 		spawnedactor->vel += DVector3(DVector2(0, spAngVec.X).Rotated(nAngVec.X, nAngVec.Y), spAngVec.Y);
