@@ -8,6 +8,7 @@
 #include "projectiles.h"
 #include "damage.h"
 #include "enemies.h"
+#include "status.h"
 #include "mashup_player.h"
 #include "c_cvars.h"
 #include "serializer.h"
@@ -129,6 +130,8 @@ bool Ignite(DCoreActor* target, DCoreActor* source, int clocks)
 	{
 		auto state = BloodState(target);
 		if (!state || !state->IsDudeActor() || !state->xspr.health) return false;
+		// Fire contact requests thaw separately from the attack's health damage.
+		Thaw(target);
 		if (!state->xspr.burnTime) Blood::evPostActor(state, 0, Blood::kCallbackFXFlameLick);
 		Blood::actBurnSprite(BloodState(source), state, min(clocks, 2400));
 		state->supersetDamageSource = Mashup::WorldSoundActor(source) ? Mashup::WorldSoundActor(source) : source;

@@ -46,14 +46,14 @@ extend class DukeActor
 
 		if (p != null)
 		{
-			let [aimed, direct] = actor.aim(self, aimangle);
+			let [aimed, direct] = actor.AimHitscan(self, aimangle);
 			if (aimed)
 			{
 				// if we already aim directly at the target, use the shooter's actual pitch for the hitscan instead of re-aiming.
 				if (direct) [vel, zvel] = Raze.setFreeAimVelocity(vel, zvel, p.getPitchWithView(), 16.);
 				else
 				{
-					double dal = ((aimed.scale.X * aimed.spriteHeight()) * 0.5) + aimed.sparkoffset;
+					double dal = actor.HitscanAimOffset(aimed);
 					double dist = (p.actor.pos.XY - aimed.pos.XY).Length();
 					zvel = ((aimed.pos.Z - pos.Z - dal) * 16) / dist;
 				}
@@ -86,11 +86,13 @@ extend class DukeActor
 			}
 		}
 
+		let oldCstat = actor.cstat;
 		actor.cstat &= ~CSTAT_SPRITE_BLOCK_ALL;
-		Raze.hitscan(pos, sectp, (ang.ToVector() * vel, zvel * 64), hit, CLIPMASK1);
+		bool shared = actor.TraceSharedHitscan(pos, (ang.ToVector() * vel, zvel * 64), hit);
+		if (!shared) Raze.hitscan(pos, sectp, (ang.ToVector() * vel, zvel * 64), hit, CLIPMASK1);
 		if (hit.hitSector) IsometricShotTrail(pos, hit.hitpos);
 
-		if ((ud.mapflags & MFLAG_ALLSECTORTYPES) && hit.hitSector != nullptr && 
+		if (!shared && (ud.mapflags & MFLAG_ALLSECTORTYPES) && hit.hitSector != nullptr &&
 			((hit.hitSector.lotag == ST_160_FLOOR_TELEPORT && zvel > 0) || (hit.hitSector.lotag == ST_161_CEILING_TELEPORT && zvel < 0))
 			&& hit.hitActor == nullptr && hit.hitWall == nullptr)
 		{
@@ -117,15 +119,16 @@ extend class DukeActor
 			}
 		}
 
-		actor.cstat |= CSTAT_SPRITE_BLOCK_ALL;
+		if (shared) actor.cstat = oldCstat;
+		else actor.cstat |= CSTAT_SPRITE_BLOCK_ALL;
 
 		if (hit.hitSector == nullptr) return true;
 
 		// RR shotgun only
-		if (waterhalfhitchance && hit.hitSector.lotag == ST_1_ABOVE_WATER && random(0, 1))
+		if (!shared && waterhalfhitchance && hit.hitSector.lotag == ST_1_ABOVE_WATER && random(0, 1))
 			return true;
 
-		if (random(0, 15) == 0 && hit.hitSector.lotag == ST_2_UNDERWATER)
+		if (!shared && random(0, 15) == 0 && hit.hitSector.lotag == ST_2_UNDERWATER)
 			tracers(hit.hitpos, pos, 8 - (ud.multimode >> 1));
 
 		DukeActor spark = null;
@@ -135,6 +138,7 @@ extend class DukeActor
 			if (!spark) return true;
 
 			spark.extra = self.strength + random(0, 5);
+			if (actor.SharedHitscanContact(hit, spark)) return true;
 
 			if (hit.hitWall == nullptr && hit.hitActor == nullptr)
 			{
@@ -256,6 +260,7 @@ extend class DukeActor
 			if (spark)
 			{
 				spark.extra = self.strength;
+				if (actor.SharedHitscanContact(hit, spark)) return true;
 				let hitActor = DukeActor(hit.hitActor);
 
 				if (hitActor)

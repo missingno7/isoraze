@@ -17,6 +17,7 @@
 #include "duke_effects.h"
 #include "duke_projectiles.h"
 #include "duke_sounds.h"
+#include "duke_weapons.h"
 #include <memory>
 #include <utility>
 
@@ -34,11 +35,6 @@ EXTERN_CVAR(Bool, mashup_combat)
 CUSTOM_CVAR(Int, superset_weapon_profile, 0, CVAR_ARCHIVE) // 0: character default, 1: Blood, 2: Duke.
 {
 	if (self < 0 || self > 2) self = clamp(int(self), 0, 2);
-	if (Superset::IsBloodMap() && self == 2)
-	{
-		Printf("Superset: Duke weapons in Blood maps need the reverse combat adapter; using the native Blood family.\n");
-		self = 0;
-	}
 }
 
 namespace Superset
@@ -50,7 +46,7 @@ bool calebPlayer = false;
 bool bloodMap = false;
 FString bloodDataPath, dukeDataPath;
 constexpr int SaveSchema = 2;
-constexpr int RulesRevision = 13;
+constexpr int RulesRevision = 14;
 constexpr const char* SaveSignature = GAMENAME ".Superset";
 
 FString FingerprintPrimaryArchive()
@@ -109,11 +105,6 @@ public:
 			// Bind native actor classes and their private program without starting Duke's world.
 			Duke3d::RegisterClasses();
 			Duke3d::InitSecondaryDukeProgram(Args->CheckValue("-dukecon"));
-			if (!BloodWeaponsRequested())
-			{
-				Printf("Superset: saved Duke weapon selection needs the reverse combat adapter; using native Blood weapons.\n");
-				superset_weapon_profile = 0;
-			}
 			InitDukeEffects();
 		}
 		Printf("Superset frontend: independent identity/configuration/saves; %s map adapter.\n", bloodMap ? "Blood" : "Duke");
@@ -201,7 +192,7 @@ public:
 	void loadPalette() override { world->loadPalette(); if (bloodMap) Duke3d::InitAnimationTables(); }
 	void FreeLevelData() override
 	{
-		if (bloodMap) ClearDukeEffects(); else ClearBloodControllerState();
+		if (bloodMap) { ClearBloodMapDukeWeapons(); ClearDukeEffects(); } else ClearBloodControllerState();
 		world->FreeLevelData();
 	}
 	bool GenerateSavePic() override { return world->GenerateSavePic(); }
@@ -235,7 +226,7 @@ public:
 	const char* CheckCheatMode() override { return world->CheckCheatMode(); }
 	const char* GenericCheat(int player, int cheat) override { return world->GenericCheat(player, cheat); }
 	void NextLevel(MapRecord* map, int skill) override { world->NextLevel(map, skill); }
-	void NewGame(MapRecord* map, int skill, bool special) override { world->NewGame(map, skill, special); }
+	void NewGame(MapRecord* map, int skill, bool special) override { if (bloodMap) ResetBloodMapDukeWeapons(); world->NewGame(map, skill, special); }
 	void LevelCompleted(MapRecord* map, int skill) override { world->LevelCompleted(map, skill); }
 	bool DrawAutomapPlayer(const DVector2& mxy, const DVector2& cpos, DAngle cang,
 		const DVector2& xydim, double zoom, double frac) override
@@ -292,8 +283,6 @@ void Configure(int mapGameFlags)
 	const char* weapons = Args->CheckValue("-superset-weapons");
 	if (Args->CheckParm("-superset-weapons") && (!weapons || (stricmp(weapons, "auto") && stricmp(weapons, "blood") && stricmp(weapons, "duke"))))
 		I_FatalError("Superset: -superset-weapons must be auto, blood or duke.");
-	if (bloodMap && weapons && !stricmp(weapons, "duke"))
-		I_FatalError("Superset: Duke weapons in Blood maps need the reverse combat adapter. Select -superset-weapons blood for now.");
 }
 
 bool IsActive() { return active; }
@@ -312,7 +301,6 @@ CCMD(superset_weapons)
 	if (!IsActive()) return;
 	if (argv.argc() == 2)
 	{
-		if (bloodMap && !stricmp(argv[1], "duke")) { Printf("Superset: Duke weapons in Blood maps need the reverse combat adapter.\n"); return; }
 		if (!stricmp(argv[1], "auto")) superset_weapon_profile = 0;
 		else if (!stricmp(argv[1], "blood")) superset_weapon_profile = 1;
 		else if (!stricmp(argv[1], "duke")) superset_weapon_profile = 2;

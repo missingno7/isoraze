@@ -48,6 +48,7 @@ This file is a combination of code from the following sources:
 #include "dukeactor.h"
 #include "games/superset/superset.h"
 #include "games/superset/duke_projectiles.h"
+#include "games/superset/duke_weapons.h"
 
 BEGIN_DUKE_NS
 
@@ -287,6 +288,7 @@ void checkavailweapon(DDukePlayer* player)
 
 		if (weap == 0) weap = max;
 		else weap--;
+		if (Superset::IsDukeWeaponActor(player->GetActor()) && !Superset::DukeWeaponSupported(weap)) continue;
 
 		if (weap == MIN_WEAPON || (player->gotweapon[weap] && player->ammo_amount[weap] > 0))
 			break;

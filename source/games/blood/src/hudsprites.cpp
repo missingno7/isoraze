@@ -20,7 +20,8 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 //-------------------------------------------------------------------------
-#include "ns.h"	// Must come before everything else!
+#include "ns.h"
+#include "games/superset/duke_weapons.h"	// Must come before everything else!
 
 #include <stdlib.h>
 #include <string.h>
@@ -136,8 +137,11 @@ void hudDraw(DBloodPlayer* pPlayer, sectortype* pSector, double bobx, double bob
 		}
 
 		#ifdef NOONE_EXTENSIONS
-		if (pPlayer->sceneQav < 0) WeaponDraw(pPlayer, nShade, cXY.X, cXY.Y, nPalette, angle);
-			else if (pPlayer->GetActor()->xspr.health > 0) playerQavSceneDraw(pPlayer, nShade, cXY.X, cXY.Y, nPalette, angle);
+		if (pPlayer->sceneQav < 0)
+		{
+			if (!Superset::DrawBloodMapDukeWeapons(pPlayer, interpfrac)) WeaponDraw(pPlayer, nShade, cXY.X, cXY.Y, nPalette, angle);
+		}
+		else if (pPlayer->GetActor()->xspr.health > 0) playerQavSceneDraw(pPlayer, nShade, cXY.X, cXY.Y, nPalette, angle);
 		else {
 			pPlayer->sceneQav = pPlayer->weaponQav = kQAVNone;
 			pPlayer->qavTimer = pPlayer->weaponTimer = pPlayer->curWeapon = 0;

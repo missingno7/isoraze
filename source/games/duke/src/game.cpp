@@ -399,6 +399,20 @@ void initactorflags()
 //
 //---------------------------------------------------------------------------
 
+void InitWeaponOrder(int index)
+{
+	ud.wchoice[index][0] = 3;
+	ud.wchoice[index][1] = 4;
+	ud.wchoice[index][2] = 5;
+	ud.wchoice[index][3] = 7;
+	ud.wchoice[index][4] = 8;
+	ud.wchoice[index][5] = 6;
+	ud.wchoice[index][6] = 0;
+	ud.wchoice[index][7] = 2;
+	ud.wchoice[index][8] = 9;
+	ud.wchoice[index][9] = 1;
+}
+
 void GameInterface::app_init()
 {
 	// Initialise player array.
@@ -418,16 +432,7 @@ void GameInterface::app_init()
 	ud.m_respawn_inventory = 0;
 	ud.cashman = 0;
 	ud.player_skill = 2;
-	ud.wchoice[0][0] = 3;
-	ud.wchoice[0][1] = 4;
-	ud.wchoice[0][2] = 5;
-	ud.wchoice[0][3] = 7;
-	ud.wchoice[0][4] = 8;
-	ud.wchoice[0][5] = 6;
-	ud.wchoice[0][6] = 0;
-	ud.wchoice[0][7] = 2;
-	ud.wchoice[0][8] = 9;
-	ud.wchoice[0][9] = 1;
+	InitWeaponOrder(0);
 	ud.multimode = 1;
 	ud.m_monsters_off = userConfig.nomonsters;
 	getPlayer(0)->aim_mode = 1;

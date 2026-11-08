@@ -5,6 +5,7 @@
 #include "../duke/src/dukeactor.h"
 #include "../blood/src/blood.h"
 #include "duke_projectiles.h"
+#include "duke_weapons.h"
 #include "superset.h"
 #include "damage.h"
 #include "vm.h"
@@ -150,7 +151,7 @@ DEFINE_ACTION_FUNCTION(DCoreActor, SpawnSharedDukeProjectile)
 DEFINE_ACTION_FUNCTION(DDukeActor, SharedProjectileMedium)
 {
 	PARAM_SELF_PROLOGUE(Duke3d::DDukeActor);
-	if (!IsBloodDukeProjectile(self)) ACTION_RETURN_INT(self->sector()->lotag);
+	if (!IsBloodDukeProjectile(self) && !IsDukeWeaponEffect(self)) ACTION_RETURN_INT(self->sector()->lotag);
 	if (self->sector()->hasX() && self->sector()->xs().Underwater) ACTION_RETURN_INT(2);
 	auto link = dyn_cast<Blood::DBloodActor>(self->sector()->upperLink.Get());
 	ACTION_RETURN_INT(link && link->spr.type == Blood::kMarkerUpWater ? 1 : 0);

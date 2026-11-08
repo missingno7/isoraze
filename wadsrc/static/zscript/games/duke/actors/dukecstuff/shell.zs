@@ -67,7 +67,7 @@ class DukeShell : DukeActor
 			return;
 		}
 
-		if (sectp.lotag == ST_2_UNDERWATER)
+		if (self.SharedProjectileMedium() == ST_2_UNDERWATER)
 		{
 			self.temp_data[1]++;
 			if (self.temp_data[1] > 8)

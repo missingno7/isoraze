@@ -6,6 +6,7 @@
 #include "../blood/src/blood.h"
 #include "duke_effects.h"
 #include "duke_projectiles.h"
+#include "duke_weapons.h"
 #include "superset.h"
 #include "mashup_resources.h"
 #include "savegamehelp.h"
@@ -21,7 +22,7 @@ void MarkEffects() { GC::MarkArray(Duke3d::spriteq, 1024); }
 bool Supported(Duke3d::DDukeActor* actor)
 {
 	return actor && ((actor->supersetForeignFx && actor->IsKindOf(PClass::FindClass("DukeBloodSplat1"))) ||
-		IsBloodDukeProjectile(actor) || IsDukeProjectileEffect(actor));
+		IsBloodDukeProjectile(actor) || IsDukeProjectileEffect(actor) || IsDukeWeaponEffect(actor));
 }
 Blood::DBloodActor* MissileTarget()
 {

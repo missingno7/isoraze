@@ -18,6 +18,10 @@ extend class CoreActor
 
 extend class DukeActor
 {
+	native CoreActor, bool AimHitscan(readonly<DukeActor> weapon, double angle);
+	native double HitscanAimOffset(CoreActor target);
+	native bool TraceSharedHitscan(Vector3 position, Vector3 direction, HitInfo hit);
+	native bool SharedHitscanContact(HitInfo hit, DukeActor spark);
 	native int SharedProjectileMedium();
 	native bool SharedProjectileContact(CollisionData coll);
 	native void InheritProjectileEnvironment(DukeActor parent);

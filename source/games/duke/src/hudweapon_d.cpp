@@ -36,9 +36,15 @@ source as it is released.
 #include "global.h"
 #include "dukeactor.h"
 #include "buildtiles.h"
+#include "mashup_resources.h"
 #include "games/superset/superset.h"
 
 BEGIN_DUKE_NS 
+
+static FTextureID WeaponTexture(const char* name)
+{
+	return HasSecondaryDukeContext() ? Mashup::DukeTexture(name) : TexMan.CheckForTexture(name, ETextureType::Any);
+}
 
 inline static double getavel(DDukePlayer* const p, const double interpfrac)
 {
@@ -53,7 +59,7 @@ inline static double getavel(DDukePlayer* const p, const double interpfrac)
 
 inline static void hud_drawpal(double x, double y, const char* tilenum, int shade, int orientation, int p, DAngle angle)
 {
-	hud_drawsprite(x, y, 1., angle.Degrees(), TexMan.CheckForTexture(tilenum, ETextureType::Any), shade, p, orientation);
+	hud_drawsprite(x, y, 1., angle.Degrees(), WeaponTexture(tilenum), shade, p, orientation);
 }
 
 //---------------------------------------------------------------------------
@@ -75,7 +81,7 @@ static void displayloogie(DDukePlayer* p, double const interpfrac)
 		const double z = 4096. + ((loogi + i) * 512.);
 		const double x = -getavel(p, interpfrac) + BobVal((loogi + i) * 64.) * 16;
 
-		hud_drawsprite((p->loogie[i].X + x), (200 + p->loogie[i].Y - y), (z - (i << 8)) / 65536., a - 22.5, TexMan.CheckForTexture("LOOGIE", ETextureType::Any), 0, 0, 0);
+		hud_drawsprite((p->loogie[i].X + x), (200 + p->loogie[i].Y - y), (z - (i << 8)) / 65536., a - 22.5, WeaponTexture("LOOGIE"), 0, 0, 0);
 	}
 }
 
@@ -93,7 +99,7 @@ static bool animatefist(int gs, DDukePlayer* p, double xoffset, double yoffset, 
 	hud_drawsprite(
 		(-fisti + 222 + xoffset),
 		(yoffset + 194 + BobVal((6 + fisti) * 128.) * 32),
-		clamp(65536. - 65536. * BobVal(512 + fisti * 64.), 40920., 90612.) / 65536., 0, TexMan.CheckForTexture("FIST", ETextureType::Any), gs, fistpal, 0);
+		clamp(65536. - 65536. * BobVal(512 + fisti * 64.), 40920., 90612.) / 65536., 0, WeaponTexture("FIST"), gs, fistpal, 0);
 
 	return true;
 }
@@ -144,7 +150,7 @@ void displaymasks_d(DDukePlayer* const p, int pal, double interpfrac)
 {
 	if (p->scuba_on)
 	{
-		auto scuba0 = TexMan.CheckForTexture("SCUBAMASK", ETextureType::Any);
+		auto scuba0 = WeaponTexture("SCUBAMASK");
 		auto tex0 = TexMan.GetGameTexture(scuba0);
 
 		double y = 200 - tex0->GetDisplayHeight();

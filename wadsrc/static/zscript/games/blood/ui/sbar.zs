@@ -521,10 +521,11 @@ class BloodStatusBar : RazeStatusBar
 		{
 			DrawStatNumber("%3d", health >> 4, "SBarHealthAmount", 86, 183, 0, 0);
 		}
-		if (pPlayer.curWeapon && pPlayer.weaponAmmo != -1)
+		int foreignAmmo = pPlayer.GetForeignWeaponAmmo();
+		if (foreignAmmo >= 0 || (foreignAmmo == -2 && pPlayer.curWeapon && pPlayer.weaponAmmo != -1))
 		{
-			int num = pPlayer.ammoCount[pPlayer.weaponAmmo];
-			if (pPlayer.weaponAmmo == 6)
+			int num = foreignAmmo >= 0 ? foreignAmmo : pPlayer.ammoCount[pPlayer.weaponAmmo];
+			if (foreignAmmo == -2 && pPlayer.weaponAmmo == 6)
 				num /= 10;
 			DrawStatNumber("%3d", num, "SBarNumberAmmo", 216, 183, 0, 0);
 		}
@@ -535,7 +536,7 @@ class BloodStatusBar : RazeStatusBar
 			int num = pPlayer.ammoCount[i];
 			if (i == 6)
 				num /= 10;
-			DrawStatNumber("%3d", num, "SBarAmmoAmount", x, y, i == pPlayer.weaponAmmo ? -128 : 32, 10);
+			DrawStatNumber("%3d", num, "SBarAmmoAmount", x, y, foreignAmmo == -2 && i == pPlayer.weaponAmmo ? -128 : 32, 10);
 		}
 		DrawStatNumber("%2d", pPlayer.ammoCount[10], "SBarAmmoAmount", 291, 194, pPlayer.weaponAmmo == 10 ? -128 : 32, 10);
 		DrawStatNumber("%2d", pPlayer.ammoCount[11], "SBarAmmoAmount", 309, 194, pPlayer.weaponAmmo == 11 ? -128 : 32, 10);
@@ -592,10 +593,11 @@ class BloodStatusBar : RazeStatusBar
 		{
 			DrawStatNumber("%3d", health >> 4, "SBarHealthAmount", 8, 183 - 200, 0, 0);
 		}
-		if (pPlayer.curWeapon && pPlayer.weaponAmmo != -1)
+		int foreignAmmo = pPlayer.GetForeignWeaponAmmo();
+		if (foreignAmmo >= 0 || (foreignAmmo == -2 && pPlayer.curWeapon && pPlayer.weaponAmmo != -1))
 		{
-			int num = pPlayer.ammoCount[pPlayer.weaponAmmo];
-			if (pPlayer.weaponAmmo == 6)
+			int num = foreignAmmo >= 0 ? foreignAmmo : pPlayer.ammoCount[pPlayer.weaponAmmo];
+			if (foreignAmmo == -2 && pPlayer.weaponAmmo == 6)
 				num /= 10;
 			DrawStatNumber("%3d", num, "SBarNumberAmmo", 42, 183 - 200, 0, 0);
 		}
@@ -670,18 +672,19 @@ class BloodStatusBar : RazeStatusBar
 
 		DrawPackItemInStatusBar2(pPlayer, 216 - 320, 194 - 200, 231 - 320, 187 - 200, 0.7);
 
-		if (pPlayer.curWeapon && pPlayer.weaponAmmo != -1)
+		int foreignAmmo = pPlayer.GetForeignWeaponAmmo();
+		if (foreignAmmo >= 0 || (foreignAmmo == -2 && pPlayer.curWeapon && pPlayer.weaponAmmo != -1))
 		{
-			int num = pPlayer.ammoCount[pPlayer.weaponAmmo];
-			if (pPlayer.weaponAmmo == 6)
+			int num = foreignAmmo >= 0 ? foreignAmmo : pPlayer.ammoCount[pPlayer.weaponAmmo];
+			if (foreignAmmo == -2 && pPlayer.weaponAmmo == 6)
 				num /= 10;
-			if (gAmmoIcons[pPlayer.weaponAmmo])
+			if (foreignAmmo == -2 && gAmmoIcons[pPlayer.weaponAmmo])
 			{
 				let scale = ammoScale[pPlayer.weaponAmmo];
 				DrawImage(gAmmoIcons[pPlayer.weaponAmmo], (304 - 320, -8 + ammoYoffs[pPlayer.weaponAmmo]), DI_ITEM_RELCENTER, scale:(scale, scale));
 			}
 
-			bool reloadableWeapon = pPlayer.curWeapon == 3 && !pPlayer.powerupCheck(Blood.kPwUpTwoGuns);
+			bool reloadableWeapon = foreignAmmo == -2 && pPlayer.curWeapon == 3 && !pPlayer.powerupCheck(Blood.kPwUpTwoGuns);
 			if (!reloadableWeapon || (reloadableWeapon && !cl_showmagamt))
 			{
 				DrawStatNumber("%3d", num, "SBarNumberAmmo", 267 - 320, 187 - 200, 0, 0);

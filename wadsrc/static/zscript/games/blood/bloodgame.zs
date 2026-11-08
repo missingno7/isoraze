@@ -71,6 +71,8 @@ struct PACKINFO // not native!
 
 class BloodPlayer : CorePlayer native
 {
+	// -2 uses native Blood HUD behavior; -1 is an ammo-less foreign weapon.
+	native int GetForeignWeaponAmmo();
 	native int GetHealth(); // health is stored in the XSPRITE which cannot be safely exported to scripting at the moment due to pending refactoring.
 	native int powerupCheck(int pwup);
 

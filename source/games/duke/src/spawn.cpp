@@ -39,6 +39,7 @@ source as it is released.
 #include "automap.h"
 #include "dukeactor.h"
 #include "interpolate.h"
+#include "games/superset/duke_weapons.h"
 #include "vm.h"
 
 BEGIN_DUKE_NS
@@ -266,6 +267,8 @@ bool initspriteforspawn(DDukeActor* act)
 
 DDukeActor* spawn(DDukeActor* actj, PClassActor * cls)
 {
+	DDukeActor* foreign = nullptr;
+	if (actj && cls && Superset::SpawnDukeWeaponEffect(actj, cls, foreign)) return foreign;
 	if (actj && cls)
 	{
 		auto spawned = CreateActor(actj->sector(), actj->spr.pos, cls, 0, DVector2(0, 0), nullAngle, 0., 0., actj, 0);

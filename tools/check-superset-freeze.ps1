@@ -71,8 +71,12 @@ cl_nostartscreens=true
         # after thaw. Allow that sequence and standing up before expecting melee.
         'load freeze-frozen', 'wait 4', 'superset_enemy_check guard', 'wait 300', 'save freeze-thawed "Timed thaw and resumed AI"', 'wait 8',
         'load freeze-start', 'wait 4', 'superset_enemy_check guard', 'superset_freeze_check burn', 'wait 4',
-        'save freeze-burning "Independent burning and paused first frame"', 'wait 2', 'screenshot',
-        'superset_freeze_check thaw', 'wait 4', 'save freeze-burnresumed "Deferred first frame resumed"', 'wait 8',
+        'save freeze-burning "Fire thaws and native burning AI resumes"', 'wait 2', 'screenshot',
+        'superset_freeze_check freeze', 'wait 4', 'save freeze-extinguished "Freezing extinguishes native burning form"',
+        'wait 15', 'save freeze-extinguishedheld "Extinguished statue remains paused"', 'wait 2',
+        'map navigation.map', 'wait 60', 'load freeze-extinguished', 'wait 4', 'gc full',
+        'save freeze-extinguishedrestored "Extinguished freeze survives save and GC"', 'wait 2',
+        'superset_freeze_check ignite', 'wait 4', 'save freeze-burnresumed "Fire thaws the restored statue"', 'wait 8',
         'load freeze-start', 'wait 4', 'superset_freeze_check responses', 'wait 4', 'quit')
     Write-SupersetCheckScript -Commands $commands -ScriptPath $script
     $start = [Diagnostics.ProcessStartInfo]::new()
@@ -133,10 +137,29 @@ cl_nostartscreens=true
     }
     $burning = Snapshot $caseRoot burning
     $resumed = Snapshot $caseRoot burnresumed
-    if ($burning.Body['superset.freeze_time'] -le 0 -or $burning.State.sprite.lotag -ne 241 -or $burning.State.xsprite.burntime -le 0 -or
-        !$burning.Seq.pendingupdate -or $resumed.Body['superset.freeze_time'] -gt 0 -or $resumed.Seq.pendingupdate -or
-        $resumed.Body.sprite.picnum -eq $burning.Body.sprite.picnum) { throw "$player did not preserve independent burn and deferred SEQ resume; inspect $log" }
+    foreach ($snapshot in @($burning, $resumed)) {
+        if (!$snapshot.Body -or $snapshot.Body['superset.freeze_time'] -gt 0 -or
+            $snapshot.State.xsprite.burntime -le 0 -or $null -ne $snapshot.Body['superset.freeze_source'] -or
+            $snapshot.Body.sprite.pal -ne $snapshot.State.sprite.pal -or $snapshot.Seq.pendingupdate) {
+            throw "$player fire did not thaw and resume native AI/SEQ; inspect $log"
+        }
+    }
+    if ($burning.State.sprite.lotag -ne 241) { throw "$player did not enter native burning zombie AI" }
+    $extinguished = Snapshot $caseRoot extinguished
+    foreach ($name in @('extinguished', 'extinguishedheld', 'extinguishedrestored')) {
+        $snapshot = Snapshot $caseRoot $name
+        if (!$snapshot.Body -or $snapshot.Body['superset.freeze_time'] -le 0 -or
+            $snapshot.State.sprite.lotag -ne 203 -or $snapshot.State.xsprite.burntime -gt 0 -or
+            $null -ne $snapshot.State.xsprite.burnsource -or
+            $snapshot.State.xsprite.health -ne $extinguished.State.xsprite.health -or
+            $snapshot.Seq.seqid -ne $extinguished.Seq.seqid -or
+            $snapshot.Seq.frameindex -ne $extinguished.Seq.frameindex -or
+            $snapshot.Seq.timecounter -ne $extinguished.Seq.timecounter -or
+            $snapshot.State.xsprite.aistate -ne $extinguished.State.xsprite.aistate) {
+            throw "$player freezing did not extinguish native burning AI or preserve that state; inspect $log"
+        }
+    }
     if (!(Select-String -LiteralPath $log -SimpleMatch 'Superset freeze responses: PASS')) { throw "$player response checks failed; inspect $log" }
-    Write-Output "${player}: PASS (native freeze projectiles, paused AI/SEQ, save/GC, shatter, timed thaw, independent Cold/fire responses)"
+    Write-Output "${player}: PASS (native freeze projectiles, paused AI/SEQ, save/GC, shatter, timed thaw, freezing extinguishes, fire thaws)"
 }
 Write-Output "Artifacts: $runRoot"

@@ -34,6 +34,7 @@ source as it is released.
 
 
 #include "ns.h"
+#include "games/superset/duke_weapons.h"
 #include "global.h"
 #include "mapinfo.h"
 #include "dukeactor.h"
@@ -197,7 +198,7 @@ double hitawall(DDukePlayer* p, walltype** hitw)
 //
 //---------------------------------------------------------------------------
 
-DDukeActor* aim(DDukeActor* actor, int abase, bool force, bool* b)
+static DCoreActor* AimActor(DDukeActor* actor, int abase, bool force, bool* b)
 {
 	DAngle aang = mapangle(abase);
 
@@ -220,16 +221,14 @@ DDukeActor* aim(DDukeActor* actor, int abase, bool force, bool* b)
 			double vel = 1024, zvel = 0;
 			setFreeAimVelocity(vel, zvel, plr->getPitchWithView(), 16.);
 
-			HitInfo hit{};
+			HitInfoBase hit{};
 			hitscan(actor->getPosWithOffsetZ().plusZ(4), actor->sector(), DVector3(actor->spr.Angles.Yaw.ToVector() * vel, zvel * 64), hit, CLIPMASK1);
 
-			if (hit.actor() != nullptr)
+			if (hit.hitActor && (Superset::IsDukeWeaponActor(actor) ? Superset::IsBloodDirectAimTarget(hit.hitActor) :
+				isIn(hit.hitActor->spr.statnum, { STAT_PLAYER, STAT_DUMMYPLAYER, STAT_ACTOR, STAT_ZOMBIEACTOR })))
 			{
-				if (isIn(hit.actor()->spr.statnum, { STAT_PLAYER, STAT_DUMMYPLAYER, STAT_ACTOR, STAT_ZOMBIEACTOR }))
-				{
-					if (b) *b = true;
-					return hit.actor();
-				}
+				if (b) *b = true;
+				return hit.hitActor;
 			}
 		}
 
@@ -261,7 +260,7 @@ DDukeActor* aim(DDukeActor* actor, int abase, bool force, bool* b)
 
 		}
 	}
-	DDukeActor* aimed = nullptr;
+	DCoreActor* aimed = nullptr;
 	//	  if(actor->isPlayer() && ps[actor->PlayerIndex()].aim_mode) return -1;
 
 	if (!isRR() && actor->isPlayer())
@@ -291,23 +290,23 @@ DDukeActor* aim(DDukeActor* actor, int abase, bool force, bool* b)
 		if (aimed)
 			break;
 
-		DukeStatIterator it(aimstats[k]);
-		while (auto act = it.Next())
+		auto consider = [&](const Superset::DukeAimCandidate& target)
 		{
-			if (act->spr.scale.X > 0 && act->spr.extra >= 0 && (act->spr.cstat & (CSTAT_SPRITE_BLOCK_ALL | CSTAT_SPRITE_INVISIBLE)) == CSTAT_SPRITE_BLOCK_ALL)
-				if (badguy(act) || k < 2)
+			auto act = target.actor;
+			if (act->spr.scale.X > 0 && target.alive && (act->spr.cstat & (CSTAT_SPRITE_BLOCK_ALL | CSTAT_SPRITE_INVISIBLE)) == CSTAT_SPRITE_BLOCK_ALL)
+				if (target.enemy || k < 2)
 				{
-					if (badguy(act) || act->isPlayer())
+					if (target.enemy || target.player)
 					{
-						if (act->isPlayer() &&
+						if (target.player &&
 							(isRR() && ud.ffire == 0) &&
 							ud.coop == 1 &&
 							actor->isPlayer() &&
 							actor != act)
-							continue;
+							return;
 
-						if (gotshrinker && act->spr.scale.X < 0.46875 && !(act->flags1 & SFLAG_SHRINKAUTOAIM)) continue;
-						if (gotfreezer && act->spr.pal == 1) continue;
+						if (gotshrinker && target.shrinkRejected) return;
+						if (gotfreezer && target.frozen) return;
 					}
 
 					DVector2 vv = act->spr.pos.XY() - actor->spr.pos.XY();
@@ -327,7 +326,7 @@ DDukeActor* aim(DDukeActor* actor, int abase, bool force, bool* b)
 								}
 								else check = 1;
 
-								int cans = cansee(act->spr.pos.plusZ(-32 + act->IntVar(NAME_aimoffset)), act->sector(), actor->spr.pos.plusZ(-32), actor->sector());
+								int cans = cansee(act->spr.pos.plusZ(target.sightOffset), act->sector(), (Superset::IsDukeWeaponActor(actor) ? actor->getPosWithOffsetZ().plusZ(8) : actor->spr.pos.plusZ(-32)), actor->sector());
 
 								if (check && cans)
 								{
@@ -337,10 +336,29 @@ DDukeActor* aim(DDukeActor* actor, int abase, bool force, bool* b)
 							}
 						}
 				}
+		};
+		if (Superset::IsDukeWeaponActor(actor)) Superset::ForEachBloodAimTarget(k, consider);
+		else
+		{
+			DukeStatIterator it(aimstats[k]);
+			while (auto act = it.Next()) consider({act, !!badguy(act), act->isPlayer(), act->spr.extra >= 0,
+				act->spr.scale.X < .46875 && !(act->flags1 & SFLAG_SHRINKAUTOAIM), act->spr.pal == 1,
+				-32. + act->IntVar(NAME_aimoffset)});
 		}
 	}
 
 	return aimed;
+}
+
+DDukeActor* aim(DDukeActor* actor, int abase, bool force, bool* direct)
+{
+	return dyn_cast<DDukeActor>(AimActor(actor, abase, force, direct));
+}
+
+DCoreActor* AimHitscanTarget(DDukeActor* actor, DDukeActor* weapon, double angle, bool* direct)
+{
+	if (!weapon || (weapon->flags1 & SFLAG_NOAUTOAIM)) return nullptr;
+	return AimActor(actor, int((angle > 0 ? angle : weapon->FloatVar(NAME_autoaimangle)) * (512 / 90.)), (weapon->flags1 & SFLAG_FORCEAUTOAIM), direct);
 }
 
 // This is what aim should be. 

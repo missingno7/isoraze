@@ -22,6 +22,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 //-------------------------------------------------------------------------
 
 #include "ns.h"	// Must come before everything else!
+#include "games/superset/duke_weapons.h"
 
 #include "build.h"
 #include "g_input.h"
@@ -440,7 +441,7 @@ void GameInterface::Ticker()
 		{
 			const auto pPlayer = getPlayer(i);
 			viewBackupView(pPlayer);
-			playerProcess(pPlayer);
+			playerProcess(pPlayer, nullptr, Superset::BloodMapWeaponServices(pPlayer));
 		}
 
 		trProcessBusy();
@@ -780,6 +781,12 @@ DEFINE_ACTION_FUNCTION(_BloodPlayer, GetHealth)
 {
 	PARAM_SELF_STRUCT_PROLOGUE(DBloodPlayer);
 	ACTION_RETURN_INT(self->GetActor()->xspr.health);
+}
+
+DEFINE_ACTION_FUNCTION(_BloodPlayer, GetForeignWeaponAmmo)
+{
+	PARAM_SELF_STRUCT_PROLOGUE(DBloodPlayer);
+	ACTION_RETURN_INT(Superset::BloodMapForeignWeaponAmmo(self));
 }
 
 DEFINE_ACTION_FUNCTION_NATIVE(_BloodPlayer, powerupCheck, powerupCheck)

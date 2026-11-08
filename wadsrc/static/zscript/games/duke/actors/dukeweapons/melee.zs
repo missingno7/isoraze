@@ -33,9 +33,11 @@ class DukeMeleeAttack : DukeActor
 			ang = (pactor.pos.XY - pos.XY).Angle();
 		}
 
-		Raze.hitscan(pos, sectp, (ang.ToVector() * vel, zvel * 64), hit, CLIPMASK1);
+		bool shared = actor.TraceSharedHitscan(pos, (ang.ToVector() * vel, zvel * 64), hit);
+		if (!shared)
+			Raze.hitscan(pos, sectp, (ang.ToVector() * vel, zvel * 64), hit, CLIPMASK1);
 
-		if ((ud.mapflags & MFLAG_ALLSECTORTYPES) && hit.hitSector != nullptr && 
+		if (!shared && (ud.mapflags & MFLAG_ALLSECTORTYPES) && hit.hitSector != nullptr &&
 			((hit.hitSector.lotag == ST_160_FLOOR_TELEPORT && zvel > 0) || (hit.hitSector.lotag == ST_161_CEILING_TELEPORT && zvel < 0))
 			&& hit.hitActor == nullptr && hit.hitWall == nullptr)
 		{
@@ -88,6 +90,7 @@ class DukeMeleeAttack : DukeActor
 				}
 
 
+				if (actor.SharedHitscanContact(hit, wpn)) return true;
 				if (hit.hitActor && !Duke.isaccessswitch(hit.hitactor.spritetexture()))
 				{
 					let da = DukeActor(hit.hitActor);
@@ -108,7 +111,7 @@ class DukeMeleeAttack : DukeActor
 					}
 				}
 			}
-			else if (p && zvel > 0 && hit.hitSector.lotag == 1)
+			else if (!shared && p && zvel > 0 && hit.hitSector.lotag == 1)
 			{
 				let splash = p.actor.spawn("DukeWaterSplash");
 				if (splash)

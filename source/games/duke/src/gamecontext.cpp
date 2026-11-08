@@ -19,6 +19,8 @@ extern TArray<ClusterDef> clusters;
 namespace Duke3d
 {
 void SerializeGameVars(FSerializer& arc);
+void InitWeaponOrder(int);
+void SetDispatcher();
 namespace
 {
 struct ConSource { FString name, text; };
@@ -279,6 +281,8 @@ void InitSecondaryDukeProgram(const char* rootCon)
 		GC::WriteBarrier(players[i]);
 	}
 	loadcons();
+	SetDispatcher();
+	InitWeaponOrder(0);
 	bool isolated = ::g_gameType == primaryFlags && gameinfo.gametype == primaryInfoFlags &&
 		mapList.Size() == primaryMapCount && ::volumes.Size() == primaryVolumeCount && ::clusters.Size() == primaryClusterCount &&
 		soundEngine->GetNumSounds() == primarySoundCount;

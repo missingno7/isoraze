@@ -107,6 +107,7 @@ void DDukePlayer::Serialize(FSerializer& arc)
 	arc("bloodcombat", bloodCombat);
 	arc("bloodmovement", bloodMovement)("bloodpublishedhealth", bloodPublishedHealth);
 	arc("superset.weapon_mode", supersetWeaponMode)("superset.stowed_blood_weapon", supersetStowedBloodWeapon);
+	arc("superset.foreign_weapons_initialized", supersetForeignWeaponsInitialized);
 	arc.Array("gotweapon", gotweapon, MAX_WEAPONS)
 		("pals", pals)
 		("fric", fric)

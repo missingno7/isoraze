@@ -39,6 +39,8 @@ bool Freeze(DCoreActor* actor, DCoreActor* source, int clocks)
 		!body->IntVar(FName("supersetfreezable"))) return false;
 	// Duke's already-frozen projectile gate does not refresh the thaw timer.
 	if (IsFrozen(body)) return true;
+	Extinguish(body);
+	body->spr.setspritetexture(state->spr.spritetexture());
 	body->supersetFreezeTime = clocks;
 	if (auto world = Mashup::WorldSoundActor(source)) source = world;
 	body->supersetFreezeSource = source;
@@ -47,6 +49,35 @@ bool Freeze(DCoreActor* actor, DCoreActor* source, int clocks)
 	body->spr.pal = 1; // Native Duke projectile/autoaim identity; artwork uses Blood cold.plu.
 	Duke3d::S_PlayActorSound(SOMETHINGFROZE, body);
 	return true;
+}
+
+bool Extinguish(DCoreActor* actor)
+{
+	if (!IsActive() || !actor) return false;
+	if (HasBloodEnemy(actor))
+	{
+		auto state = BloodState(actor);
+		if (!state || !state->IsDudeActor() || !state->xspr.health) return false;
+		state->xspr.burnTime = 0;
+		state->SetBurnSource(nullptr);
+		Blood::evKillActor(state, Blood::kCallbackFXFlameLick);
+		// The shared Blood receiver currently supports the axe zombie. Its
+		// burning AI is a separate native type, not a consequence of burnTime.
+		// Restore its ordinary brain without healing or resetting its target.
+		if (state->spr.type == Blood::kDudeBurningZombieAxe)
+		{
+			state->spr.type = Blood::kDudeZombieAxeNormal;
+			Blood::aiNewState(state, &Blood::zombieAGoto);
+		}
+		return true;
+	}
+	if (auto duke = dyn_cast<Duke3d::DDukeActor>(actor))
+	{
+		duke->supersetBurnTime = duke->supersetBurnFxTime = 0;
+		duke->supersetBurnSource = nullptr;
+		return true;
+	}
+	return false;
 }
 
 bool Thaw(DCoreActor* actor)
@@ -133,6 +164,7 @@ CCMD(superset_freeze_check)
 	if (!state) return;
 	if (!stricmp(argv[1], "freeze")) { Freeze(body, player->GetActor(), int(Units::FromSimulationSteps(138))); return; }
 	if (!stricmp(argv[1], "thaw")) { Thaw(body); return; }
+	if (!stricmp(argv[1], "ignite")) { Ignite(body, player->GetActor(), 2400); return; }
 	if (!stricmp(argv[1], "toss"))
 	{
 		flightIndex = body->GetIndex(); flightStart = PlayClock;

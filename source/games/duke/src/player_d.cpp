@@ -38,6 +38,7 @@ source as it is released.
 #include "gamevar.h"
 #include "dukeactor.h"
 #include "mashup_player.h"
+#include "games/superset/duke_weapons.h"
 
 BEGIN_DUKE_NS 
 
@@ -167,7 +168,8 @@ void selectweapon_d(DDukePlayer* const p, int weap) // playernum, weaponnum
 					if (k == -1) k = 9;
 					else if (k == 10) k = 0;
 
-					if (p->gotweapon[k] && p->ammo_amount[k] > 0)
+					if (p->gotweapon[k] && p->ammo_amount[k] > 0 &&
+						(!Superset::IsDukeWeaponActor(pact) || Superset::DukeWeaponSupported(k)))
 					{
 						if (isPlutoPak())	// JBF 20040116: so we don't select grower with v1.3d
 						{
@@ -284,6 +286,7 @@ void selectweapon_d(DDukePlayer* const p, int weap) // playernum, weaponnum
 					p->subweapon &= ~(1 << GROW_WEAPON);
 			}
 
+			if (Superset::IsDukeWeaponActor(pact) && !Superset::DukeWeaponSupported(j)) return;
 			if (p->holster_weapon)
 			{
 				p->cmd.ucmd.actions |= SB_HOLSTER;

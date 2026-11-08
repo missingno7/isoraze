@@ -105,9 +105,14 @@ struct MovementWorldServices
 	virtual DCoreActor* CollisionOwner(DBloodActor*) const { return nullptr; }
 };
 
-struct PlayerWorldServices : MovementWorldServices
+struct PlayerWeaponServices
 {
 	virtual bool UseBloodWeapons() const { return true; }
+	virtual void ProcessWeapons(DBloodPlayer*) {}
+};
+
+struct PlayerWorldServices : MovementWorldServices, PlayerWeaponServices
+{
 	virtual void UseAction(DBloodPlayer* player) = 0;
 	virtual void CollectPickups(DBloodPlayer* player) = 0;
 	virtual bool CanPickUp(DBloodActor* item) const = 0;
@@ -165,8 +170,8 @@ void playerStart(int nPlayer, int bNewLevel = 0);
 void playerReset(DBloodPlayer* pPlayer);
 void playerInit(int nPlayer, unsigned int a2);
 void CheckPickUp(DBloodPlayer* pPlayer, PlayerWorldServices* world = nullptr);
-void ProcessInput(DBloodPlayer* pPlayer, PlayerWorldServices* world = nullptr);
-void playerProcess(DBloodPlayer* pPlayer, PlayerWorldServices* world = nullptr);
+void ProcessInput(DBloodPlayer* pPlayer, PlayerWorldServices* world = nullptr, PlayerWeaponServices* weapons = nullptr);
+void playerProcess(DBloodPlayer* pPlayer, PlayerWorldServices* world = nullptr, PlayerWeaponServices* weapons = nullptr);
 DBloodActor* playerFireMissile(DBloodPlayer* pPlayer, double xyoff, const DVector3& vec, int nType);
 DBloodActor* playerFireThing(DBloodPlayer* pPlayer, double xyoff, double zvel, int thingType, double nSpeed);
 void playerFrag(DBloodPlayer* pKiller, DBloodPlayer* pVictim);

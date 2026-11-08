@@ -1498,8 +1498,9 @@ int ActionScan(DBloodPlayer* pPlayer, HitInfo* out)
 //
 //---------------------------------------------------------------------------
 
-void ProcessInput(DBloodPlayer* pPlayer, PlayerWorldServices* world)
+void ProcessInput(DBloodPlayer* pPlayer, PlayerWorldServices* world, PlayerWeaponServices* weapons)
 {
+	if (!weapons) weapons = world;
 	enum
 	{
 		Item_MedKit = 0,
@@ -1520,7 +1521,8 @@ void ProcessInput(DBloodPlayer* pPlayer, PlayerWorldServices* world)
 		pPlayer->restTime = 0;
 	else if (pPlayer->restTime >= 0)
 		pPlayer->restTime += 4;
-	if (!world || world->UseBloodWeapons()) WeaponProcess(pPlayer);
+	if (!weapons || weapons->UseBloodWeapons()) WeaponProcess(pPlayer);
+	else weapons->ProcessWeapons(pPlayer);
 	if (actor->xspr.health == 0)
 	{
 		// force synchronised input upon death.
@@ -1748,7 +1750,7 @@ void ProcessInput(DBloodPlayer* pPlayer, PlayerWorldServices* world)
 		if (pPlayer->packSlots[0].curAmount > 0)
 			packUseItem(pPlayer, 0);
 	}
-	if ((!world || world->UseBloodWeapons()) && (pInput->actions & SB_HOLSTER))
+	if ((!weapons || weapons->UseBloodWeapons()) && (pInput->actions & SB_HOLSTER))
 	{
 		pInput->actions &= ~SB_HOLSTER;
 		if (pPlayer->curWeapon)
@@ -1761,7 +1763,7 @@ void ProcessInput(DBloodPlayer* pPlayer, PlayerWorldServices* world)
 	else CheckPickUp(pPlayer);
 }
 
-void playerProcess(DBloodPlayer* pPlayer, PlayerWorldServices* world)
+void playerProcess(DBloodPlayer* pPlayer, PlayerWorldServices* world, PlayerWeaponServices* weapons)
 {
 	DBloodActor* actor = pPlayer->GetActor();
 	POSTURE* pPosture = &pPlayer->pPosture[pPlayer->lifeMode][pPlayer->posture];
@@ -1787,7 +1789,7 @@ void playerProcess(DBloodPlayer* pPlayer, PlayerWorldServices* world)
 				ChangeActorSect(actor, pSector);
 		}
 	}
-	ProcessInput(pPlayer, world);
+	ProcessInput(pPlayer, world, weapons ? weapons : world);
 	pPlayer->zViewVel = interpolatedvalue(pPlayer->zViewVel, actor->vel.Z, FixedToFloat(0x7000));
 	double dz = pPlayer->GetActor()->spr.pos.Z - pPosture->eyeAboveZ - pPlayer->zView;
 	if (dz > 0)
