@@ -52,8 +52,10 @@ Use `-iwad` for Duke data and `-blooddata` for the isolated Blood bank:
 
 The default player remains Duke. Add `-superset-player caleb` to select native
 Blood movement, camera inertia, jumping/crouching and the native pitchfork.
+Blood shotgun/Tommy gun and selected native pickups are available through the
+explicit spawn commands described below; Duke pickups are not replaced yet.
 `-superset-player duke` retains Duke movement; the optional `+mashup_combat 1`
-pitchfork experiment is also available with Duke. The HUD and map mechanisms
+Blood weapon/inventory mode is also available with Duke. The HUD and map mechanisms
 still use the Duke adapter. Only Duke map data is accepted by this first map
 adapter; Blood-map loading and independent loadout/enemy selections remain work
 for later milestones. The current Caleb adapter supports single-player.
@@ -65,7 +67,7 @@ and resolved Blood resource bank digest. Loading checks this metadata before
 selecting a map or restoring actors. Installation paths do not enter the digests.
 Full primary-mod dependency tracking is still pending; the current manifest
 fingerprints the primary Duke archive and secondary bank, not every loose Duke
-override or CON mod. The optional pitchfork selection is saved with the session.
+override or CON mod. The optional Blood weapon mode is saved with the session.
 
 Legacy game flags currently describe the Duke map adapter for existing native
 code. They do not identify the combined frontend, and are never formed by ORing
@@ -109,8 +111,8 @@ This is an incremental native adapter, not the final shared actor/AI model.
 
 No scale compensation is applied: initial idle eye height is 56.6875 world units
 and horizontal radius is 12. Native Blood SEQ state and the selected controller
-are serialized with the session. Save schema is 2; rules revision is now 4
-after integrating incoming Caleb damage and Blood object events. Earlier
+are serialized with the session. Save schema is 2; rules revision is now 5
+after integrating native Blood pickups and shotgun/Tommy gun vectors. Earlier
 Superset bootstrap saves are intentionally incompatible with this experimental
 schema. The legacy native game save signatures remain separate.
 
@@ -431,6 +433,74 @@ checks were followed by an ordinary Duke E1L1 run without the secondary bank
 (`runtime-20261108T013215115`), which also passed. These
 remain component checks on the local Plutonium Pak data, not full playthroughs
 or proof of arbitrary CON/mod compatibility.
+
+## Native Blood pickups and hitscan guns
+
+Superset now uses native Blood weapon and pickup state for the pitchfork,
+sawed-off shotgun and Tommy gun. Native QAV callbacks retain weapon selection,
+raising/lowering, primary/alternate firing, spread, cadence, ammunition use,
+reloads and switching after ammunition runs out. Bullet vectors submit shared
+Q4 Physical damage through Duke hit/CON callbacks, preserving native Blood
+damage amounts. They do not consume Duke ammunition. Flesh impacts use native
+Blood sound/FX; full material effects and autoaim against Duke actors remain
+integration work. Manual aiming works through the native hitscan path.
+
+Caleb enables this inventory automatically. Duke can use the same Blood weapons
+and pickups with `+mashup_combat 1` under `-superset`. This toggle still enables
+only the pitchfork in the older `-bloodduke` experiment. Blood armor is consumed
+by Caleb's native damage receiver; the optional Duke movement/combat profile
+stores it but still uses Duke's incoming damage/shield receiver. That unfinished
+armor adapter is not a decided rule for character-specific armor restrictions.
+
+For now, place actual Blood items through the console, for example:
+
+```text
+superset_spawn_pickup shotgun
+superset_spawn_pickup tommy
+superset_spawn_pickup shells
+superset_spawn_pickup drum
+superset_spawn_pickup bodyarmor
+```
+
+The command without arguments lists supported names: `shotgun`, `tommy`,
+`shells`, `shellbox`, `bullets`, `drum`, `medpouch`, `essence`, `lifeseed`,
+`redpotion`, `basicarmor`, `bodyarmor`, `firearmor`, `spiritarmor`, `superarmor`.
+Items spawn on the floor ahead and retain native artwork, collection distance,
+line-of-sight requirements, amounts, health caps and full-inventory refusal.
+Native item callbacks apply inventory changes; environment services handle
+collection policy and removal without starting Blood map triggers in a Duke
+map. Spawned items have no respawn configuration. Other weapons, powerups and
+automatic Duke pickup conversion are pending.
+
+These are native Blood amounts: a shotgun grants 8 shells, a Tommy gun grants
+50 bullets, Life Essence heals 20 and Medicine Pouch heals 50 up to 100 health.
+Body Armor grants its native physical pool; Super Armor supplies all three
+pools. Their raw values remain Q4 units. Whether converted Duke pickups should
+grant Blood amounts or preserve Duke amounts remains an open gameplay decision.
+The extra readout displays the active Blood weapon/ammunition and Caleb's three
+armor pools. The remaining status bar still belongs to the Duke map adapter.
+
+`check-superset-inventory.ps1` uses the existing asset-free navigation fixture
+with monsters disabled. It resets the player to a flat room between placements;
+normal movement input collects actual items. Native fire input and temporary
+Duke targets verify both fire modes, vector counts/types, ammo use and damage
+ownership. The test checks health-cap refusal and restores weapons, ammunition,
+armor, health and an uncollected item across save/load. Its setup commands are
+diagnostics, not alternate inventory implementations. `mashup_combat_check`
+resets the native Blood inventory and should only be used in disposable checks.
+
+```powershell
+./tools/check-superset-inventory.ps1 -DukeGrp 'D:/games/duke/duke3d.grp' -BloodDirectory 'D:/games/blood' -PythonPath python -EnableSound
+```
+
+Verified on 2026-11-08: Release build and both character profiles passed the
+inventory/fire/save checks with audio (`inventory-20261108T020934052`).
+Shotgun/readout screenshots were inspected. Caleb E1L1 and a fresh E1L2 load
+passed the existing movement, fractional damage, armor, death/restart, shared
+FX and save checks (`runtime-20261108T021142379`). Original Duke E1L1 and Blood
+E1M1 passed runtime/save regressions (`runtime-20261108T021249822`). These are
+component checks on local Plutonium Pak data, not stock-map playthroughs or
+proof of automatic pickup conversion and arbitrary CON compatibility.
 
 ## Build and regression checks
 

@@ -103,6 +103,8 @@ struct PlayerWorldServices
 	virtual int CheckRoomLink(DBloodActor* actor) = 0;
 	virtual void UseAction(DBloodPlayer* player) = 0;
 	virtual void CollectPickups(DBloodPlayer* player) = 0;
+	virtual bool CanPickUp(DBloodActor* item) const = 0;
+	virtual void PickupTaken(DBloodPlayer* player, DBloodActor* item) = 0;
 	virtual void PlayerDied(DBloodPlayer* player) = 0;
 	virtual void RestartPlayer(DBloodPlayer* player) = 0;
 };
@@ -155,7 +157,7 @@ void playerCorrectInertia(DBloodPlayer* pPlayer, const DVector3& oldpos);
 void playerStart(int nPlayer, int bNewLevel = 0);
 void playerReset(DBloodPlayer* pPlayer);
 void playerInit(int nPlayer, unsigned int a2);
-void CheckPickUp(DBloodPlayer* pPlayer);
+void CheckPickUp(DBloodPlayer* pPlayer, PlayerWorldServices* world = nullptr);
 void ProcessInput(DBloodPlayer* pPlayer, PlayerWorldServices* world = nullptr);
 void playerProcess(DBloodPlayer* pPlayer, PlayerWorldServices* world = nullptr);
 DBloodActor* playerFireMissile(DBloodPlayer* pPlayer, double xyoff, const DVector3& vec, int nType);

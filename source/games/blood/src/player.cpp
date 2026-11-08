@@ -1324,7 +1324,7 @@ bool PickupWeapon(DBloodPlayer* pPlayer, DBloodActor* weaponactor)
 //
 //---------------------------------------------------------------------------
 
-void PickUp(DBloodPlayer* pPlayer, DBloodActor* actor)
+void PickUp(DBloodPlayer* pPlayer, DBloodActor* actor, PlayerWorldServices* world)
 {
 	const char* msg = nullptr;
 	int nType = actor->spr.type;
@@ -1353,13 +1353,14 @@ void PickUp(DBloodPlayer* pPlayer, DBloodActor* actor)
 	}
 
 	if (!pickedUp) return;
-	else if (actor->hasX())
+	else if (!world && actor->hasX())
 	{
 		if (actor->xspr.Pickup)
 			trTriggerSprite(actor, kCmdSpritePickup);
 	}
 
-	if (!actCheckRespawn(actor))
+	if (world) world->PickupTaken(pPlayer, actor);
+	else if (!actCheckRespawn(actor))
 		actPostSprite(actor, kStatFree);
 
 	pPlayer->pickupEffect = 30;
@@ -1375,7 +1376,7 @@ void PickUp(DBloodPlayer* pPlayer, DBloodActor* actor)
 //
 //---------------------------------------------------------------------------
 
-void CheckPickUp(DBloodPlayer* pPlayer)
+void CheckPickUp(DBloodPlayer* pPlayer, PlayerWorldServices* world)
 {
 	auto plActor = pPlayer->GetActor();
 	auto ppos = plActor->spr.pos;
@@ -1383,6 +1384,7 @@ void CheckPickUp(DBloodPlayer* pPlayer)
 	BloodStatIterator it(kStatItem);
 	while (auto itemactor = it.Next())
 	{
+		if (world && !world->CanPickUp(itemactor)) continue;
 		if (itemactor->spr.flags & 32)
 			continue;
 		double dx = abs(ppos.X - itemactor->spr.pos.X);
@@ -1406,7 +1408,7 @@ void CheckPickUp(DBloodPlayer* pPlayer)
 		if (cansee(ppos, pSector, itemactor->spr.pos, itemactor->sector())
 			|| cansee(ppos, pSector, DVector3(itemactor->spr.pos.XY(), top), itemactor->sector())
 			|| cansee(ppos, pSector, DVector3(itemactor->spr.pos.XY(), bottom), itemactor->sector()))
-			PickUp(pPlayer, itemactor);
+			PickUp(pPlayer, itemactor, world);
 	}
 }
 

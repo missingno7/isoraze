@@ -41,11 +41,17 @@ bool NativeBloodDamageKind(DamageKind kind, int& nativeKind)
 
 Damage BloodTineDamage(bool playerTarget)
 {
-	auto& vector = Blood::gVectorData[Blood::kVectorTine];
+	return BloodVectorDamage(Blood::kVectorTine, playerTarget);
+}
+
+Damage BloodVectorDamage(int vectorType, bool playerTarget)
+{
 	Damage damage {-1, DamageKind::Physical};
+	if (vectorType < 0 || vectorType >= Blood::kVectorMax) return damage;
+	auto& vector = Blood::gVectorData[vectorType];
 	if (!BloodDamageKind(vector.dmgType, damage.kind)) return damage;
 	// Native actFireVector uses Q4 points and halves tine damage to non-players.
-	damage.amount = Units::FromBloodHealth(vector.dmg << (playerTarget ? 4 : 3));
+	damage.amount = Units::FromBloodHealth(vector.dmg << (vectorType == Blood::kVectorTine && !playerTarget ? 3 : 4));
 	return damage;
 }
 

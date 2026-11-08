@@ -15,6 +15,8 @@ bool PrepareBloodMovement(DCorePlayer* player);
 bool TickBloodMovement(DCorePlayer* player);
 void FinishBloodMovement(DCorePlayer* player);
 void TickSharedObjects();
+bool BloodPickupSupported(int type);
+void CollectBloodPickups(DCorePlayer* player);
 void SerializeBloodControllerState(FSerializer& arc);
 void ClearBloodControllerState();
 ::GameInterface* CreateInterface();

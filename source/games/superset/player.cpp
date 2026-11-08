@@ -33,7 +33,7 @@ void AdvanceBloodSequences()
 Blood::DBloodActor* FindDiagnosticFx()
 {
 	Blood::BloodStatIterator it(Blood::kStatFX);
-	while (auto actor = it.Next()) if (actor->spr.hitag == 31018) return actor;
+	while (auto actor = it.Next()) if (actor->spr.intowner == 31018) return actor;
 	return nullptr;
 }
 struct MovementProbe
@@ -144,10 +144,14 @@ public:
 	}
 	int CheckRoomLink(Blood::DBloodActor*) override { return 0; } // Duke transports run in the world phase.
 	void UseAction(Blood::DBloodPlayer*) override { useRequested = true; }
-	void CollectPickups(Blood::DBloodPlayer*) override
+	void CollectPickups(Blood::DBloodPlayer* player) override
 	{
-		// Duke map pickups still execute their native touch handlers. Independent
-		// mixed pickup/inventory definitions are a subsequent gameplay milestone.
+		Blood::CheckPickUp(player, this);
+	}
+	bool CanPickUp(Blood::DBloodActor* item) const override { return BloodPickupSupported(item->spr.type); }
+	void PickupTaken(Blood::DBloodPlayer*, Blood::DBloodActor* item) override
+	{
+		if (!Blood::actCheckRespawn(item)) Blood::actPostSprite(item, Blood::kStatFree);
 	}
 	void PlayerDied(Blood::DBloodPlayer* player) override
 	{
@@ -188,6 +192,22 @@ void ApplyCalebImpulse(DCorePlayer* player, const DVector2& impulse)
 	auto blood = NativePlayer(player);
 	blood->GetActor()->vel += impulse;
 	Publish(static_cast<Duke3d::DDukePlayer*>(player), blood);
+}
+
+void CollectBloodPickups(DCorePlayer* player)
+{
+	if (!IsActive() || !Mashup::IsCombatPlayer(player)) return;
+	auto blood = NativePlayer(player);
+	if (!blood || blood->GetActor()->xspr.health == 0) return;
+	DukePlayerWorld world;
+	world.CollectPickups(blood);
+	if (!HasBloodMovement(player))
+	{
+		// Native Duke movement still owns its integer health facade in this
+		// profile. Blood pickup amounts/caps remain native Blood values.
+		auto duke = static_cast<Duke3d::DDukePlayer*>(player);
+		duke->GetActor()->spr.extra = blood->GetActor()->xspr.health >> 4;
+	}
 }
 
 bool HasBloodMovement(DCorePlayer* player)
@@ -366,7 +386,7 @@ CCMD(superset_fx_check)
 		fx = Blood::gFX.fxSpawnActor(Blood::FX_43, body->sector(), body->getPosWithOffsetZ());
 		if (fx)
 		{
-			fx->spr.hitag = 31018;
+			fx->spr.intowner = 31018;
 			fx->basePoint = fx->spr.pos;
 			fx->vel.X = .03125;
 			Blood::evPostActor(fx, 480, Blood::kCallbackRemove);

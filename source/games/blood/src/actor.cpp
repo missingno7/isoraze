@@ -2739,17 +2739,43 @@ static DBloodActor* actSpawnFloor(DBloodActor* actor)
 	return spawned;
 }
 
+static void SetupPickup(DBloodActor* actor, int type)
+{
+	auto setup = [&](const auto& data)
+	{
+		actor->spr.type = type;
+		actor->spr.setspritetexture(data.textureID());
+		actor->spr.shade = data.shade;
+		actor->spr.scale = DVector2(data.xrepeat * REPEAT_SCALE, data.yrepeat * REPEAT_SCALE);
+	};
+	if (type >= kItemWeaponBase && type < kItemWeaponMax) setup(gWeaponItemData[type - kItemWeaponBase]);
+	else if (type >= kItemAmmoBase && type < kItemAmmoMax) setup(gAmmoItemData[type - kItemAmmoBase]);
+	else setup(gItemData[type - kItemBase]);
+}
+
+DBloodActor* actSpawnPickup(sectortype* sector, const DVector3& pos, int type)
+{
+	if (!sector || !((type >= kItemWeaponBase && type < kItemWeaponMax) ||
+		(type >= kItemAmmoBase && type < kItemAmmoMax) || (type >= kItemBase && type < kItemMax))) return nullptr;
+	auto actor = actSpawnSprite(sector, pos, kStatItem, false);
+	if (!actor) return nullptr;
+	SetupPickup(actor, type);
+	actor->spr.inittype = type;
+	actor->spr.cstat &= ~CSTAT_SPRITE_BLOCK_ALL;
+	double top, bottom;
+	GetActorExtents(actor, &top, &bottom);
+	if (bottom >= actor->spr.pos.Z) actor->spr.pos.Z -= bottom - actor->spr.pos.Z;
+	actor->basePoint = actor->spr.pos;
+	return actor;
+}
+
 static DBloodActor* actDropAmmo(DBloodActor* actor, int nType)
 {
 	if (!actor) return nullptr;
 	if (actor->spr.statnum < kMaxStatus && nType >= kItemAmmoBase && nType < kItemAmmoMax)
 	{
 		auto act2 = actSpawnFloor(actor);
-		const AMMOITEMDATA* pAmmo = &gAmmoItemData[nType - kItemAmmoBase];
-		act2->spr.type = nType;
-		act2->spr.setspritetexture(pAmmo->textureID());
-		act2->spr.shade = pAmmo->shade;
-		act2->spr.scale = DVector2(pAmmo->xrepeat * REPEAT_SCALE, pAmmo->yrepeat * REPEAT_SCALE);
+		SetupPickup(act2, nType);
 		return act2;
 	}
 	return nullptr;
@@ -2761,11 +2787,7 @@ static DBloodActor* actDropWeapon(DBloodActor* actor, int nType)
 	if (actor->spr.statnum < kMaxStatus && nType >= kItemWeaponBase && nType < kItemWeaponMax)
 	{
 		auto act2 = actSpawnFloor(actor);
-		const WEAPONITEMDATA* pWeapon = &gWeaponItemData[nType - kItemWeaponBase];
-		act2->spr.type = nType;
-		act2->spr.setspritetexture(pWeapon->textureID());
-		act2->spr.shade = pWeapon->shade;
-		act2->spr.scale = DVector2(pWeapon->xrepeat * REPEAT_SCALE, pWeapon->yrepeat * REPEAT_SCALE);
+		SetupPickup(act2, nType);
 		return act2;
 	}
 	return nullptr;
@@ -2777,11 +2799,7 @@ static DBloodActor* actDropItem(DBloodActor* actor, int nType)
 	if (actor->spr.statnum < kMaxStatus && nType >= kItemBase && nType < kItemMax)
 	{
 		auto act2 = actSpawnFloor(actor);
-		const ITEMDATA* pItem = &gItemData[nType - kItemBase];
-		act2->spr.type = nType;
-		act2->spr.setspritetexture(pItem->textureID());
-		act2->spr.shade = pItem->shade;
-		act2->spr.scale = DVector2(pItem->xrepeat * REPEAT_SCALE, pItem->yrepeat * REPEAT_SCALE);
+		SetupPickup(act2, nType);
 		return act2;
 	}
 	return nullptr;

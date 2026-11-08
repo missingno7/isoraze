@@ -13,6 +13,8 @@
 #include "raze_sound.h"
 #include "games/superset/superset.h"
 #include "games/superset/damage.h"
+#include "v_draw.h"
+#include "v_text.h"
 
 CVAR(Bool, mashup_combat, false, 0)
 
@@ -23,6 +25,8 @@ namespace
 bool inputProbeActive = false;
 int inputProbeVectors = 0;
 int inputProbeTicks = 0, inputProbeFireTicks = 0;
+int inputProbeVectorTypes[Blood::kVectorMax] {};
+int weaponProbeWeapon = 0, weaponProbeAmmo = 0, weaponProbeBefore = 0, weaponProbeVector = 0;
 short inputProbeAmmo[Duke3d::MAX_WEAPONS] {};
 
 Blood::DBloodPlayer* Secondary(DCorePlayer* player)
@@ -152,6 +156,58 @@ CCMD(mashup_combat_check)
 		routing ? "PASS" : "FAIL", hits ? "PASS" : "FAIL", ownership ? "PASS" : "FAIL", self ? "PASS" : "FAIL", samples ? "PASS" : "FAIL");
 }
 
+CCMD(superset_weapon_input_check)
+{
+	if (!Superset::IsActive() || !CombatEnabled() || gamestate != GS_LEVEL) return;
+	auto duke = Duke3d::getPlayer(myconnectindex);
+	auto blood = Secondary(duke);
+	if (!blood) return;
+	auto body = duke->GetActor();
+	Duke3d::DDukeActor* target = nullptr;
+	Duke3d::DukeStatIterator it(MAXSTATUS - 2);
+	while (auto actor = it.Next()) if (actor->spr.hitag == 31019) { target = actor; break; }
+	if (argv.argc() == 4 && !stricmp(argv[1], "start"))
+	{
+		if (target) target->Destroy();
+		weaponProbeWeapon = !stricmp(argv[2], "shotgun") ? Blood::kWeapShotgun : Blood::kWeapTommyGun;
+		weaponProbeAmmo = weaponProbeWeapon == Blood::kWeapShotgun ? 2 : 3;
+		bool alternate = !stricmp(argv[3], "alternate");
+		weaponProbeVector = weaponProbeWeapon == Blood::kWeapShotgun ?
+			(alternate ? Blood::kVectorShellAP : Blood::kVectorShell) : (alternate ? Blood::kVectorTommyAP : Blood::kVectorTommyRegular);
+		weaponProbeBefore = blood->ammoCount[weaponProbeAmmo];
+		inputProbeActive = true;
+		inputProbeVectors = inputProbeTicks = inputProbeFireTicks = 0;
+		memset(inputProbeVectorTypes, 0, sizeof(inputProbeVectorTypes));
+		memcpy(inputProbeAmmo, duke->ammo_amount, sizeof(inputProbeAmmo));
+		auto pos = DVector3(blood->GetActor()->spr.pos.XY(), blood->zWeapon) + body->spr.Angles.Yaw.ToVector() * 32;
+		target = Duke3d::CreateActor(body->sector(), pos, PClass::FindActor("DukeLizTrooper"),
+			0, DVector2(3, 3), nullAngle, 0, 0, body, STAT_MISC);
+		if (target)
+		{
+			ChangeActorStat(target, MAXSTATUS - 2);
+			target->spr.cstat = CSTAT_SPRITE_BLOCK_HITSCAN | CSTAT_SPRITE_YCENTER | CSTAT_SPRITE_INVISIBLE;
+			target->spr.hitag = 31019;
+			target->flags2 |= SFLAG2_NODAMAGEPUSH;
+			target->flags3 |= SFLAG3_NOHITJIBS;
+			target->spr.extra = 5000;
+		}
+		return;
+	}
+	int spent = weaponProbeBefore - blood->ammoCount[weaponProbeAmmo];
+	bool ammo = spent > 0 && inputProbeVectors == spent * (weaponProbeWeapon == Blood::kWeapShotgun ? 16 : 1);
+	// Native weapons may switch automatically after firing their last round.
+	bool vectors = inputProbeActive && inputProbeFireTicks > 0 &&
+		inputProbeVectors > 0 && inputProbeVectorTypes[weaponProbeVector] == inputProbeVectors;
+	bool damage = target && target->hitextra > 0 && target->attackertype == Duke3d::DukeShotSparkClass && target->GetHitOwner() == body;
+	bool nativeAmmo = true;
+	for (unsigned i = 0; i < countof(inputProbeAmmo); ++i) nativeAmmo &= duke->ammo_amount[i] >= inputProbeAmmo[i];
+	Printf("Superset weapon input check: vectors=%s, Blood ammo=%s, Duke hit=%s, Duke ammo=%s (weapon=%d spent=%d vectors=%d hits=%d).\n",
+		vectors ? "PASS" : "FAIL", ammo ? "PASS" : "FAIL", damage ? "PASS" : "FAIL", nativeAmmo ? "PASS" : "FAIL",
+		weaponProbeWeapon, spent, inputProbeVectors, target ? int(target->hitextra) : -1);
+	inputProbeActive = false;
+	if (target) target->Destroy();
+}
+
 bool CombatEnabled()
 {
 	return (mashup_combat || Superset::CalebSelected()) && HasBloodResources() && isDuke() && !isRR() && numplayers == 1;
@@ -217,10 +273,12 @@ void PrepareCombat(DCorePlayer* player)
 		++inputProbeTicks;
 		if (blood->cmd.ucmd.actions & (SB_FIRE | SB_ALTFIRE)) ++inputProbeFireTicks;
 	}
-	// Only the pitchfork has a world adapter in this increment. Retain the native
-	// raise/lower, primary/alternate fire and QAV callback state machine.
+	// Keep unsupported missile/throwable weapons outside the active set until
+	// their world adapters exist. Selection and QAV transitions remain native.
 	int weapon = blood->cmd.ucmd.getNewWeapon();
-	if (weapon && weapon != Blood::kWeapPitchFork && weapon != WeaponSel_Next && weapon != WeaponSel_Prev)
+	bool supported = weapon == Blood::kWeapPitchFork || (Superset::IsActive() &&
+		(weapon == Blood::kWeapShotgun || weapon == Blood::kWeapTommyGun));
+	if (weapon && !supported && weapon != WeaponSel_Next && weapon != WeaponSel_Prev)
 		blood->cmd.ucmd.setNewWeapon(Blood::kWeapNone);
 	duke->quick_kick = duke->last_quick_kick = duke->knee_incs = 0;
 	duke->kickback_pic = duke->okickback_pic = 0;
@@ -238,6 +296,7 @@ void TickCombat(DCorePlayer* player)
 	auto duke = static_cast<Duke3d::DDukePlayer*>(player);
 	auto blood = Secondary(duke);
 	SyncPose(duke, blood);
+	Superset::CollectBloodPickups(player);
 	Blood::WeaponProcess(blood);
 	if ((blood->cmd.ucmd.actions & SB_HOLSTER) && blood->curWeapon) Blood::WeaponLower(blood);
 }
@@ -249,6 +308,18 @@ bool DrawCombat(DCorePlayer* player, double interpolation)
 	if (duke->over_shoulder_on || duke->newOwner || Duke3d::ud.cameraactor || duke->GetActor()->spr.extra <= 0) return true;
 	auto blood = Secondary(duke);
 	Blood::WeaponDraw(blood, duke->GetActor()->spr.shade, 160, 200, 0, nullAngle);
+	if (Superset::IsActive())
+	{
+		const char* name = blood->curWeapon == Blood::kWeapShotgun ? "Shotgun" : blood->curWeapon == Blood::kWeapTommyGun ? "Tommy gun" : "Pitchfork";
+		FString line = FStringf("Blood %s", name);
+		if (blood->weaponAmmo >= 0) line.AppendFormat("   Ammo %d", blood->ammoCount[blood->weaponAmmo]);
+		DrawText(twod, SmallFont, CR_WHITE, 6, 150, line.GetChars(), DTA_VirtualWidth, 320, DTA_VirtualHeight, 200, DTA_KeepRatio, true, TAG_DONE);
+		if (Superset::HasBloodMovement(player))
+		{
+			line.Format("Armor: Body %d  Fire %d  Spirit %d", blood->armor[0] >> 4, blood->armor[1] >> 4, blood->armor[2] >> 4);
+			DrawText(twod, SmallFont, CR_WHITE, 6, 158, line.GetChars(), DTA_VirtualWidth, 320, DTA_VirtualHeight, 200, DTA_KeepRatio, true, TAG_DONE);
+		}
+	}
 	return true;
 }
 
@@ -257,8 +328,11 @@ bool FireBloodVector(DCoreActor* source, double offset, double zoffset, DVector3
 	auto owner = Owner(source);
 	if (!owner) return false;
 	if (inputProbeActive) ++inputProbeVectors;
+	if (inputProbeActive && type >= 0 && type < Blood::kVectorMax) ++inputProbeVectorTypes[type];
 	// Never pass a Duke actor through Blood's typed HitInfo/trigger/damage path.
-	if (type != Blood::kVectorTine || direction.XY().LengthSquared() == 0) return true;
+	bool physical = type == Blood::kVectorTine || (Superset::IsActive() && (type == Blood::kVectorShell ||
+		type == Blood::kVectorShellAP || type == Blood::kVectorTommyRegular || type == Blood::kVectorTommyAP));
+	if (!physical || direction.XY().LengthSquared() == 0) return true;
 	auto& vector = Blood::gVectorData[type];
 	if (range < 0) range = vector.fMaxDist();
 	direction /= direction.XY().Length();
@@ -271,11 +345,12 @@ bool FireBloodVector(DCoreActor* source, double offset, double zoffset, DVector3
 	hitscan(origin, source->sector(), direction * 1024., hit, CLIPMASK1);
 	body->spr.cstat = flags;
 	if (!hit.hitSector || (range > 0 && (hit.hitpos.XY() - origin.XY()).Length() >= range)) return true;
-	auto hitter = Duke3d::CreateActor(hit.hitSector, hit.hitpos, Duke3d::DukeMeleeAttackClass,
+	auto attackClass = type == Blood::kVectorTine ? Duke3d::DukeMeleeAttackClass : Duke3d::DukeShotSparkClass;
+	auto hitter = Duke3d::CreateActor(hit.hitSector, hit.hitpos, attackClass,
 		-15, DVector2(0, 0), source->spr.Angles.Yaw, 0, 0, body, STAT_PROJECTILE);
 	if (!hitter) return true;
 	auto target = dyn_cast<Duke3d::DDukeActor>(hit.hitActor);
-	if (!Superset::PrepareDukeHit(hitter, Superset::BloodTineDamage(target && target->isPlayer())))
+	if (!Superset::PrepareDukeHit(hitter, Superset::BloodVectorDamage(type, target && target->isPlayer())))
 	{
 		hitter->Destroy();
 		return true;
@@ -288,7 +363,15 @@ bool FireBloodVector(DCoreActor* source, double offset, double zoffset, DVector3
 			Duke3d::checkhitsprite(target, hitter);
 			Duke3d::checkhitswitch(owner, nullptr, target);
 			if (flesh)
-				Blood::sfxPlay3DSound(hit.hitpos, vector.surfHit[Blood::kSurfFlesh].fxSnd, hit.hitSector);
+			{
+				auto& impact = vector.surfHit[Blood::kSurfFlesh];
+				if (impact.fxSnd >= 0) Blood::sfxPlay3DSound(hit.hitpos, impact.fxSnd, hit.hitSector);
+				if (Superset::IsActive())
+				{
+					if (impact.fx2 >= 0) Blood::gFX.fxSpawnActor(impact.fx2, hit.hitSector, hit.hitpos - direction);
+					if (impact.fx3 >= 0) Blood::gFX.fxSpawnActor(impact.fx3, hit.hitSector, hit.hitpos - direction);
+				}
+			}
 		}
 	}
 	else if (hit.hitWall)
@@ -302,6 +385,8 @@ bool FireBloodVector(DCoreActor* source, double offset, double zoffset, DVector3
 			Duke3d::checkhitswitch(owner, wall, nullptr);
 		}
 	}
+	else if (type != Blood::kVectorTine && hit.hitpos.Z <= getceilzofslopeptr(hit.hitSector, hit.hitpos) + .01)
+		Duke3d::checkhitceiling(hit.hitSector);
 	hitter->Destroy();
 	return true;
 }

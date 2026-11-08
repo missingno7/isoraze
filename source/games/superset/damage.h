@@ -23,6 +23,7 @@ struct Damage
 bool BloodDamageKind(int nativeKind, DamageKind& kind);
 bool NativeBloodDamageKind(DamageKind kind, int& nativeKind);
 Damage BloodTineDamage(bool playerTarget);
+Damage BloodVectorDamage(int vectorType, bool playerTarget);
 
 // The first Duke receiver handles physical hits through the native onHit path.
 // Unsupported categories return false instead of acquiring invented reactions.
