@@ -10,6 +10,7 @@ param(
     [string]$OutputDirectory = (Join-Path $PSScriptRoot '../build-mashup/checks')
 )
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'superset-check-common.ps1')
 $ExePath = (Resolve-Path -LiteralPath $ExePath).Path
 $DukeGrp = (Resolve-Path -LiteralPath $DukeGrp).Path
 $BloodDirectory = (Resolve-Path -LiteralPath $BloodDirectory).Path
@@ -68,7 +69,7 @@ cl_nostartscreens=true
             ('save enemy-{0} "Native enemy cleanup"' -f $removal), 'wait 2')
     }
     $commands += @('wait 5', 'quit')
-    $commands -join '; ' | Set-Content -LiteralPath $script
+    Write-SupersetCheckScript -Commands $commands -ScriptPath $script
     $start = [Diagnostics.ProcessStartInfo]::new()
     $start.FileName = $ExePath
     $start.WorkingDirectory = Split-Path -Parent $ExePath

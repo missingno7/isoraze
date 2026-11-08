@@ -12,7 +12,7 @@ namespace Superset
 {
 // Blood already distinguishes these health-damage responses. Status changes
 // and impulses are separate operations; Heat does not implicitly ignite.
-enum class DamageKind { Impact, Heat, Physical, Blast, Asphyxiation, Spirit, Electric };
+enum class DamageKind { Impact, Heat, Physical, Blast, Asphyxiation, Spirit, Electric, Cold };
 
 struct Damage
 {

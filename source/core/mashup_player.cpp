@@ -14,6 +14,7 @@
 #include "games/superset/superset.h"
 #include "games/superset/damage.h"
 #include "games/superset/enemies.h"
+#include "games/superset/status.h"
 #include "v_draw.h"
 #include "v_text.h"
 
@@ -383,7 +384,7 @@ bool FireBloodVector(DCoreActor* source, double offset, double zoffset, DVector3
 	{
 		if (!isaccessswitch(target->spr.spritetexture()))
 		{
-			bool flesh = Duke3d::badguy(target) || target->isPlayer();
+			bool flesh = (Duke3d::badguy(target) || target->isPlayer()) && !Superset::IsFrozen(target);
 			Duke3d::checkhitsprite(target, hitter);
 			if (bloodPhysics) Superset::ApplyBloodVectorImpulse(target, type, direction);
 			if (owner) Duke3d::checkhitswitch(owner, nullptr, target);

@@ -84,6 +84,7 @@ struct SEQINST
 	int callback;
 	int16_t timeCounter;
 	uint8_t frameIndex;
+	bool pendingUpdate = false;
 	void Update();
 };
 

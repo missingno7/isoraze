@@ -32,6 +32,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "files.h"
 #include "eventq.h"
 #include "callback.h"
+#include "games/superset/status.h"
 
 
 BEGIN_BLD_NS
@@ -323,6 +324,12 @@ void UpdateSprite(DBloodActor* actor, SEQFRAME* pFrame)
 
 void SEQINST::Update()
 {
+	if (type == SS_SPRITE && Superset::IsFrozen(target.actor()))
+	{
+		pendingUpdate = true;
+		return;
+	}
+	pendingUpdate = false;
 	assert(frameIndex < pSequence->nFrames);
 	switch (type)
 	{
@@ -615,6 +622,7 @@ void seqSpawn_(int nSeqID, int type, const EventObject& eob, int callback)
 	pInst->callback = callback;
 	pInst->timeCounter = (short)pSequence->ticksPerFrame;
 	pInst->frameIndex = 0;
+	pInst->pendingUpdate = false;
 	pInst->type = type;
 	pInst->target = eob;
 	pInst->Update();
@@ -699,6 +707,14 @@ void seqProcess(int nTicks)
 		SEQINST* pInst = activeList.getInst(i);
 		Seq* pSeq = pInst->pSequence;
 		auto target = pInst->target;
+		if (pInst->type == SS_SPRITE && Superset::IsFrozen(target.actor())) continue;
+		if (pInst->pendingUpdate)
+		{
+			// Start a deferred first frame on resume. Its callback may replace or
+			// remove this instance, so do not keep using the old sequence pointer.
+			pInst->Update();
+			continue;
+		}
 
 		assert(pInst->frameIndex < pSeq->nFrames);
 
@@ -764,6 +780,7 @@ FSerializer& Serialize(FSerializer& arc, const char* keyname, SEQINST& w, SEQINS
 			("seqid", w.nSeqID)
 			("timecounter", w.timeCounter)
 			("frameindex", w.frameIndex)
+			("pendingupdate", w.pendingUpdate)
 			("target", w.target);
 
 		arc.EndObject();

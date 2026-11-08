@@ -27,6 +27,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "savegamehelp.h"
 
 #include "blood.h"
+#include "games/superset/status.h"
 
 BEGIN_BLD_NS
 
@@ -1597,7 +1598,7 @@ void aiProcessDudes(void)
 	BloodStatIterator it(kStatDude);
 	while (auto actor = it.Next())
 	{
-		if (actor->spr.flags & 32) continue;
+		if (actor->spr.flags & 32 || Superset::IsFrozen(actor)) continue;
 		DUDEINFO* pDudeInfo = getDudeInfo(actor->spr.type);
 		if (actor->IsPlayerActor() || actor->xspr.health == 0) continue;
 

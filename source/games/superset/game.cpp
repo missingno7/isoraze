@@ -28,7 +28,7 @@ bool active = false;
 bool calebPlayer = false;
 FString bloodDataPath;
 constexpr int SaveSchema = 2;
-constexpr int RulesRevision = 7;
+constexpr int RulesRevision = 8;
 constexpr const char* SaveSignature = GAMENAME ".Superset";
 
 FString FingerprintPrimaryArchive()

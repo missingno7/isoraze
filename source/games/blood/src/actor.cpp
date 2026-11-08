@@ -3610,7 +3610,7 @@ void actKillDude(DBloodActor* killerActor, DBloodActor* actor, DAMAGE_TYPE damag
 //
 //---------------------------------------------------------------------------
 
-static int actDamageDude(DBloodActor* source, DBloodActor* actor, int damage, DAMAGE_TYPE damageType)
+static int actDamageDude(DBloodActor* source, DBloodActor* actor, int damage, DAMAGE_TYPE damageType, int factorOverride)
 {
 	if (!actor->IsDudeActor())
 	{
@@ -3626,6 +3626,9 @@ static int actDamageDude(DBloodActor* source, DBloodActor* actor, int damage, DA
 		nDamageFactor = actor->genDudeExtra.dmgControl[damageType];
 #endif
 
+	// A shared category can supply its own response factor while retaining the
+	// native pain/AI/death handler. Ordinary Blood keeps its native table lookup.
+	if (factorOverride >= 0) nDamageFactor = factorOverride;
 	if (!nDamageFactor) return 0;
 	else if (nDamageFactor != 256) damage = MulScale(damage, nDamageFactor, 8);
 
@@ -3751,7 +3754,7 @@ static int actDamageThing(DBloodActor* source, DBloodActor* actor, int damage, D
 //
 //---------------------------------------------------------------------------
 
-int actDamageSprite(DBloodActor* source, DBloodActor* actor, DAMAGE_TYPE damageType, int damage)
+int actDamageSprite(DBloodActor* source, DBloodActor* actor, DAMAGE_TYPE damageType, int damage, int dudeDamageFactor)
 {
 	if (actor->spr.flags & 32 || !actor->hasX())
 		return 0;
@@ -3768,7 +3771,7 @@ int actDamageSprite(DBloodActor* source, DBloodActor* actor, DAMAGE_TYPE damageT
 	switch (actor->spr.statnum)
 	{
 	case kStatDude:
-		damage = actDamageDude(source, actor, damage, damageType);
+		damage = actDamageDude(source, actor, damage, damageType, dudeDamageFactor);
 		break;
 	case kStatThing:
 		damage = actDamageThing(source, actor, damage, damageType, pSourcePlayer);

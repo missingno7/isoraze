@@ -87,6 +87,8 @@ public:
 	TObjPtr<DCoreActor*> supersetBurnSource;
 	TObjPtr<DCoreActor*> supersetBloodState;
 	int supersetBloodHealth = 0;
+	int supersetFreezeTime = 0;
+	TObjPtr<DCoreActor*> supersetFreezeSource;
 	short tempval, basepicnum;
 	unsigned short timetosleep;
 	bool mapSpawned;

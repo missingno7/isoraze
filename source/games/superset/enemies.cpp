@@ -8,6 +8,7 @@
 #include "superset.h"
 #include "damage.h"
 #include "projectiles.h"
+#include "status.h"
 #include "mashup_player.h"
 #include "mashup_resources.h"
 #include "c_dispatch.h"
@@ -46,10 +47,10 @@ void Publish(Duke3d::DDukeActor* body, Blood::DBloodActor* state)
 	if (body->sector() != state->sector()) ChangeActorSect(body, state->sector());
 	body->spr.pos = DVector3(state->spr.pos.XY(), Feet(state));
 	body->spr.Angles = state->spr.Angles;
-	body->spr.setspritetexture(state->spr.spritetexture());
+	if (!IsFrozen(body)) body->spr.setspritetexture(state->spr.spritetexture());
 	body->spr.scale = state->spr.scale;
 	body->spr.shade = state->spr.shade;
-	body->spr.pal = state->spr.pal;
+	body->spr.pal = IsFrozen(body) ? 1 : state->spr.pal;
 	body->spr.cstat = state->spr.cstat & ~(CSTAT_SPRITE_INVISIBLE | CSTAT_SPRITE_YCENTER | CSTAT_SPRITE_BLOCK_ALL);
 	bool alive = state->IsDudeActor() && state->xspr.health > 0 && state->spr.statnum == Blood::kStatDude;
 	if (alive) body->spr.cstat |= CSTAT_SPRITE_BLOCK_ALL;
@@ -72,17 +73,59 @@ void ConfigureDifficulty()
 	}
 }
 
+bool ColdAmount(Duke3d::DDukeActor* body, Units::Health amount, int& scaled)
+{
+	double factor = body->FloatVar(FName("supersetcoldfactor"));
+	if (amount < 0 || amount > INT_MAX || !std::isfinite(factor) || factor < 0 || factor > 256 || amount * factor > INT_MAX) return false;
+	scaled = int(amount * factor);
+	return true;
+}
+
+void NativeDamage(Duke3d::DDukeActor* body, int kind, int amount, DCoreActor* source, int factor = -1)
+{
+	auto state = BloodState(body);
+	state->supersetDamageSource = source;
+	GC::WriteBarrier(state, source);
+	Blood::actDamageSprite(BloodState(source), state, Blood::DAMAGE_TYPE(kind), amount, factor);
+	if (!state->xspr.health) Thaw(body);
+	Publish(body, state);
+}
+
 bool DamageEnemy(Duke3d::DDukeActor* body, Damage damage, DCoreActor* source)
 {
 	auto state = BloodState(body);
 	int kind;
-	if (!state || !state->IsDudeActor() || !state->xspr.health || damage.amount < 0 || damage.amount > INT_MAX || !NativeBloodDamageKind(damage.kind, kind)) return false;
+	if (!state || !state->IsDudeActor() || !state->xspr.health || damage.amount < 0 || damage.amount > INT_MAX) return false;
 	ConfigureDifficulty();
-	state->supersetDamageSource = source;
-	GC::WriteBarrier(state, source);
-	Blood::actDamageSprite(BloodState(source), state, Blood::DAMAGE_TYPE(kind), int(damage.amount));
-	Publish(body, state);
+	if (damage.kind == DamageKind::Cold)
+	{
+		int amount;
+		if (!ColdAmount(body, damage.amount, amount)) return false;
+		// No native Cold table exists. Use its independent factor and the ordinary
+		// hit reaction, without borrowing Bullet resistance, ignition or Tesla stun.
+		if (amount) NativeDamage(body, Blood::kDamageBullet, amount, source, 256);
+	}
+	else
+	{
+		if (!NativeBloodDamageKind(damage.kind, kind)) return false;
+		NativeDamage(body, kind, int(damage.amount), source);
+	}
 	return true;
+}
+
+void FreezerHit(Duke3d::DDukeActor* body, Units::Health amount, DCoreActor* source)
+{
+	auto state = BloodState(body);
+	int scaled;
+	if (!state || !state->IsDudeActor() || !state->xspr.health || IsFrozen(body) || !ColdAmount(body, amount, scaled) || !scaled) return;
+	ConfigureDifficulty();
+	bool freeze = scaled >= int(state->xspr.health) && body->IntVar(FName("supersetfreezable"));
+	// Native Duke thaws at zero but still lives; Blood requires positive health
+	// to run its AI. Retain the minimum Q4 quantum, not a healed health point.
+	if (freeze) scaled = max(0, int(state->xspr.health) - 1);
+	if (scaled) NativeDamage(body, Blood::kDamageBullet, scaled, source, 256);
+	if (freeze) Freeze(body, source, int(Units::FromSimulationSteps(138))); // Stock THAWTIME.
+	Publish(body, state);
 }
 
 class DukeEnemyWorld final : public Blood::MovementWorldServices
@@ -162,9 +205,20 @@ void ApplyBloodVectorImpulse(DCoreActor* actor, int type, const DVector3& direct
 void BloodEnemyHit(Duke3d::DDukeActor* body, Duke3d::DDukeActor* hitter)
 {
 	if (!HasBloodEnemy(body) || !hitter || (!(hitter->flags3 & SFLAG3_CANHURTSHOOTER) && hitter->GetOwner() == body)) return;
+	if (hitter->flags2 & SFLAG2_FREEZEDAMAGE)
+	{
+		if (Duke3d::gs.freezerhurtowner || hitter->GetOwner() != body)
+		{
+			if (auto state = BloodState(body); state && state->IsDudeActor() && state->xspr.health && !IsFrozen(body))
+				state->vel += hitter->spr.Angles.Yaw.ToVector() * max(0, int(hitter->spr.extra)) * .25;
+			FreezerHit(body, Units::FromDukeHealth(max(0, int(hitter->spr.extra))), hitter->GetOwner());
+		}
+		return;
+	}
 	DamageKind kind;
 	if (hitter->supersetHitDamage >= 0) kind = DamageKind(hitter->supersetHitKind);
 	else if (!DukeDamageKind(static_cast<PClassActor*>(hitter->GetClass()), kind)) return;
+	if ((kind == DamageKind::Physical || kind == DamageKind::Blast) && Shatter(body, hitter->GetOwner())) return;
 	auto amount = hitter->supersetHitDamage >= 0 ? hitter->supersetHitDamage : Units::FromDukeHealth(max(0, int(hitter->spr.extra)));
 	DamageEnemy(body, {amount, kind}, hitter->GetOwner());
 	if (hitter->supersetHitDamage < 0 && !hitter->supersetDamageOnly)
@@ -199,7 +253,11 @@ void TickBloodEnemies()
 			DamageKind kind;
 			int damage = body->hitextra;
 			body->hitextra = -1;
-			if (DukeDamageKind(body->attackertype, kind)) DamageEnemy(body, {Units::FromDukeHealth(damage), kind}, body->GetHitOwner());
+			if (DukeDamageKind(body->attackertype, kind))
+			{
+				if ((kind == DamageKind::Physical || kind == DamageKind::Blast) && Shatter(body, body->GetHitOwner())) continue;
+				DamageEnemy(body, {Units::FromDukeHealth(damage), kind}, body->GetHitOwner());
+			}
 		}
 		Hide(state);
 		state->interpolated = false;
@@ -251,7 +309,8 @@ bool AnimateBloodEnemy(tspritetype* sprite, Duke3d::DDukeActor* body, const DVec
 	if (!HasBloodEnemy(body)) return false;
 	auto state = BloodState(body);
 	if (!state) return true;
-	sprite->setspritetexture(state->spr.spritetexture());
+	if (IsFrozen(body)) sprite->pal = 10; // Blood cold.plu, not Duke's palette 1.
+	else sprite->setspritetexture(state->spr.spritetexture());
 	Blood::viewApplySpriteRotation(sprite, body, view);
 	return true;
 }

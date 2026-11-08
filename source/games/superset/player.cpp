@@ -14,6 +14,7 @@
 #include "damage.h"
 #include "projectiles.h"
 #include "enemies.h"
+#include "status.h"
 #include "c_dispatch.h"
 
 namespace Blood { void SerializeSequences(FSerializer& arc); void SerializeEvents(FSerializer& arc); }
@@ -333,6 +334,7 @@ void TickSharedObjects()
 	TickBloodEnemies();
 	TickBloodProjectiles();
 	TickStatusEffects();
+	TickFreezeEffects();
 	Blood::gFX.fxProcess();
 	Blood::actPostProcess();
 	PublishBloodEnemies();

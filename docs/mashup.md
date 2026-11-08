@@ -85,7 +85,7 @@ and verify the separate configuration section. `-MashupCombat` additionally
 exercises the existing pitchfork prototype.
 
 The next milestones are broader navigation/physics and targeting support,
-freezing a Blood enemy, then the reverse map adapter and expanded mixed content.
+expanded shared effects, then the reverse map adapter and expanded mixed content.
 Spray-can burning of Duke enemies and native Blood axe-zombie AI/combat in the
 Duke world are implemented; full actor reactions and cross-effect rules remain work.
 The common health/time definitions are present, and the pitchfork now submits
@@ -113,8 +113,8 @@ This is an incremental native adapter, not the final shared actor/AI model.
 
 No scale compensation is applied: initial idle eye height is 56.6875 world units
 and horizontal radius is 12. Native Blood SEQ state and the selected controller
-are serialized with the session. Save schema is 2; rules revision is now 7
-after integrating native Blood axe-zombie AI and damage receivers. Earlier
+are serialized with the session. Save schema is 2; rules revision is now 8
+after integrating freezing, Cold responses and resumable Blood sequences. Earlier
 Superset bootstrap saves are intentionally incompatible with this experimental
 schema. The legacy native game save signatures remain separate.
 
@@ -322,6 +322,7 @@ Blood's existing seven damage categories supply the initial response vocabulary:
 | Drown | Asphyxiation |
 | Spirit | Spirit |
 | Tesla | Electric |
+| No native Blood category | Cold, with an independent shared response factor |
 
 These categories come from `actDamageDude`, the per-enemy `damageVal` table,
 player immunity and armor dispatch. They are not weapon/enemy pair rules.
@@ -640,8 +641,9 @@ This is source behavior preservation, not a new shared balance multiplier.
 Player/adapted-enemy attackers resolve to native aliases. An unadapted Duke NPC
 attacker is retained as a generic source, without a fabricated self-hit; native
 Blood retaliation against that foreign NPC remains unfinished. Native Duke
-freezer/shrinker/grower hits are not interpreted as ordinary zombie damage:
-they await shared effect handling. This receiver does not establish their rules.
+shrinker/grower hits are not interpreted as ordinary zombie damage:
+they await shared effect handling. Freezer hits now have the separate Cold and
+freeze-on-defeat adapter described below.
 
 World/controller/source references, health, AI targets and native sequences are
 GC-tracked and saved. Native deferred status transfer is preserved: the pending
@@ -688,6 +690,97 @@ The related regressions also passed:
   scripted waits alone consume about 53 seconds, leaving inadequate startup/save
   margin with the previous 60-second limit. The prior run passed its assertions
   but reached that limit just before exit.
+
+## Shared freezing and Cold damage
+
+The first foreign freezing receiver supports the native Blood axe zombie and
+its burning form. Duke's original freezer projectiles keep their native firing,
+autoaim, velocity, bounce, damage randomization and already-frozen contact gate.
+For this Blood receiver, health depletion submits Cold damage; a hit that would
+defeat a freezable target instead starts a timed freeze. Duke CON enemies retain
+their native frozen-state algorithms. This is an effect boundary with a Blood
+adapter, not a migration of every Duke CON state into the shared ticker.
+The native freezer hit impulse is applied separately from its Cold response;
+entering the frozen state stops horizontal velocity.
+
+`status.h` provides separate freeze, thaw, shatter and frozen-state queries.
+Cold health damage alone does not request freezing or shattering. The Blood
+receiver uses `SupersetColdFactor` (default 1, zero means damage immunity) and
+`SupersetFreezable` (default true) independently. No Cold slot exists in Blood's
+seven-entry native response arrays. The adapter supplies the shared factor and
+reuses the ordinary native hit/AI/death handler, without borrowing Bullet
+resistance, Heat ignition or Tesla recoil. A generic Cold hit can kill normally;
+the freezer's explicit defeat handler caps that hit before native death.
+
+Stock Duke enemies thaw alive with zero integer health. Blood's native AI stops
+at zero, so this adapter retains one Q4 health quantum (1/16 point), including
+after thaw. It does not refill the enemy's health. This is an explicit temporary
+representation compromise while native integer and Q4 receivers coexist.
+The first freezer profile uses stock `THAWTIME`: 138 simulation steps, or 552
+shared clocks (4.6 seconds). Mod-specific CON thaw constants are not imported
+into this foreign profile yet. Repeated freezer contacts do not refresh it,
+matching the native already-frozen projectile gate.
+
+Freezing suspends the target's native Blood AI timers, thinking/movement inputs
+and SEQ frame/callback progression. Its gravity, collision, drag and moving-world
+physics remain in `actProcessDudes`. Native sequences created while paused keep
+a pending first-frame update, applied once on resume before normal timing
+continues. This avoids losing a native transformation callback or allowing a
+queued melee callback during freezing. Pending updates serialize with the SEQ;
+freeze duration and source identity serialize/GC-track on the world pawn.
+Native knockdown or recoil resumes with its remaining duration after thaw,
+rather than being replaced by a newly invented idle/chase state.
+
+The physical world pawn uses Duke's frozen palette marker for native projectile
+and autoaim gates. Rendering selects Blood's isolated `cold.plu` lookup and
+retains the paused native frame/rotation. An accepted physical or explosive
+weapon hit explicitly requests shattering. That path awards one native kill,
+reuses Duke ice/glass fragments and sound, and removes both actor
+representations and their native SEQ/events. Health-only effect damage does not
+implicitly shatter a statue. Native Duke automatic frozen-target quick-kicking,
+water-drip visuals, other Blood enemy families, player freezing and all
+boss/mod-specific exceptions still need integration.
+
+**Open rule, provisional default:** burning and freezing currently coexist.
+Heat damage and burning do not automatically thaw or shatter. Native Blood
+burning transformation/damage can continue while its AI/SEQ is paused; a lethal
+health hit ends freezing so native death can proceed. The user-facing fire/ice
+question remains open; this default is not a settled crossover balance rule.
+
+```powershell
+./tools/check-superset-freeze.ps1 -DukeGrp 'D:/dos/duke3D/duke3d.grp' -BloodDirectory 'D:/prog/isoraze/build-isoraze/run/blood-data' -PythonPath python -EnableSound
+```
+
+The fixture exercises Duke's freezer through actual input and native ammo.
+Caleb's case explicitly launches native Duke freezer projectiles through
+`ShootThis`; Caleb cannot yet select Duke's weapon inventory. His shatter test
+uses actual pitchfork input; Duke's uses his native pistol. Snapshots and a
+native physics observation check one collider, source/GC ownership, unchanged
+AI/SEQ during a vulnerable hold, frozen-body gravity, timed thaw with resumed native brain, native ice
+fragments and exactly one kill. Separate diagnostic calls check Cold resistance,
+Q4 precision, independent freeze capability and native burning transformation
+with a deferred SEQ first frame. These component checks do not prove arbitrary
+maps, mods or other actor families.
+
+Both enemy and freezing fixtures now split their scripts at ordinary saves.
+`superset_save_wait` continues only after the normal input-stream save completes,
+preventing a later load/map command from replacing a request or changing the
+world before its snapshot. A fixed tick delay had produced missing saves,
+`TXT_SAVEPENDING`, and a purported corpse snapshot containing the freshly loaded
+living zombie. The vulnerable freezing hold also clears leftover freezer bolts
+and preparation hit queues first: stock `FREEZERHURTOWNER YES` permits native
+ricochets to hurt the shooter, independently of the paused enemy's AI.
+
+Verification on 2026-11-08: Release build and both freezing profiles passed
+(`freeze-20261108T042650879`), with audio. Duke/freezer and Caleb/pitchfork frozen
+zombie screenshots were inspected. Original Duke E1L1 and Blood E1M1
+runtime/save/load, including original Blood flare/spray input, ammo and saved
+missiles, passed (`runtime-20261108T042833760`). Both profiles' existing native
+enemy pursuit/melee, weapon kills, burning, nonblocking remains and cleanup
+checks passed with save-completion synchronization
+(`enemies-20261108T043335853`).
+Caleb's E1L1 runtime, shared damage, death/restart, FX and save/load checks plus
+a fresh E1L2 load passed with audio (`runtime-20261108T043524940`).
 
 ## Build and regression checks
 
@@ -806,7 +899,7 @@ compensation does not address collision, projectile origins or interaction reach
    Use shared fractional health units and retain native AI/weapon behavior.
    Keep native same-game resistances and death/trigger callbacks meaningful.
 3. Expand shared status effects with per-actor reactions: burning on Duke and
-   axe-zombie targets is present; add freezing on a Blood enemy, then shrinking, electrical and
+   axe-zombie targets and freezing on axe zombies are present; add shrinking, electrical and
    other damage interactions. Coordinate animation/AI callbacks and save state.
 4. Route native movement/environment queries to each map adapter's water,
    platforms, transports, use actions and hazards. Add the Blood map adapter
