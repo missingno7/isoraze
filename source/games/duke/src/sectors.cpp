@@ -1831,7 +1831,7 @@ bool checkhitswitch(DDukePlayer* const p, walltype* wwal, DDukeActor* act)
 		{
 			if (swdef.type == SwitchDef::Combo)
 			{
-				FSoundID sound = swdef.soundid != NO_SOUND ? swdef.soundid : S_FindSoundByResID(SWITCH_ON);
+				FSoundID sound = swdef.soundid != NO_SOUND ? swdef.soundid : DukeSoundByResource(SWITCH_ON);
 				if (act) S_PlaySound3D(sound, act, v);
 				else S_PlaySound3D(sound, pact, v);
 				if (numdips != correctdips) return 0;
@@ -1891,7 +1891,7 @@ bool checkhitswitch(DDukePlayer* const p, walltype* wwal, DDukeActor* act)
 
 		if (hitag == 0 && isadoorwall(texid) == 0)
 		{
-			FSoundID sound = swdef.soundid != NO_SOUND ? swdef.soundid : S_FindSoundByResID(SWITCH_ON);
+			FSoundID sound = swdef.soundid != NO_SOUND ? swdef.soundid : DukeSoundByResource(SWITCH_ON);
 			if (act) S_PlaySound3D(sound, act, v);
 			else S_PlaySound3D(sound, pact, v);
 		}

@@ -171,6 +171,7 @@ struct Duke native
 	native static DukePlayer checkcursectnums(sectortype sect);
 	native static int global_random();
 	native static int GetSoundFlags(Sound snd);
+	native static Sound FindSoundByResID(int resource);
 	native static int badguyID(int id);
 	native static void updatepindisplay(int tag, int pinmask);
 	native static bool StartCommentary(int tag, DukeActor act);

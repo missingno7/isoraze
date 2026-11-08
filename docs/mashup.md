@@ -152,7 +152,7 @@ the separate secondary-Blood serializer used in Duke maps is not run again.
 Shared gameplay becomes map-independent as the reverse collision/damage and
 controller services are added; these gates identify the still one-way adapters.
 
-Rules revision 12 records `map_rules=blood`, Blood's native save adapter version,
+Rules revision 13 records `map_rules=blood`, Blood's native save adapter version,
 `blood_archive_md5`, `duke_bank_md5` and `duke_program_md5`. The bank digest fingerprints the secondary
 archive and engine alias definitions without installation paths. The manifest
 rejects the opposite map family, altered secondary content and missing metadata
@@ -192,7 +192,7 @@ Compiler declarations for maps, volumes, clusters, skills, music, quotes and
 sounds go to private Duke stores. They do not replace Blood's map catalog,
 quotes, UI crosshair messages or sound registry. Startup verifies the primary
 flags, players, catalog counts, skills, quotes and sound count across compilation.
-Duke sound declarations are retained; secondary sample playback is still pending.
+Duke sound declarations now feed a private playback bank described below.
 The existing private resource check covers primary palette/tile/filesystem
 isolation separately.
 
@@ -214,7 +214,7 @@ Additional ART, samples and other mod dependencies still need manifest support.
 This is a compiler/state foundation, not arbitrary CON mod gameplay support.
 Atomic/Plutonium-style `gamestartup` is required (30 entries; the 31-entry World
 Tour variant parses but is unverified). Earlier startup formats are rejected.
-Duke actor-class finalization, world queries, map events, HUD, sound playback
+Duke actor-class finalization, world queries, map events, HUD
 and the reverse weapon controller still need environment adapters. The private
 program's actor health headers are retained; native Duke finalization normally
 copies these into class defaults and clears them in bytecode. ZScript's existing
@@ -239,7 +239,7 @@ checks independent player slots, mutates state, restores across a fresh Blood
 map and GC, and reloads in a fresh process from a relocated CON directory.
 Changing an included file must reject the save before restoring the private
 state or map record; the engine follows its normal failed-load console handling.
-Rules revision 12 rejects earlier experimental saves; ordinary game signatures
+Rules revision 13 rejects earlier experimental saves; ordinary game signatures
 are unchanged. Weapon/enemy selection in Blood maps is still gated.
 
 Verified on 2026-11-08: Release build and the complete native-program fixture
@@ -250,6 +250,81 @@ runtime/save checks passed, including native Blood flare/spray input, ammo and
 missile reload (`runtime-20261108T090854605`).
 Mixed Blood-enemy pursuit/melee, weapon/death reactions, save/GC and cleanup
 passed for both Caleb and Duke (`enemies-20261108T090953397`).
+
+## Native Duke audio in Blood maps
+
+The secondary program now installs its CON sound definitions under
+`mashup/duke/con########` in the existing sound engine. Private definitions have
+no primary resource ID. Numeric Duke lookup uses the private table while Blood
+keeps its own numeric bindings. Registration verifies every existing primary
+resource-ID binding. In the tested Plutonium archive, 374 declarations resolve
+to 359 available samples; missing samples retain their metadata and follow the
+native empty-sound fallback. They never fall back to a same-numbered Blood sound.
+
+Sample bytes come directly from the isolated Duke GRP through synthetic lump
+IDs, disjoint from Blood's private sample range. The common decoder loads the
+original VOC bytes. Native Duke sound-property setup is shared for pitch, flags,
+distance adjustment and volume. Each private sound keeps Duke's 144/1088 rolloff,
+independent of Blood's 170/850 default. The existing native playback path retains
+loop/talk/global handling, distance/visibility adjustment, explosion identification
+and underwater pitch handling. CON's priority value remains unused as in the
+existing native implementation; the adapter does not invent a new priority rule.
+
+Duke's engine sound catalog supplies symbolic resource names, aliases and
+near-channel limits. Its current `$resourceid`, `$alias` and `$limit` directives
+are read privately. Missing symbolic names receive silent handles before script
+compilation, with no primary resource ID or sample binding. Existing primary
+names retain their definition. Duke calls resolve these handles in the Duke
+context, so even a primary mod's `PISTOL_FIRE` sound can coexist with Duke's
+compiled `"PISTOL_FIRE"` literal. Dynamic Duke script lookup uses
+`Duke.FindSoundByResID`; generic `Raze.FindSoundByResID` retains the map's namespace.
+Ordinary game frontends use the no-op preparation hook and their existing lookup.
+The engine sound catalog is included in the private resource fingerprint.
+
+Native Duke positional code now accepts `CoreActor` sources. Its callback is
+shared by the original Duke sound engine and private Duke sounds in Blood's
+sound engine. Blood supplies its existing listener position and underwater
+player state, and continues to own listener updates. Native Duke's zero source
+velocity is preserved. In the Blood host, listener-height requests use Blood's
+normalized sound-coordinate convention. No second sound engine, listener or
+game ticker is started.
+
+Stop/query/pitch operations remain scoped to the calling family. Blood's actor
+sound operations skip private Duke channels; explicit Duke channel stops only
+affect Duke channels in the host. Native actor destruction still stops all loops
+owned by that actor. Save/load uses the engine's existing named-channel and
+generic actor-reference serialization. Blood's post-restore cleanup preserves
+the secondary module's restored channels; ordinary Blood keeps its original
+cleanup behavior. Rules revision 13 rejects earlier experimental saves.
+
+```powershell
+./tools/check-superset-duke-sounds.ps1 -DukeGrp D:/dos/duke3D/duke3d.grp -BloodRff D:/prog/isoraze/build-isoraze/run/blood-data/BLOOD.RFF
+```
+
+This check requires enabled audio and a working output device. It creates a
+primary sound-name/ID collision and a small Duke script fixture. It verifies
+unmodified private VOC bytes and native decoding/playback, compiled named and
+numeric script lookup, preservation of the primary collision definition, native
+properties, loops on both Blood and Duke sources, actual spatial callbacks and
+listener-height conversion, stop/query/pitch isolation and native Blood medium
+input. It checks named channels and sources after a fresh map, GC and a fresh
+process, then native destruction cleanup.
+
+This removes an audio dependency of the reverse weapon/controller adapter.
+Duke weapons are still gated in Blood maps. Private mod SNDINFO processing,
+external/loose Duke samples, World Tour-specific sound catalogs and full
+primary-mod dependency tracking remain pending; the stock Atomic/Plutonium
+archive is the current target.
+
+Verified on 2026-11-08: Release build and the complete audio fixture passed
+(`duke-sounds-20261108T093928130`). Ordinary Duke/Blood runtime and native Blood
+flare/spray/save checks passed (`runtime-20261108T094107629`). Character/weapon
+profile switching, saved actions and both inventories passed for Caleb and Duke
+(`weapons-20261108T094223072`). The full Blood-map fixture passed
+(`blood-map-20261108T094434770`), as did reverse Duke projectile collision,
+damage/source/save/GC checks (`duke-projectiles-20261108T094546097`) and the full
+native CON program/restore/content validation fixture
+(`duke-program-20261108T094704024`).
 
 ## Native Duke laser projectiles in Blood maps
 
@@ -312,9 +387,9 @@ attacks run after the native Blood actor phase, so the frontend commits Blood's
 deferred actor transfers/removals again at the end of that component phase.
 Native death state must be complete before a frame can be saved or collected.
 
-Rules revision 12 includes this component and rejects earlier experimental
+Rules revision 13 includes this component and rejects earlier experimental
 revisions. Duke weapons/inventory, enemy controllers, world-dependent secondary CON execution,
-Duke sounds, other projectile families, special body effects and broader
+other projectile families, special body effects and broader
 cross-game attacker identities in Blood maps remain unfinished.
 
 ```powershell
@@ -383,8 +458,8 @@ This is an incremental native adapter, not the final shared actor/AI model.
 
 No scale compensation is applied: initial idle eye height is 56.6875 world units
 and horizontal radius is 12. Native Blood SEQ state and the selected controller
-are serialized with the session. Save schema is 2; rules revision is now 12
-after adding private Duke CON state to the reverse map adapter. Earlier
+are serialized with the session. Save schema is 2; rules revision is now 13
+after adding private Duke CON/audio state to the reverse map adapter. Earlier
 Superset bootstrap saves are intentionally incompatible with this experimental
 schema. The legacy native game save signatures remain separate.
 

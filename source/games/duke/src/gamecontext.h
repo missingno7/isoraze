@@ -4,6 +4,7 @@
 
 class Quotes;
 class FSerializer;
+class FSoundID;
 struct MapRecord;
 struct VolumeRecord;
 struct ClusterDef;
@@ -39,6 +40,7 @@ void InitSecondaryDukeProgram(const char* rootCon);
 DDukePlayer* SecondaryDukePlayer(int index);
 void SerializeSecondaryDukeProgram(FSerializer& arc);
 const char* SecondaryDukeProgramFingerprint();
+FSoundID DukeSoundByResource(int resource);
 int FindConSource(const char* name);
 FString ReadConSource(int index);
 const char* ConSourceName(int index);

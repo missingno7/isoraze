@@ -23,7 +23,7 @@ void sndStartSample(const char* pzSound, int nVolume, int nChannel = -1);
 void sndStartSample(unsigned int nSound, int nVolume, int nChannel = -1, bool bLoop = false, EChanFlags soundflags = CHANF_NONE);
 void sndStartWavID(unsigned int nSound, int nVolume, int nChannel = -1);
 void sndStartWavDisk(const char* pzFile, int nVolume, int nChannel = -1);
-void sndKillAllSounds(void);
+void sndKillAllSounds(bool preserveSecondaryDuke = false);
 void sndProcess(void);
 void sndTerm(void);
 void sndInit(void);
@@ -32,7 +32,7 @@ void sfxPlay3DSound(const DVector3& pos, int soundId, sectortype* pSector);
 void sfxPlay3DSound(DBloodActor* pSprite, int soundId, int a3 = -1, int a4 = 0);
 void sfxPlay3DSoundVolume(DBloodActor* pSprite, int soundId, int a3 = -1, int a4 = 0, int pitch = 0, int volume = 0);
 void sfxKill3DSound(DBloodActor* pSprite, int a2 = -1, int a3 = -1);
-void sfxKillAllSounds(void);
+void sfxKillAllSounds(bool preserveSecondaryDuke = false);
 void sfxSetReverb(bool toggle);
 void sfxSetReverb2(bool toggle);
 

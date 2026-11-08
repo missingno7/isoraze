@@ -167,6 +167,14 @@ int duke_GetSoundFlags(int sndid)
 	return S_GetUserFlags(FSoundID::fromInt(sndid));
 }
 
+int duke_FindSoundByResID(int resource) { return DukeSoundByResource(resource).index(); }
+DEFINE_ACTION_FUNCTION_NATIVE(_Duke, FindSoundByResID, duke_FindSoundByResID)
+{
+	PARAM_PROLOGUE;
+	PARAM_INT(resource);
+	ACTION_RETURN_INT(duke_FindSoundByResID(resource));
+}
+
 DEFINE_ACTION_FUNCTION_NATIVE(_Duke, GetSoundFlags, duke_GetSoundFlags)
 {
 	PARAM_PROLOGUE;

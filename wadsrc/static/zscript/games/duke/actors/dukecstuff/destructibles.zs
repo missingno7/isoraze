@@ -403,7 +403,7 @@ class DukeMonk : DukeSpaceMarine
 	
 	override void OnHit(DukeActor proj)
 	{
-		self.PlayActorSound(Raze.FindSoundByResID(self.lotag));
+		self.PlayActorSound(Duke.FindSoundByResID(self.lotag));
 		self.spawnsprite(self.hitag);
 		super.OnHit(proj);
 	}

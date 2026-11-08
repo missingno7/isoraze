@@ -14,6 +14,7 @@ void LoadDukeResources(const char* path);
 bool HasDukeResources();
 const char* DukeResourceFingerprint();
 FileReader OpenDukeResource(const char* name);
+FString DukeSoundDefinitions();
 FTextureID DukeTile(int tile);
 FTextureID DukeTexture(const char* name);
 bool IsDukeTexture(FTextureID texture);

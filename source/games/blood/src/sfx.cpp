@@ -23,6 +23,7 @@ See the GNU General Public License for more details.
 #include "build.h"
 #include "blood.h"
 #include "raze_sound.h"
+#include "games/superset/duke_sounds.h"
 
 BEGIN_BLD_NS
 
@@ -61,6 +62,7 @@ public:
 
 void BloodSoundEngine::CalcPosVel(int type, const void* source, const float pt[3], int channum, int chanflags, FSoundID chanSound, FVector3* pos, FVector3* vel, FSoundChan*)
 {
+	if (Duke3d::UpdateSecondaryDukeSoundPosition(type, source, pt, chanflags, chanSound, pos, vel)) return;
 	if (pos != nullptr && type != SOURCE_None)
 	{
 		DBloodPlayer* pPlayer = getPlayer(myconnectindex);
@@ -80,7 +82,7 @@ void BloodSoundEngine::CalcPosVel(int type, const void* source, const float pt[3
 		else if (type == SOURCE_Actor)
 		{
 			assert(source != nullptr);
-			auto actor = (DBloodActor*)source;
+			auto actor = (DCoreActor*)source;
 
 			// Engine expects velocity in units per second, not units per tic.
 			if (vel) *vel = FVector3(float(actor->vel.X * 30), float(actor->vel.Z * -30), float(actor->vel.Y * -30));
@@ -200,6 +202,7 @@ void sfxPlay3DSoundVolume(DBloodActor* pActor, int soundId, int playchannel, int
 		playchannel++;   // This is to make 0 a valid channel value.
 		if (soundEngine->EnumerateChannels([=](FSoundChan* chan) -> int
 			{
+				if (Duke3d::IsSecondaryDukeSound(chan->OrgID)) return false;
 				if (chan->SourceType != SOURCE_Actor) return false; // other source types are not our business.
 				if (Mashup::HasBloodResources() && strncmp(soundEngine->GetSoundName(chan->OrgID), "mashup/blood/", 13)) return false;
 				if (chan->EntChannel == playchannel && (chan->Source == source || (playflags & FX_GlobalChannel) != 0))
@@ -250,6 +253,7 @@ void sfxKill3DSound(DBloodActor* pActor, int a2, int a3)
 	auto sid = Mashup::BloodSound(a3);
 	soundEngine->EnumerateChannels([=](FSoundChan* channel)
 		{
+			if (Duke3d::IsSecondaryDukeSound(channel->OrgID)) return false;
 			if (Mashup::HasBloodResources() && strncmp(soundEngine->GetSoundName(channel->OrgID), "mashup/blood/", 13)) return false;
 			if (channel->SourceType == SOURCE_Actor && channel->Source == source && (a2 < 0 || a2 == channel->EntChannel) && (a3 < 0 || sid == channel->OrgID))
 			{
@@ -259,10 +263,11 @@ void sfxKill3DSound(DBloodActor* pActor, int a2, int a3)
 		});
 }
 
-void sfxKillAllSounds(void)
+void sfxKillAllSounds(bool preserveSecondaryDuke)
 {
-	if (soundEngine) soundEngine->EnumerateChannels([](FSoundChan* channel)
+	if (soundEngine) soundEngine->EnumerateChannels([=](FSoundChan* channel)
 		{
+			if (preserveSecondaryDuke && Duke3d::IsSecondaryDukeSound(channel->OrgID)) return false;
 			if (channel->SourceType == SOURCE_Actor || channel->SourceType == SOURCE_Unattached) soundEngine->StopChannel(channel);
 			return false;
 		});

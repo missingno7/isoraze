@@ -45,7 +45,7 @@ class DukeSoundController : DukeActor
 			let sec = self.sector;
 			if (self.lotag < 999 && sec.lotag >= 0 && sec.lotag < ST_9_SLIDING_ST_DOOR && snd_ambience && sec.floorz != sec.ceilingz)
 			{
-				int flags = Duke.GetSoundFlags(Raze.FindSoundByResID(self.lotag));
+				int flags = Duke.GetSoundFlags(Duke.FindSoundByResID(self.lotag));
 				if (flags & Duke.SF_MSFX)
 				{
 					double distance = (p.actor.pos - self.pos).Length();
@@ -53,7 +53,7 @@ class DukeSoundController : DukeActor
 					if (distance < maxdist && self.counter == 0)
 					{
 						// Start playing an ambience sound.
-						self.PlayActorSound(Raze.FindSoundByResID(self.lotag), CHAN_AUTO, CHANF_LOOP);
+						self.PlayActorSound(Duke.FindSoundByResID(self.lotag), CHAN_AUTO, CHANF_LOOP);
 						self.counter = 1;  // AMBIENT_SFX_PLAYING
 					}
 					else if (distance >= maxdist && self.counter == 1)
@@ -68,7 +68,7 @@ class DukeSoundController : DukeActor
 					if (self.temp_data[4] > 0) self.temp_data[4]--;
 					else if (sec == p.actor.sector)
 					{
-						Duke.PlaySound(Raze.FindSoundByResID(self.lotag + uint(Duke.global_random()) % uint(self.hitag + 1)));
+						Duke.PlaySound(Duke.FindSoundByResID(self.lotag + uint(Duke.global_random()) % uint(self.hitag + 1)));
 						self.temp_data[4] = 26 * 40 + (Duke.global_random() % (26 * 40));
 					}
 				}

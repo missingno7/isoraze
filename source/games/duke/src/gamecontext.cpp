@@ -8,6 +8,8 @@
 #include "filesystem.h"
 #include "raze_sound.h"
 #include "gi.h"
+#include "games/superset/duke_sounds.h"
+#include "sc_man.h"
 #include <memory>
 
 extern TArray<TPointer<MapRecord>> mapList;
@@ -35,6 +37,11 @@ FString skillNames[MAXSKILLS], conDirectory, conRoot, programFingerprint;
 TArray<FString> music;
 std::unique_ptr<Quotes> quotes;
 TObjPtr<DDukePlayer*> players[MAXPLAYERS];
+TMap<FName, int> soundSymbols;
+TMap<int, FSoundID> privateSounds;
+TMap<int, int> privateSoundResources, soundLimits;
+TArray<FString> soundSamples;
+constexpr int DukeSampleBase = INT_MIN + 0x10000000;
 void MarkPlayers()
 {
 	GC::MarkArray(players, MAXPLAYERS);
@@ -51,8 +58,8 @@ FString Fingerprint()
 	MD5Context hash;
 	for (auto& source : sources)
 	{
-		hash.Update(reinterpret_cast<const uint8_t*>(source.name.GetChars()), source.name.Len() + 1);
-		hash.Update(reinterpret_cast<const uint8_t*>(source.text.GetChars()), source.text.Len() + 1);
+		hash.Update(reinterpret_cast<const uint8_t*>(source.name.GetChars()), unsigned(source.name.Len() + 1));
+		hash.Update(reinterpret_cast<const uint8_t*>(source.text.GetChars()), unsigned(source.text.Len() + 1));
 	}
 	uint8_t digest[16]; hash.Final(digest);
 	FString result;
@@ -64,6 +71,118 @@ FString Fingerprint()
 DDukePlayer* SecondaryDukePlayer(int index)
 {
 	return unsigned(index) < MAXPLAYERS ? players[index].Get() : nullptr;
+}
+
+void PrepareSecondaryDukeSoundNames()
+{
+	// Preserve primary definitions. These silent name handles let Duke script
+	// literals retain their identity until native CON declarations are compiled.
+	auto text = Mashup::DukeSoundDefinitions();
+	FScanner sc;
+	sc.OpenMem("Private Duke sound names", text.GetChars(), int(text.Len()));
+	TMap<FName, FName> aliases;
+	TMap<FName, int> limits;
+	while (sc.GetString())
+	{
+		FString command = sc.String;
+		sc.MustGetString(); FName name = sc.String;
+		if (command.CompareNoCase("$resourceid") == 0)
+		{
+			sc.MustGetNumber(); soundSymbols.Insert(name, sc.Number);
+		}
+		else if (command.CompareNoCase("$limit") == 0)
+		{
+			sc.MustGetNumber(); limits.Insert(name, sc.Number);
+		}
+		else if (command.CompareNoCase("$alias") == 0)
+		{
+			sc.MustGetString(); aliases.Insert(name, FName(sc.String));
+		}
+		else sc.ScriptError("Unsupported engine Duke sound directive %s", command.GetChars());
+	}
+	TMapIterator<FName, FName> aliasIt(aliases); TMap<FName, FName>::Pair* alias;
+	while (aliasIt.NextPair(alias))
+	{
+		auto resource = soundSymbols.CheckKey(alias->Value);
+		if (!resource) I_FatalError("Private Duke sound alias target is missing");
+		soundSymbols.Insert(alias->Key, *resource);
+	}
+	TMapIterator<FName, int> symbolIt(soundSymbols); TMap<FName, int>::Pair* symbol;
+	while (symbolIt.NextPair(symbol)) soundEngine->FindSoundTentative(symbol->Key.GetChars());
+	TMapIterator<FName, int> limitIt(limits); TMap<FName, int>::Pair* limit;
+	while (limitIt.NextPair(limit)) if (auto resource = soundSymbols.CheckKey(limit->Key)) soundLimits.Insert(*resource, limit->Value);
+	soundEngine->HashSounds();
+}
+
+FSoundID DukeSoundByResource(int resource)
+{
+	if (!HasSecondaryDukeContext()) return ::S_FindSoundByResID(resource);
+	auto id = privateSounds.CheckKey(resource);
+	return id ? *id : NO_SOUND;
+}
+
+bool IsSecondaryDukeSound(FSoundID sound) { return privateSoundResources.CheckKey(sound.index()) != nullptr; }
+
+FSoundID ResolveDukeSound(FSoundID sound)
+{
+	if (!HasSecondaryDukeContext() || IsSecondaryDukeSound(sound)) return sound;
+	if (sound.index() <= 0 || unsigned(sound.index()) >= soundEngine->GetNumSounds()) return NO_SOUND;
+	auto resource = soundSymbols.CheckKey(FName(soundEngine->GetSoundName(sound)));
+	return resource ? DukeSoundByResource(*resource) : NO_SOUND;
+}
+
+int DukeSoundResource(FSoundID sound)
+{
+	if (auto resource = privateSoundResources.CheckKey(sound.index())) return *resource;
+	auto sfx = soundEngine->GetSfx(sound);
+	return sfx ? sfx->ResourceId : -1;
+}
+
+void InitSecondaryDukeSounds()
+{
+	TMap<int, FSoundID> primaryBindings;
+	for (unsigned i = 0; i < soundEngine->GetNumSounds(); ++i)
+	{
+		auto sfx = soundEngine->GetSfx(FSoundID::fromInt(i));
+		if (sfx->ResourceId >= 0) primaryBindings.Insert(sfx->ResourceId, soundEngine->FindSoundByResID(sfx->ResourceId));
+	}
+	unsigned available = 0;
+	TMapIterator<int, ConSound> it(sounds); TMap<int, ConSound>::Pair* entry;
+	while (it.NextPair(entry))
+	{
+		auto& definition = entry->Value;
+		FString filename = definition.filename; filename.Substitute("\\\\", "\\"); FixPathSeperator(filename);
+		auto reader = Mashup::OpenDukeResource(filename.GetChars());
+		if (!reader.isOpen() && isWorldTour())
+		{
+			filename.ToLower(); filename.Substitute("sound/", ""); filename.Substitute(".ogg", ".voc");
+			reader = Mashup::OpenDukeResource(filename.GetChars());
+		}
+		if (reader.isOpen()) ++available;
+		int lump = DukeSampleBase + int(soundSamples.Size()); soundSamples.Push(filename);
+		auto id = soundEngine->AddSoundLump(FStringf("mashup/duke/con%08d", entry->Key).GetChars(), lump, 0, -1, 6);
+		S_ConfigureSound(id, definition.ps, definition.pe, definition.flags, definition.distance, definition.volume);
+		auto sfx = soundEngine->GetWritableSfx(id);
+		sfx->Rolloff.RolloffType = ROLLOFF_Doom;
+		sfx->Rolloff.MinDistance = 144; sfx->Rolloff.MaxDistance = 1088;
+		if (auto limit = soundLimits.CheckKey(entry->Key)) sfx->NearLimit = clamp(*limit, 0, 255);
+		privateSounds.Insert(entry->Key, id); privateSoundResources.Insert(id.index(), entry->Key);
+	}
+	soundEngine->HashSounds();
+	TMapIterator<int, FSoundID> primaryIt(primaryBindings); TMap<int, FSoundID>::Pair* binding;
+	while (primaryIt.NextPair(binding)) if (soundEngine->FindSoundByResID(binding->Key) != binding->Value)
+		I_FatalError("Superset: private Duke sounds changed a primary sound resource ID");
+	Printf("Superset Duke sound bank: %u definitions, %u available samples; primary resource IDs unchanged.\n", soundSamples.Size(), available);
+}
+
+bool ReadSecondaryDukeSound(int lump, TArray<uint8_t>& data)
+{
+	unsigned index = unsigned(lump) - unsigned(DukeSampleBase);
+	if (index >= soundSamples.Size()) return false;
+	auto reader = Mashup::OpenDukeResource(soundSamples[index].GetChars());
+	if (!reader.isOpen()) { data.Clear(); return true; }
+	data.Resize(unsigned(reader.GetLength())); reader.Read(data.Data(), data.Size());
+	return true;
 }
 
 int FindConSource(const char* filename)

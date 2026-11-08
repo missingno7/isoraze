@@ -46,12 +46,33 @@ source as it is released.
 #include "i_music.h"
 #include "vm.h"
 #include "s_music.h"
+#include "games/superset/duke_sounds.h"
 
 CVAR(Bool, wt_forcemidi, false, CVAR_ARCHIVE|CVAR_GLOBALCONFIG) // quick hack to disable the oggs, which are of lower quality than playing the MIDIs with a good synth and sound font.
 CVAR(Bool, wt_forcevoc, false, CVAR_ARCHIVE|CVAR_GLOBALCONFIG) // The same for sound effects. The re-recordings are rather poor and disliked
 CVAR(Bool, wt_commentary, false, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
 
 BEGIN_DUKE_NS
+
+static DCoreActor* LocalSoundPlayer(int index)
+{
+	return HasSecondaryDukeContext() ? PlayerArray[index]->GetActor() : getPlayer(index)->GetActor();
+}
+static int SoundPlayerIndex(DCoreActor* source)
+{
+	if (HasSecondaryDukeContext())
+	{
+		for (int i = 0; i < MAXPLAYERS; ++i) if (LocalSoundPlayer(i) == source) return i;
+		return -1;
+	}
+	auto actor = dyn_cast<DDukeActor>(source);
+	return actor && actor->isPlayer() ? actor->PlayerIndex() : -1;
+}
+static bool IsDukeSoundController(DCoreActor* source)
+{
+	auto actor = dyn_cast<DDukeActor>(source);
+	return actor && issoundcontroller(actor);
+}
 
 int32_t g_cdTrack = -1;
 
@@ -129,6 +150,7 @@ void GameInterface::StartSoundEngine()
 
 static FSoundID GetReplacementSound(FSoundID soundNum)
 {
+	soundNum = ResolveDukeSound(soundNum);
 	if (wt_forcevoc && isWorldTour() && soundEngine->isValidSoundId(soundNum))
 	{
 		auto const* snd = soundEngine->GetUserData(soundNum);
@@ -155,6 +177,7 @@ static FSoundID GetReplacementSound(FSoundID soundNum)
 
 int S_GetUserFlags(FSoundID soundid)
 {
+	soundid = ResolveDukeSound(soundid);
 	if (!soundEngine->isValidSoundId(soundid)) return 0;
 	auto const* snd = soundEngine->GetSfx(soundid);
 	if (!snd) return 0;
@@ -166,6 +189,23 @@ int S_GetUserFlags(FSoundID soundid)
 // 
 //
 //==========================================================================
+
+void S_ConfigureSound(FSoundID sound, int minpitch, int maxpitch, int type, int distance, float volume)
+{
+	auto sfx = soundEngine->GetWritableSfx(sound);
+	sfx->UserData.Resize(kMaxUserData);
+	sfx->bExternal = true;
+	sfx->UserVal = type & SF_CON_MASK;
+	if (minpitch != 0 || maxpitch != 0)
+	{
+		sfx->DefPitch = (float)pow(2, clamp<int>(minpitch, INT16_MIN, INT16_MAX) / 1200.);
+		sfx->DefPitchMax = (float)pow(2, clamp<int>(maxpitch, INT16_MIN, INT16_MAX) / 1200.);
+	}
+	sfx->UserData[kVolAdjust] = clamp<int>(distance, INT16_MIN, INT16_MAX);
+	sfx->UserData[kWorldTourMapping] = 0;
+	sfx->Volume = volume;
+	sfx->bTentative = false;
+}
 
 int S_DefineSound(unsigned index, const char *filename, int minpitch, int maxpitch, int priority, int type, int distance, float volume)
 {
@@ -224,22 +264,14 @@ int S_DefineSound(unsigned index, const char *filename, int minpitch, int maxpit
 		fn.Substitute(".ogg", ".voc");
 		sfx->lumpnum = S_LookupSound(fn.GetChars());
 	}
-	if (minpitch != 0 || maxpitch != 0)
-	{
-		sfx->DefPitch = (float)pow(2, clamp<int>(minpitch, INT16_MIN, INT16_MAX) / 1200.);
-		sfx->DefPitchMax = (float)pow(2, clamp<int>(maxpitch, INT16_MIN, INT16_MAX) / 1200.);
-	}
-	sfx->UserData[kVolAdjust] = clamp<int>(distance, INT16_MIN, INT16_MAX);
-	sfx->UserData[kWorldTourMapping] = 0;
-	sfx->Volume = volume;
-	sfx->bTentative = false;
+	S_ConfigureSound(s_index, minpitch, maxpitch, type, distance, volume);
 	return 0;
 }
 
 
-inline bool S_IsAmbientSFX(DDukeActor* actor)
+inline bool S_IsAmbientSFX(DCoreActor* actor)
 {
-	return (issoundcontroller(actor) && actor->spr.lotag < 999);
+	return (IsDukeSoundController(actor) && actor->spr.lotag < 999);
 }
 
 //==========================================================================
@@ -248,7 +280,7 @@ inline bool S_IsAmbientSFX(DDukeActor* actor)
 //
 //==========================================================================
 
-static int GetPositionInfo(DDukeActor* actor, FSoundID soundid, sectortype* sect,
+static int GetPositionInfo(DCoreActor* actor, FSoundID soundid, sectortype* sect,
 							 const DVector3 &cam, const DVector3 &pos, int *distPtr, FVector3 *sndPos)
 {
 	// There's a lot of hackery going on here that could be mapped to rolloff and attenuation parameters.
@@ -262,18 +294,18 @@ static int GetPositionInfo(DDukeActor* actor, FSoundID soundid, sectortype* sect
 	FVector3 sndorg = GetSoundPos(pos);
 	FVector3 campos = GetSoundPos(cam);
 
-	if (!actor->isPlayer() || actor->PlayerIndex() != screenpeek)
+	if (SoundPlayerIndex(actor) != screenpeek)
 	{
 		orgsndist = sndist = int(16 * (sndorg - campos).Length());
 
-		if ((userflags & (SF_GLOBAL | SF_DTAG)) != SF_GLOBAL && issoundcontroller(actor) && actor->spr.lotag < 999 && (actor->sector()->lotag & 0xff) < ST_9_SLIDING_ST_DOOR)
+		if ((userflags & (SF_GLOBAL | SF_DTAG)) != SF_GLOBAL && IsDukeSoundController(actor) && actor->spr.lotag < 999 && (actor->sector()->lotag & 0xff) < ST_9_SLIDING_ST_DOOR)
 			sndist = DivScale(sndist, actor->spr.hitag + 1, 14);
 	}
 
 	sndist += dist_adjust;
 	if (sndist < 0) sndist = 0;
 
-	if (sect!= nullptr && sndist && !issoundcontroller(actor) && !cansee(cam.plusZ(-24), sect, actor->spr.pos.plusZ(-24), actor->sector()))
+	if (sect!= nullptr && sndist && !IsDukeSoundController(actor) && !cansee(cam.plusZ(-24), sect, actor->spr.pos.plusZ(-24), actor->sector()))
 		sndist += sndist >> (isRR() ? 2 : 5);
 
 	// Here the sound distance was clamped to a minimum of 144*4. 
@@ -309,6 +341,7 @@ static int GetPositionInfo(DDukeActor* actor, FSoundID soundid, sectortype* sect
 
 void S_GetCamera(DVector3* c, DAngle* ca, sectortype** cs)
 {
+	if (HasSecondaryDukeContext()) { Superset::DukeSoundView(c, ca, cs); return; }
 	if (ud.cameraactor == nullptr)
 	{
 		auto p = getPlayer(screenpeek);
@@ -341,7 +374,7 @@ void S_GetCamera(DVector3* c, DAngle* ca, sectortype** cs)
 //
 //=========================================================================
 
-void DukeSoundEngine::CalcPosVel(int type, const void* source, const float pt[3], int channum, int chanflags, FSoundID chanSound, FVector3* pos, FVector3* vel, FSoundChan* chan)
+static void CalcDukeSoundPosition(int type, const void* source, const float pt[3], int chanflags, FSoundID chanSound, FVector3* pos, FVector3* vel)
 {
 	if (pos != nullptr)
 	{
@@ -359,7 +392,7 @@ void DukeSoundEngine::CalcPosVel(int type, const void* source, const float pt[3]
 		}
 		else if (type == SOURCE_Actor)
 		{
-			auto aactor = (DDukeActor*)source;
+			auto aactor = (DCoreActor*)source;
 			if (aactor != nullptr)
 			{
 				GetPositionInfo(aactor, chanSound, camsect, campos, aactor->spr.pos, nullptr, pos);
@@ -375,11 +408,24 @@ void DukeSoundEngine::CalcPosVel(int type, const void* source, const float pt[3]
 		}
 		if ((chanflags & CHANF_LISTENERZ) && type != SOURCE_None)
 		{
-			pos->Y = (float)campos.Z / 256.f;
+			// The Blood host supplies normalized world coordinates, matching its
+			// listener and SOURCE_Actor callback. Keep the original Duke path.
+			pos->Y = HasSecondaryDukeContext() ? GetSoundPos(campos).Y : (float)campos.Z / 256.f;
 		}
 	}
 }
 
+
+void DukeSoundEngine::CalcPosVel(int type, const void* source, const float pt[3], int channum, int chanflags, FSoundID chanSound, FVector3* pos, FVector3* vel, FSoundChan* chan)
+{
+	CalcDukeSoundPosition(type, source, pt, chanflags, chanSound, pos, vel);
+}
+bool UpdateSecondaryDukeSoundPosition(int type, const void* source, const float* point, int flags, FSoundID sound, FVector3* position, FVector3* velocity)
+{
+	if (!HasSecondaryDukeContext() || !IsSecondaryDukeSound(sound)) return false;
+	CalcDukeSoundPosition(type, source, point, flags, sound, position, velocity);
+	return true;
+}
 
 //==========================================================================
 //
@@ -420,15 +466,16 @@ void GameInterface::UpdateSounds(void)
 //
 //==========================================================================
 
-int S_PlaySound3D(FSoundID soundid, DDukeActor* actor, const DVector3& pos, int channel, EChanFlags flags)
+int S_PlaySound3D(FSoundID soundid, DCoreActor* actor, const DVector3& pos, int channel, EChanFlags flags)
 {
+	if (HasSecondaryDukeContext()) soundid = ResolveDukeSound(soundid);
 	const auto mcip = getPlayer(myconnectindex);
 	const auto spp = getPlayer(screenpeek);
 
 	if (!soundEngine->isValidSoundId(soundid) || !SoundEnabled() || actor == nullptr || !playrunning() ||
 		(mcip->timebeforeexit > 0 && mcip->timebeforeexit <= REALGAMETICSPERSEC * 3)) return -1;
 
-	if (flags & CHANF_LOCAL && actor != getPlayer(screenpeek)->GetActor() && !ud.coop) return -1;	// makes no sense...
+	if (flags & CHANF_LOCAL && actor != LocalSoundPlayer(screenpeek) && !ud.coop) return -1;	// makes no sense...
 
 	soundid = GetReplacementSound(soundid);
 	int userflags = S_GetUserFlags(soundid);
@@ -441,10 +488,11 @@ int S_PlaySound3D(FSoundID soundid, DDukeActor* actor, const DVector3& pos, int 
 
 	if (userflags & SF_TALK)
 	{
-		if (snd_speech == 0 || (ud.multimode > 1 && actor->isPlayer() && actor->PlayerIndex() != screenpeek && ud.coop != 1)) return -1;
+		if (snd_speech == 0 || (ud.multimode > 1 && SoundPlayerIndex(actor) >= 0 && SoundPlayerIndex(actor) != screenpeek && ud.coop != 1)) return -1;
 		bool foundone =  soundEngine->EnumerateChannels([&](FSoundChan* chan)
 			{
 				auto sid = chan->OrgID;
+				if (HasSecondaryDukeContext() && !IsSecondaryDukeSound(sid)) return false;
 				auto flags = S_GetUserFlags(sid);
 				return !!(flags & SF_TALK);
 			});
@@ -453,9 +501,9 @@ int S_PlaySound3D(FSoundID soundid, DDukeActor* actor, const DVector3& pos, int 
 
 		// When in single player, force all talk sounds to originate from the player actor, no matter what is being used to start them.
 		// Fixes a problem with quake06.voc in E3L4.
-		if (ud.multimode == 1)
+		if (HasSecondaryDukeContext() ? numplayers == 1 : ud.multimode == 1)
 		{
-			actor = mcip->GetActor();
+			actor = LocalSoundPlayer(myconnectindex);
 		}
 	}
 
@@ -470,13 +518,13 @@ int S_PlaySound3D(FSoundID soundid, DDukeActor* actor, const DVector3& pos, int 
 
 	auto sfx = soundEngine->GetSfx(soundid);
 	bool explosion = ((userflags & (SF_GLOBAL | SF_DTAG)) == (SF_GLOBAL | SF_DTAG)) || 
-		((sfx->ResourceId == PIPEBOMB_EXPLODE || sfx->ResourceId == LASERTRIP_EXPLODE || sfx->ResourceId == RPG_EXPLODE));
+		((DukeSoundResource(soundid) == PIPEBOMB_EXPLODE || DukeSoundResource(soundid) == LASERTRIP_EXPLODE || DukeSoundResource(soundid) == RPG_EXPLODE));
 
-	bool underwater = spp->insector() && spp->cursector->lotag == ST_2_UNDERWATER;
+	bool underwater = HasSecondaryDukeContext() ? Superset::DukeSoundUnderwater() : spp->insector() && spp->cursector->lotag == ST_2_UNDERWATER;
 	float pitch = 0;
 	if (!explosion)
 	{
-		if (sndist > 32767 && !issoundcontroller(actor) && (userflags & (SF_LOOP | SF_MSFX)) == 0)
+		if (sndist > 32767 && !IsDukeSoundController(actor) && (userflags & (SF_LOOP | SF_MSFX)) == 0)
 			return -1;
 
 		if (underwater && (userflags & SF_TALK) == 0)
@@ -484,7 +532,7 @@ int S_PlaySound3D(FSoundID soundid, DDukeActor* actor, const DVector3& pos, int 
 	}
 
 	bool is_playing = soundEngine->GetSoundPlayingInfo(SOURCE_Any, nullptr, soundid);
-	if (is_playing && !issoundcontroller(actor))
+	if (is_playing && !IsDukeSoundController(actor))
 		S_StopSound(soundid, actor);
 
 	int const repeatp = (userflags & SF_LOOP);
@@ -525,6 +573,7 @@ int S_PlaySound3D(FSoundID soundid, DDukeActor* actor, const DVector3& pos, int 
 
 int S_PlaySound(FSoundID soundid, int channel, EChanFlags flags, float vol)
 {
+	if (HasSecondaryDukeContext()) soundid = ResolveDukeSound(soundid);
 	if (!soundEngine->isValidSoundId(soundid) || !SoundEnabled()) return -1;
 
 	soundid = GetReplacementSound(soundid);
@@ -546,30 +595,39 @@ int S_PlaySound(FSoundID soundid, int channel, EChanFlags flags, float vol)
 //
 //==========================================================================
 
-int S_PlayActorSound(FSoundID soundNum, DDukeActor* actor, int channel, EChanFlags flags)
+int S_PlayActorSound(FSoundID soundNum, DCoreActor* actor, int channel, EChanFlags flags)
 {
 	return (actor == nullptr ? S_PlaySound(soundNum, channel, flags) :
 		S_PlaySound3D(soundNum, actor, actor->spr.pos, channel, flags));
 }
 
-void S_StopSound(FSoundID soundid, DDukeActor* actor, int channel)
+void S_StopSound(FSoundID soundid, DCoreActor* actor, int channel)
 {
 	soundid = GetReplacementSound(soundid);
+	if (HasSecondaryDukeContext() && !IsSecondaryDukeSound(soundid)) return;
 
 	if (!actor) soundEngine->StopSoundID(soundid);
 	else
 	{
 		if (channel == -1) soundEngine->StopSound(SOURCE_Actor, actor, -1, soundid);
+		else if (HasSecondaryDukeContext()) soundEngine->EnumerateChannels([=](FSoundChan* active)
+			{
+				if (active->SourceType == SOURCE_Actor && active->Source == actor && active->EntChannel == channel && IsSecondaryDukeSound(active->OrgID))
+					soundEngine->StopChannel(active);
+				return false;
+			});
 		else soundEngine->StopSound(SOURCE_Actor, actor, channel);
 
 		// StopSound kills the actor reference so this cannot be delayed until ChannelEnded gets called. At that point the actor may also not be valid anymore.
 		if (S_IsAmbientSFX(actor) && actor->sector()->lotag < 3)  // ST_2_UNDERWATER
-			actor->counter = 0;
+			static_cast<DDukeActor*>(actor)->counter = 0;
 	}
 }
 
-void S_ChangeSoundPitch(FSoundID soundid, DDukeActor* actor, int pitchoffset)
+void S_ChangeSoundPitch(FSoundID soundid, DCoreActor* actor, int pitchoffset)
 {
+	soundid = ResolveDukeSound(soundid);
+	if (HasSecondaryDukeContext() && !IsSecondaryDukeSound(soundid)) return;
 	double expitch = pow(2, pitchoffset / 1200.);   // I hope I got this right that ASS uses a linear scale where 1200 is a full octave.
 	if (!actor)
 	{
@@ -587,23 +645,28 @@ void S_ChangeSoundPitch(FSoundID soundid, DDukeActor* actor, int pitchoffset)
 //
 //==========================================================================
 
-int S_CheckActorSoundPlaying(DDukeActor* actor, FSoundID soundid, int channel)
+int S_CheckActorSoundPlaying(DCoreActor* actor, FSoundID soundid, int channel)
 {
 	soundid = GetReplacementSound(soundid);
+	if (HasSecondaryDukeContext() && !IsSecondaryDukeSound(soundid)) return false;
 
 	if (actor == nullptr) return soundEngine->GetSoundPlayingInfo(SOURCE_Any, nullptr, soundid);
 	return soundEngine->IsSourcePlayingSomething(SOURCE_Actor, actor, channel, soundid);
 }
 
 // Check if actor <i> is playing any sound.
-int S_CheckAnyActorSoundPlaying(DDukeActor* actor)
+int S_CheckAnyActorSoundPlaying(DCoreActor* actor)
 {
 	if (!actor) return false;
+	if (HasSecondaryDukeContext()) return soundEngine->EnumerateChannels([=](FSoundChan* channel)
+		{ return channel->SourceType == SOURCE_Actor && channel->Source == actor && IsSecondaryDukeSound(channel->OrgID); });
 	return soundEngine->IsSourcePlayingSomething(SOURCE_Actor, actor, CHAN_AUTO);
 }
 
 int S_CheckSoundPlaying(FSoundID soundid)
 {
+	soundid = ResolveDukeSound(soundid);
+	if (HasSecondaryDukeContext() && !IsSecondaryDukeSound(soundid)) return false;
 	return soundEngine->GetSoundPlayingInfo(SOURCE_Any, nullptr, soundid);
 }
 

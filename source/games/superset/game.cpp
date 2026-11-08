@@ -16,6 +16,7 @@
 #include "savegamehelp.h"
 #include "duke_effects.h"
 #include "duke_projectiles.h"
+#include "duke_sounds.h"
 #include <memory>
 #include <utility>
 
@@ -49,7 +50,7 @@ bool calebPlayer = false;
 bool bloodMap = false;
 FString bloodDataPath, dukeDataPath;
 constexpr int SaveSchema = 2;
-constexpr int RulesRevision = 12;
+constexpr int RulesRevision = 13;
 constexpr const char* SaveSignature = GAMENAME ".Superset";
 
 FString FingerprintPrimaryArchive()
@@ -90,6 +91,12 @@ public:
 	{
 		world->InitSecondarySounds();
 		Mashup::InitBloodSounds();
+		if (bloodMap) Duke3d::InitSecondaryDukeSounds();
+	}
+	void PrepareSecondarySoundNames() override
+	{
+		world->PrepareSecondarySoundNames();
+		if (bloodMap) Duke3d::PrepareSecondaryDukeSoundNames();
 	}
 
 	void app_init() override

@@ -1158,6 +1158,7 @@ int RunGame()
 	StartWindow->Progress();
 	Mus_InitMusic();
 	S_ParseSndInfo();
+	gi->PrepareSecondarySoundNames();
 	S_ParseReverbDef();
 	InitStatistics();
 	LoadScripts();

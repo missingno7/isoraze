@@ -26,6 +26,7 @@ struct DukeResourceBank : PrivateArtBank
 	int primaryLumps = fileSystem.GetNumEntries();
 	uint32_t primaryPaletteCRC = Bcrc32(GPalette.BaseColors, sizeof(GPalette.BaseColors), 0);
 	FString fingerprint;
+	FString soundDefinitions;
 
 	FileSys::FileData Read(const char* name)
 	{
@@ -141,6 +142,11 @@ struct DukeResourceBank : PrivateArtBank
 		FScanner scanner;
 		scanner.OpenMem("Superset Duke TEXNAMES", reinterpret_cast<const char*>(aliases.bytes()), int(aliases.size()));
 		LoadTextureAliases(scanner, firstTexture, int(tiles.Size()) - 1, Prefix);
+		entry = engine->FindEntry("filter/dukelike/sndinfo.txt");
+		if (entry < 0) I_FatalError("Superset: engine Duke sound names are missing.");
+		auto sounds = engine->Read(entry);
+		soundDefinitions = FString(reinterpret_cast<const char*>(sounds.data()), sounds.size());
+		hash.Update(sounds.bytes(), unsigned(sounds.size()));
 		uint8_t digest[16];
 		hash.Final(digest);
 		for (auto byte : digest) fingerprint.AppendFormat("%02x", byte);
@@ -157,6 +163,7 @@ void LoadDukeResources(const char* path)
 	bank->Load(path);
 }
 bool HasDukeResources() { return bank != nullptr; }
+FString DukeSoundDefinitions() { return bank ? bank->soundDefinitions : FString(); }
 const char* DukeResourceFingerprint() { return bank ? bank->fingerprint.GetChars() : ""; }
 FileReader OpenDukeResource(const char* name)
 {

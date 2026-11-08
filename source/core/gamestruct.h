@@ -65,6 +65,7 @@ struct GameInterface
 	// Additional content banks are initialized after the primary textures/sounds.
 	virtual void LoadSecondaryResources() {}
 	virtual void InitSecondarySounds() {}
+	virtual void PrepareSecondarySoundNames() {}
 	virtual void FinalizeSetup() {}
 	virtual void LoadTextureInfo(TilesetBuildInfo& info) {}
 	virtual void SetupSpecialTextures(TilesetBuildInfo&) = 0;

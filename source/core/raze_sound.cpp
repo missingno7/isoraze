@@ -34,6 +34,7 @@
 */
 
 #include "raze_sound.h"
+#include "games/superset/duke_sounds.h"
 #include "c_cvars.h"
 #include "basics.h"
 #include "stats.h"
@@ -93,6 +94,7 @@ void S_SetReverb(int strength)
 TArray<uint8_t> RazeSoundEngine::ReadSound(int lumpnum)
 {
 	TArray<uint8_t> secondary;
+	if (Duke3d::ReadSecondaryDukeSound(lumpnum, secondary)) return secondary;
 	if (Mashup::ReadBloodSound(lumpnum, secondary)) return secondary;
 	auto wlump = fileSystem.OpenFileReader(lumpnum);
 	TArray<uint8_t> buffer(wlump.GetLength(), true);

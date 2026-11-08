@@ -24,6 +24,7 @@ See the GNU General Public License for more details.
 #include "raze_music.h"
 #include "raze_sound.h"
 #include "gamecontrol.h"
+#include "games/superset/duke_sounds.h"
 
 BEGIN_BLD_NS
 
@@ -234,9 +235,15 @@ void sndStartWavDisk(const char* pzFile, int nVolume, int nChannel)
 	return sndStartSample(name.GetChars(), nVolume, nChannel);
 }
 
-void sndKillAllSounds(void)
+void sndKillAllSounds(bool preserveSecondaryDuke)
 {
-	if (soundEngine) soundEngine->StopSound(CHAN_AUTO);
+	if (!soundEngine) return;
+	if (!preserveSecondaryDuke) soundEngine->StopSound(CHAN_AUTO);
+	else soundEngine->EnumerateChannels([](FSoundChan* channel)
+		{
+			if (channel->SourceType == SOURCE_None && !Duke3d::IsSecondaryDukeSound(channel->OrgID)) soundEngine->StopChannel(channel);
+			return false;
+		});
 }
 
 

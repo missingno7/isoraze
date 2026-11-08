@@ -29,6 +29,7 @@ See the GNU General Public License for more details.
 #include "mapinfo.h"
 #include "gamestate.h"
 #include "d_net.h"
+#include "games/superset/superset.h"
 
 
 BEGIN_BLD_NS
@@ -734,8 +735,10 @@ void GameInterface::SerializeGameState(FSerializer& arc)
 	}
 	else
 	{
-		sndKillAllSounds();
-		sfxKillAllSounds();
+		// Core sound restoration precedes this native cleanup. The secondary
+		// module owns its restored channels; ordinary Blood keeps its old path.
+		sndKillAllSounds(Superset::IsBloodMap());
+		sfxKillAllSounds(Superset::IsBloodMap());
 		ambKillAll();
 		seqKillAll();
 	}
