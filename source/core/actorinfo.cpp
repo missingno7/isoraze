@@ -48,6 +48,7 @@
 #include "texturemanager.h"
 #include "texinfo.h"
 #include "buildtiles.h"
+#include "mashup_resources.h"
 
 extern void LoadActors ();
 
@@ -248,9 +249,12 @@ PClassActor *PClassActor::GetReplacee()
 void FActorInfo::ResolveTextures(const char* clsname, DCoreActor* defaults)
 {
 	SpriteSet.Resize(SpriteSetNames.Size());
+	auto duke = Mashup::HasDukeResources() ? PClass::FindClass("DukeActor") : nullptr;
+	bool privateDuke = duke && defaults->IsKindOf(duke);
 	for (unsigned i = 0; i < SpriteSet.Size(); i++)
 	{
-		SpriteSet[i] = TexMan.CheckForTexture(SpriteSetNames[i].GetChars(), ETextureType::Any);
+		SpriteSet[i] = privateDuke ?
+			Mashup::DukeTexture(SpriteSetNames[i].GetChars()) : TexMan.CheckForTexture(SpriteSetNames[i].GetChars(), ETextureType::Any);
 		// This should later be enabled to user content.
 		//if (SpriteSet[i] == -1) Printf(TEXTCOLOR_RED "Unknown texture '%s' in sprite set for class %s\n", SpriteSetNames[i].GetChars(), clsname);
 	}

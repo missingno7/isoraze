@@ -89,6 +89,7 @@ public:
 	int supersetBloodHealth = 0;
 	int supersetFreezeTime = 0;
 	TObjPtr<DCoreActor*> supersetFreezeSource;
+	bool supersetForeignFx = false;
 	short tempval, basepicnum;
 	unsigned short timetosleep;
 	bool mapSpawned;

@@ -17,6 +17,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'superset-check-common.ps1')
 if (!$DukeGrp -and !$BloodRff) { throw 'Specify -DukeGrp and/or -BloodRff.' }
 if ($BloodProjectiles -and !$BloodRff) { throw '-BloodProjectiles requires -BloodRff.' }
 if ($MashupCombat -and !$MashupBloodDirectory) { throw '-MashupCombat requires -MashupBloodDirectory.' }
@@ -116,9 +117,9 @@ cl_resumesavegame=true
     if ($fxActive) { $commands += @('wait 120', 'superset_fx_check expired') }
     if ($calebActive) {
         $commands += @('superset_incoming_check die', 'wait 180', 'superset_incoming_check dead',
-            '+Open', 'wait 2', '-Open', 'wait 90', 'superset_incoming_check restored',
+            '+Open', 'wait 30', '-Open', 'wait 90', 'superset_incoming_check restored',
             'superset_incoming_check die_blast', 'wait 180', 'superset_incoming_check dead',
-            '+Open', 'wait 2', '-Open', 'wait 90', 'superset_incoming_check restored')
+            '+Open', 'wait 30', '-Open', 'wait 90', 'superset_incoming_check restored')
     }
     if ($DukeTransitionMap -and $case.Name.StartsWith('duke-')) {
         $commands += @("map $DukeTransitionMap", 'wait 120', 'gc full', 'mashup_runtime_check', $frontendCheck, $resourceCheck, $movementCheck, $inputCheck, $combatCheck, 'wait 15', 'screenshot', 'wait 10')
@@ -134,7 +135,7 @@ cl_resumesavegame=true
         $expectedCount++
     }
     $commands += 'quit'
-    $commands -join '; ' | Set-Content -LiteralPath $scriptPath
+    Write-SupersetCheckScript -Commands $commands -ScriptPath $scriptPath
 
     $startInfo = [Diagnostics.ProcessStartInfo]::new()
     $startInfo.FileName = $ExePath

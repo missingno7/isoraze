@@ -50,7 +50,7 @@ Use `-iwad` for Duke data and `-blooddata` for the isolated Blood bank:
 ./build-mashup/Release/raze.exe -superset -iwad D:/dos/duke3D/duke3d.grp -blooddata D:/prog/isoraze/build-isoraze/run/blood-data -map E1L1
 ```
 
-The default player remains Duke. Add `-superset-player caleb` to select native
+For Duke maps the default player remains Duke. Add `-superset-player caleb` to select native
 Blood movement, camera inertia, jumping/crouching and the native pitchfork.
 Blood shotgun/Tommy gun, spray-can primary fire and selected native pickups are
 available through the explicit spawn commands described below; Duke pickups
@@ -59,23 +59,24 @@ are not replaced yet.
 or `-superset-weapons duke` to choose a weapon family independently of the
 character. `-superset-weapons auto` uses the character's default (Caleb/Blood,
 Duke/Duke); legacy `+mashup_combat 1` still requests Blood weapons in auto mode.
-The HUD and map mechanisms still use the Duke adapter. Only Duke map data is
-accepted by this first map
-adapter; Blood-map loading, a unified weapon list and enemy selections remain work
-for later milestones. The current Caleb adapter supports single-player.
+The HUD and map mechanisms use the map's native adapter. The Duke-map Caleb
+adapter supports single-player. A first Blood-map adapter is now available with
+native Caleb/Blood gameplay and an initial native Duke actor component; full
+reverse combat, a unified weapon list and independent enemy selection remain work.
 
 The frontend owns `Superset` configuration/autoexec/autoload sections, save and
 demo directories, and the independent `Raze.Superset` save signature/schema. Its content manifest
-records the rules revision, map adapter version, primary Duke archive digest
-and resolved Blood resource bank digest. Loading checks this metadata before
+records the rules revision, map family/adapter version, primary archive digest
+and secondary resource bank digest. Loading checks this metadata before
 selecting a map or restoring actors. Installation paths do not enter the digests.
 Full primary-mod dependency tracking is still pending; the current manifest
-fingerprints the primary Duke archive and secondary bank, not every loose Duke
-override or CON mod. The optional Blood weapon mode is saved with the session.
+fingerprints the primary archive and secondary bank, not every loose primary
+override, CON mod or additional Blood ART/SFX dependency. The selected character
+and weapon family are saved with the session.
 
-Legacy game flags currently describe the Duke map adapter for existing native
+Legacy game flags describe the current map adapter for existing native
 code. They do not identify the combined frontend, and are never formed by ORing
-Blood and Duke together. `LumpFilter` still selects Duke's startup assets while
+Blood and Duke together. `LumpFilter` selects that map family's startup assets while
 `currentGame` and `SavegameFolder` identify Superset. Native Blood and Duke retain
 their own frontends and save signatures. The new module composes the native
 adapter instead of subclassing or copying its implementation.
@@ -88,12 +89,110 @@ and verify the separate configuration section. `-MashupCombat` additionally
 exercises the existing pitchfork prototype.
 
 The next milestones are broader navigation/physics and targeting support,
-expanded shared effects, then the reverse map adapter and expanded mixed content.
+expanded shared effects, reverse combat and expanded mixed content.
 Spray-can burning of Duke enemies and native Blood axe-zombie AI/combat in the
 Duke world are implemented; full actor reactions and cross-effect rules remain work.
 The common health/time definitions are present, and the pitchfork now submits
 shared Q4 physical hits. Other attacks and receivers still need migration.
 Original-game regression checks remain required.
+
+## Blood maps and the reverse actor bootstrap
+
+Select Blood as the map source and provide a private Duke archive:
+
+```powershell
+./build-mashup/Release/raze.exe -superset -iwad D:/prog/isoraze/build-isoraze/run/blood-data/BLOOD.RFF -dukedata D:/dos/duke3D/duke3d.grp -map E1M1
+```
+
+This composes Blood's original `GameInterface` beneath the same Superset
+frontend. Blood owns its map loader, XSECTOR/XSPRITE triggers, events, sequences,
+player, enemies, physics, weapons, pickups, sounds, HUD and world clock. The
+default character is Caleb in this adapter. Duke character/weapon selection is
+explicitly rejected until its reverse controller/combat adapter exists; a stale
+archived Duke weapon preference falls back with a diagnostic. This is a
+single-player bootstrap. Switching map families during a live session remains
+pending; choose the primary map family at startup for now.
+
+The first foreign component is the original `DukeBloodSplat1` class and its
+native Initialize/Tick/Animate handlers. `superset_spawn_duke_effect splat`
+places one on a nearby wall for inspection. It remains a real `DukeActor`
+alongside Blood actors, using Duke art and source palette colors. The original
+decal growth algorithm stops at counter 364. The native Duke sprite queue owns
+insertion/eviction; the Blood adapter supplies that component's GC, save and map
+lifetime. Its current uncompiled-CON default capacity is 64. Secondary CON
+settings are not yet applied in this adapter.
+
+Only explicitly supported, nonblocking foreign effects are ticked/rendered.
+Blood's sprite renderer checks actor family before entering its typed actor
+path. Blood owns each simulation step; the foreign tick runs once when the
+native clock advances, without running Duke's full ticker. The fixture compares
+native frame/clock deltas with the Duke actor counter. Unknown foreign actors
+are not passed through Blood rendering as if they were Blood actors.
+
+The private Duke bank reads ART, palette.dat, lookup.dat and the engine's Duke
+texture-name definitions without installing Duke's filter or archive in Blood's
+filesystem. Both private banks share the ART decoder, and native/private banks
+share the texture-alias parser including rotations. Duke sprite sets resolve
+through `mashup/duke/` names. Primary tile ranges, palette, shade count, game
+flags and filesystem entries stay unchanged. Private archive readers preserve
+future access to CON/samples without making them primary Blood resources.
+
+The bank retains Duke lookup/base-palette data and decodes the native colors,
+including opaque index 0 and transparent index 255. Normal/underwater view roles
+are mapped explicitly; other Blood view palettes are not assumed to mean the
+same Duke effect. Complete indexed shading, fullbright masks, voxels, sounds,
+overrides and CON execution remain integration work for secondary Duke content.
+
+Existing Duke-world adapters use `IsDukeMap()` at their environment boundaries.
+Frontend identity alone must not intercept native Blood missiles, clear its
+things' hit flags, retune its dudes, or run the Duke-world controller/diagnostic
+paths. Blood's original sequence/event serialization remains authoritative;
+the separate secondary-Blood serializer used in Duke maps is not run again.
+Shared gameplay becomes map-independent as the reverse collision/damage and
+controller services are added; these gates identify the still one-way adapters.
+
+Rules revision 10 records `map_rules=blood`, Blood's native save adapter version,
+`blood_archive_md5` and `duke_bank_md5`. The latter fingerprints the secondary
+archive and engine alias definitions without installation paths. The manifest
+rejects the opposite map family, altered secondary content and missing metadata
+before actor restoration. Full primary Blood ART/SFX/mod dependency tracking
+is still pending. Earlier experimental rule revisions are incompatible.
+
+```powershell
+./tools/check-superset-blood-map.ps1 -DukeGrp D:/dos/duke3D/duke3d.grp -BloodRff D:/prog/isoraze/build-isoraze/run/blood-data/BLOOD.RFF -EnableSound
+```
+
+The fixture checks E1M1, fresh E1M2 loads and restoration, native-size Caleb,
+native TNT-barrel health/hitscan flags, actual flare input/ammo, ignition/source
+attribution and subsequent native burn damage. Its high-health, paused zombie
+is diagnostic setup, not a changed enemy rule. It checks native Blood scheduled
+FX restoration/expiry beside native Duke ticking, decal growth limits, queue
+capacity/eviction, save/load/GC and complete foreign actor removal. Ignition is
+checked separately from health loss because the native flare configuration can
+ignite first and deal health damage through later burn ticks.
+
+This is the first reverse-world component, not full Duke combat in Blood maps.
+Native collision/hit structures still contain game-specific typed casts. Duke
+weapons, projectiles and enemies need world identity/damage/collision services
+before they can safely interact with arbitrary native Blood actors. Their CON
+and map queries also need appropriate environment handlers. Merely invoking a
+second full simulation or changing global game flags would not provide that.
+
+Verified on 2026-11-08: Release build and the complete reverse-map fixture passed
+with audio (`blood-map-20261108T063216312`), including all private Duke palette
+decoders, native queue insertion/eviction, one tick per Blood frame and counter
+restoration. Screenshots were inspected. Original Duke episode starts passed
+(`runtime-20261108T062546246`); original Duke E1L1 and Blood E1M1 then passed with
+the common save barrier, including native flare/spray persistence
+(`runtime-20261108T063143430`). Both characters passed independent weapon-family
+handoffs (`weapons-20261108T063249069`) and shared freezer/zombie checks
+(`freeze-20261108T063415239`). Caleb E1L1, a fresh E1L2 load, incoming damage,
+both death/restart paths and saved FX passed (`runtime-20261108T063933815`).
+
+Fixture saves use the core `mashup_save_wait` completion barrier; the earlier
+`superset_save_wait` command remains an alias. This also applies to original-game
+checks. Input pulses for native Use/death restart stay held across queued/catch-up
+packets; health, armor, movement and restart assertions remain unchanged.
 
 ## Native Caleb controller milestone
 
@@ -116,8 +215,8 @@ This is an incremental native adapter, not the final shared actor/AI model.
 
 No scale compensation is applied: initial idle eye height is 56.6875 world units
 and horizontal radius is 12. Native Blood SEQ state and the selected controller
-are serialized with the session. Save schema is 2; rules revision is now 9
-after integrating freezing, resumable Blood sequences and independent weapon families. Earlier
+are serialized with the session. Save schema is 2; rules revision is now 10
+after adding the reverse map adapter and foreign Duke actor state. Earlier
 Superset bootstrap saves are intentionally incompatible with this experimental
 schema. The legacy native game save signatures remain separate.
 
@@ -577,8 +676,8 @@ secondary controller, and emitted projectiles retain that resolution after the
 Blood weapon mode is disabled. Blood's flame-lick FX spawning is reused, with
 extents adjusted for centered Blood sprites and feet-based Duke sprites.
 Shared object ticks advance projectiles and statuses once after the Duke world
-phase. Native axe-zombie AI now shares this phase; the reverse Blood map adapter
-is still pending.
+phase. Native axe-zombie AI now shares this phase; the initial Blood-map
+bootstrap is described above, and reverse combat remains pending.
 
 ```powershell
 ./tools/check-superset-flames.ps1 -DukeGrp 'D:/games/duke/duke3d.grp' -BloodDirectory 'D:/games/blood' -PythonPath python -EnableSound
@@ -732,8 +831,8 @@ that dedicated interaction still needs a Blood-controller hook.
 Selecting Duke weapons does not activate Duke inventory controls/jetpack for
 Caleb. Blood sprite repeats are not interpreted as Duke's shrunken HUD state;
 the normal Duke weapon is drawn without changing Caleb's physical dimensions.
-Shrinking, player freezing, other Blood weapons and the reverse map
-adapter remain pending. Duke pickups retain Duke inventory ownership; automatic
+Shrinking, player freezing, other Blood weapons in Duke maps and reverse combat
+remain pending. Duke pickups retain Duke inventory ownership; automatic
 cross-game pickup conversion and the common armor policy remain open decisions.
 
 ```powershell
@@ -986,8 +1085,8 @@ compensation does not address collision, projectile origins or interaction reach
    axe-zombie targets and freezing on axe zombies are present; add shrinking, electrical and
    other damage interactions. Coordinate animation/AI callbacks and save state.
 4. Route native movement/environment queries to each map adapter's water,
-   platforms, transports, use actions and hazards. Add the Blood map adapter
-   and prove foreign actors in both map families.
+   platforms, transports, use actions and hazards. Extend the Blood map adapter
+   and expand the initial foreign Duke actor proof into reverse combat.
 5. Expand selectable mixed inventories, weapons, enemies and pickup policies;
    provide jetpack/shrinking progression abilities. Keep conversions separate
    from tunable balance and verify safe regrowth and passage clearance.

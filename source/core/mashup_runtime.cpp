@@ -14,6 +14,25 @@
 #include "savegamehelp.h"
 #include "mashup_resources.h"
 
+extern FString BackupSaveGame;
+extern bool sendsave;
+
+namespace
+{
+void ContinueAfterSave(FCommandLine& argv)
+{
+	if (argv.argc() != 3) return;
+	if (!sendsave && gameaction != ga_savegame && BackupSaveGame == G_BuildSaveName(argv[1]))
+		C_ExecFile(argv[2]);
+	else AddCommandString(FStringf("wait 1; mashup_save_wait \"%s\" \"%s\"", argv[1], argv[2]).GetChars());
+}
+}
+
+// Save requests are ordinary input packets; every frontend needs the completed
+// save before a diagnostic script can mutate or reload the scene.
+UNSAFE_CCMD(mashup_save_wait) { ContinueAfterSave(argv); }
+UNSAFE_CCMD(superset_save_wait) { ContinueAfterSave(argv); } // Existing fixture alias.
+
 namespace Mashup
 {
 void DrawWeaponResourcePreview()

@@ -70,7 +70,7 @@ bool PrepareDukeHit(Duke3d::DDukeActor* hitter, Damage damage, bool impulse)
 bool ApplyDukeHealthDamage(Duke3d::DDukeActor* target, Damage damage, DCoreActor* source)
 {
 	if (HasBloodEnemy(target)) return ApplyBloodEnemyDamage(target, damage, source);
-	if (!IsActive() || !target || target->spr.extra <= 0 || damage.amount < 0 ||
+	if (!IsDukeMap() || !target || target->spr.extra <= 0 || damage.amount < 0 ||
 		damage.amount > Units::FromDukeHealth(INT16_MAX)) return false;
 	if (damage.kind == DamageKind::Heat)
 	{

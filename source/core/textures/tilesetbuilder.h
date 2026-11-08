@@ -2,6 +2,9 @@
 
 #include "texinfo.h"
 
+class FScanner;
+void LoadTextureAliases(FScanner& scanner, int firsttileid, int maxarttile, const char* prefix = "");
+
 struct TileBuildDesc
 {
 	// persistent data that will be present for the entire run of the game.

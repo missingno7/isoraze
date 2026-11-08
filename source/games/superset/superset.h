@@ -9,6 +9,8 @@ namespace Superset
 // Frontend identity is independent of the map adapter's legacy game flags.
 void Configure(int mapGameFlags);
 bool IsActive();
+bool IsBloodMap();
+bool IsDukeMap();
 bool CalebSelected();
 bool BloodWeaponsRequested();
 bool HasBloodMovement(DCorePlayer* player);

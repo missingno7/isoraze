@@ -1,4 +1,5 @@
 #include "mashup_resources.h"
+#include "mashup_art.h"
 #include "resourcefile.h"
 #include "texturemanager.h"
 #include "image.h"
@@ -24,19 +25,9 @@ namespace Mashup
 {
 namespace
 {
-struct ArtTile
-{
-	const uint8_t* pixels = nullptr;
-	unsigned width = 0, height = 0;
-	uint32_t animation = 0;
-};
-
-struct BloodResourceBank
+struct BloodResourceBank : PrivateArtBank
 {
 	std::unique_ptr<FileSys::FResourceFile> directory, resources, sounds;
-	// FBuildTexture borrows pixel memory. Keep the buffers at stable addresses.
-	std::vector<std::unique_ptr<FileSys::FileData>> artFiles;
-	TArray<ArtTile> tiles;
 	FRemapTable imagePalette;
 	int translations[5][15] {};
 	int firstTexture = 0;
@@ -97,29 +88,6 @@ struct BloodResourceBank
 		if (entry < 0) I_FatalError("Blood/Duke: missing %s", name);
 		auto reader = directory->GetEntryReader(entry);
 		return std::unique_ptr<FileSys::FResourceFile>(FileSys::FResourceFile::OpenResourceFile(name, reader, true));
-	}
-
-	void ReadArt(FileSys::FileData data)
-	{
-		auto word = [&](size_t offset) { uint16_t v; memcpy(&v, data.bytes() + offset, 2); return LittleShort(v); };
-		auto dword = [&](size_t offset) { uint32_t v; memcpy(&v, data.bytes() + offset, 4); return LittleLong(v); };
-		if (data.size() < 16 || dword(0) != 1) I_FatalError("Blood/Duke: invalid ART header");
-		unsigned first = dword(8), last = dword(12);
-		if (first > last || last >= MAXUSERTILES) I_FatalError("Blood/Duke: invalid ART tile range");
-		size_t count = last - first + 1, offset = 16 + count * 8;
-		if (offset > data.size()) I_FatalError("Blood/Duke: truncated ART metadata");
-		if (tiles.Size() <= last) tiles.Resize(last + 1);
-		for (unsigned i = 0; i < count; ++i)
-		{
-			unsigned width = word(16 + i * 2), height = word(16 + count * 2 + i * 2);
-			size_t size = size_t(width) * height;
-			if (size > data.size() - offset) I_FatalError("Blood/Duke: truncated ART pixels");
-			tiles[first + i] = { size ? data.bytes() + offset : nullptr, width, height, dword(16 + count * 4 + i * 4) };
-			offset += size;
-		}
-		auto buffer = std::make_unique<FileSys::FileData>();
-		*buffer = std::move(data);
-		artFiles.push_back(std::move(buffer));
 	}
 
 	void LoadPalettes()

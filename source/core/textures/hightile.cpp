@@ -322,6 +322,7 @@ bool PickTexture(FGameTexture* tex, int paletteid, TexturePick& pick, bool wanti
 {
 	if (!tex->isValid() || tex->GetTexelWidth() <= 0 || tex->GetTexelHeight() <= 0) return false;
 	if (Mashup::PickBloodTexture(tex, paletteid, pick)) return true;
+	if (Mashup::PickDukeTexture(tex, paletteid, pick)) return true;
 
 	int usepalette = 0, useremap = 0;
 	if (!IsLuminosityTranslation(paletteid))

@@ -14,12 +14,22 @@
 #include "version.h"
 #include "gamestate.h"
 #include "savegamehelp.h"
+#include "duke_effects.h"
 #include <memory>
 #include <utility>
 
-namespace Duke3d { ::GameInterface* CreateInterface(); }
+namespace Duke3d { ::GameInterface* CreateInterface(); void InitAnimationTables(); }
+namespace Blood { ::GameInterface* CreateInterface(); }
 EXTERN_CVAR(Bool, mashup_combat)
-CVAR(Int, superset_weapon_profile, 0, CVAR_ARCHIVE) // 0: character default, 1: Blood, 2: Duke.
+CUSTOM_CVAR(Int, superset_weapon_profile, 0, CVAR_ARCHIVE) // 0: character default, 1: Blood, 2: Duke.
+{
+	if (self < 0 || self > 2) self = clamp(int(self), 0, 2);
+	if (Superset::IsBloodMap() && self == 2)
+	{
+		Printf("Superset: Duke weapons in Blood maps need the reverse combat adapter; using the native Blood family.\n");
+		self = 0;
+	}
+}
 
 namespace Superset
 {
@@ -27,9 +37,10 @@ namespace
 {
 bool active = false;
 bool calebPlayer = false;
-FString bloodDataPath;
+bool bloodMap = false;
+FString bloodDataPath, dukeDataPath;
 constexpr int SaveSchema = 2;
-constexpr int RulesRevision = 9;
+constexpr int RulesRevision = 10;
 constexpr const char* SaveSignature = GAMENAME ".Superset";
 
 FString FingerprintPrimaryArchive()
@@ -51,7 +62,7 @@ FString FingerprintPrimaryArchive()
 
 class CombinedGameInterface final : public ::GameInterface
 {
-	std::unique_ptr<::GameInterface> world { Duke3d::CreateInterface() };
+	std::unique_ptr<::GameInterface> world { bloodMap ? Blood::CreateInterface() : Duke3d::CreateInterface() };
 	FString primaryFingerprint;
 
 public:
@@ -61,7 +72,8 @@ public:
 	void LoadSecondaryResources() override
 	{
 		world->LoadSecondaryResources();
-		Mashup::LoadBloodResources(bloodDataPath.GetChars());
+		if (bloodMap) Mashup::LoadDukeResources(dukeDataPath.GetChars());
+		else Mashup::LoadBloodResources(bloodDataPath.GetChars());
 		primaryFingerprint = FingerprintPrimaryArchive();
 	}
 
@@ -76,7 +88,16 @@ public:
 		world->app_init();
 		if (const char* weapons = Args->CheckValue("-superset-weapons"))
 			superset_weapon_profile = !stricmp(weapons, "blood") ? 1 : !stricmp(weapons, "duke") ? 2 : 0;
-		Printf("Superset frontend: independent identity/configuration/saves; Duke map adapter.\n");
+		if (bloodMap)
+		{
+			if (!BloodWeaponsRequested())
+			{
+				Printf("Superset: saved Duke weapon selection needs the reverse combat adapter; using native Blood weapons.\n");
+				superset_weapon_profile = 0;
+			}
+			InitDukeEffects();
+		}
+		Printf("Superset frontend: independent identity/configuration/saves; %s map adapter.\n", bloodMap ? "Blood" : "Duke");
 		Printf("Superset controller: %s. Mixed inventory and full damage normalization remain pending.\n",
 			CalebSelected() ? "Caleb (native Blood movement)" : "Duke (native Duke movement)");
 	}
@@ -86,9 +107,11 @@ public:
 		if (arc.BeginObject("Superset"))
 		{
 			int rules = RulesRevision, adapter = world->GetSaveSig().currentsavever;
-			FString mapRules = "duke", blood = Mashup::BloodResourceFingerprint();
+			FString mapRules = bloodMap ? "blood" : "duke";
+			FString secondary = bloodMap ? Mashup::DukeResourceFingerprint() : Mashup::BloodResourceFingerprint();
 			arc("rules_revision", rules)("map_rules", mapRules)("map_adapter_version", adapter)
-				("duke_archive_md5", primaryFingerprint)("blood_bank_md5", blood).EndObject();
+				(bloodMap ? "blood_archive_md5" : "duke_archive_md5", primaryFingerprint)
+				(bloodMap ? "duke_bank_md5" : "blood_bank_md5", secondary).EndObject();
 		}
 	}
 
@@ -98,13 +121,14 @@ public:
 		if (arc.BeginObject("Superset"))
 		{
 			int rules = -1, adapter = -1;
-			FString mapRules, duke, blood;
+			FString mapRules, primary, secondary;
 			arc("rules_revision", rules)("map_rules", mapRules)("map_adapter_version", adapter)
-				("duke_archive_md5", duke)("blood_bank_md5", blood).EndObject();
-			matches = rules == RulesRevision && mapRules.Compare("duke") == 0 &&
+				(bloodMap ? "blood_archive_md5" : "duke_archive_md5", primary)
+				(bloodMap ? "duke_bank_md5" : "blood_bank_md5", secondary).EndObject();
+			matches = rules == RulesRevision && mapRules.Compare(bloodMap ? "blood" : "duke") == 0 &&
 				adapter == world->GetSaveSig().currentsavever &&
-				primaryFingerprint.IsNotEmpty() && duke == primaryFingerprint &&
-				blood.IsNotEmpty() && blood.Compare(Mashup::BloodResourceFingerprint()) == 0;
+				primaryFingerprint.IsNotEmpty() && primary == primaryFingerprint &&
+				secondary.IsNotEmpty() && secondary.Compare(bloodMap ? Mashup::DukeResourceFingerprint() : Mashup::BloodResourceFingerprint()) == 0;
 		}
 		if (!matches && !formenu)
 			Printf("Superset: save requires a matching rules revision, map adapter and Duke/Blood content.\n");
@@ -129,7 +153,8 @@ public:
 			}
 		}
 		world->SerializeGameState(arc);
-		SerializeBloodControllerState(arc);
+		if (bloodMap) SerializeDukeEffects(arc);
+		else SerializeBloodControllerState(arc);
 	}
 
 	// Bootstrap delegation preserves the native map behavior. Shared gameplay
@@ -138,8 +163,12 @@ public:
 	void FinalizeSetup() override { world->FinalizeSetup(); }
 	void LoadTextureInfo(TilesetBuildInfo& info) override { world->LoadTextureInfo(info); }
 	void SetupSpecialTextures(TilesetBuildInfo& info) override { world->SetupSpecialTextures(info); }
-	void loadPalette() override { world->loadPalette(); }
-	void FreeLevelData() override { ClearBloodControllerState(); world->FreeLevelData(); }
+	void loadPalette() override { world->loadPalette(); if (bloodMap) Duke3d::InitAnimationTables(); }
+	void FreeLevelData() override
+	{
+		if (bloodMap) ClearDukeEffects(); else ClearBloodControllerState();
+		world->FreeLevelData();
+	}
 	bool GenerateSavePic() override { return world->GenerateSavePic(); }
 	void PlayHudSound() override { world->PlayHudSound(); }
 	void MenuOpened() override { world->MenuOpened(); }
@@ -152,11 +181,17 @@ public:
 	void SetAmbience(bool on) override { world->SetAmbience(on); }
 	void ExitFromMenu() override { world->ExitFromMenu(); }
 	void UpdateSounds() override { world->UpdateSounds(); }
-	void ErrorCleanup() override { world->ErrorCleanup(); }
+	void ErrorCleanup() override { if (bloodMap) ClearDukeEffects(); world->ErrorCleanup(); }
 	void Startup() override { world->Startup(); }
 	void DrawBackground() override { world->DrawBackground(); }
 	void Render() override { world->Render(); }
-	void Ticker() override { world->Ticker(); }
+	void Ticker() override
+	{
+		int before = PlayClock;
+		if (bloodMap) BackupDukeEffects();
+		world->Ticker();
+		if (bloodMap && PlayClock != before) TickDukeEffects();
+	}
 	int GetPlayerChecksum(int pnum) override { return world->GetPlayerChecksum(pnum); }
 	const char* CheckCheatMode() override { return world->CheckCheatMode(); }
 	const char* GenericCheat(int player, int cheat) override { return world->GenericCheat(player, cheat); }
@@ -199,26 +234,32 @@ void Configure(int mapGameFlags)
 	active = Args->CheckParm("-superset") != 0;
 	if (!active)
 	{
-		if (Args->CheckParm("-blooddata")) I_FatalError("Use -blooddata with the -superset frontend.");
+		if (Args->CheckParm("-blooddata") || Args->CheckParm("-dukedata")) I_FatalError("Use secondary game data with the -superset frontend.");
 		return;
 	}
-	if (!(mapGameFlags & GAMEFLAG_DUKE) || (mapGameFlags & GAMEFLAG_RRALL))
-		I_FatalError("Superset: the bootstrap currently requires Duke Nukem 3D map data (-iwad duke3d.grp).");
+	bloodMap = (mapGameFlags & GAMEFLAG_BLOOD) != 0;
+	if ((!bloodMap && !(mapGameFlags & GAMEFLAG_DUKE)) || (mapGameFlags & GAMEFLAG_RRALL))
+		I_FatalError("Superset: select Duke Nukem 3D or Blood map data with -iwad.");
 	if (Args->CheckParm("-bloodduke"))
 		I_FatalError("Superset: use -blooddata <Blood directory>, without the legacy -bloodduke option.");
-	const char* path = Args->CheckValue("-blooddata");
-	if (!path) I_FatalError("Superset: specify -blooddata <Blood data directory or BLOOD.RFF>.");
-	bloodDataPath = path;
+	const char* path = Args->CheckValue(bloodMap ? "-dukedata" : "-blooddata");
+	if (!path) I_FatalError("Superset: specify %s for this map adapter.", bloodMap ? "-dukedata <Duke GRP archive>" : "-blooddata <Blood directory or BLOOD.RFF>");
+	if (bloodMap) dukeDataPath = path; else bloodDataPath = path;
 	const char* character = Args->CheckValue("-superset-player");
 	if (character && stricmp(character, "duke") && stricmp(character, "caleb"))
 		I_FatalError("Superset: -superset-player must be duke or caleb.");
-	calebPlayer = character && !stricmp(character, "caleb");
+	calebPlayer = character ? !stricmp(character, "caleb") : bloodMap;
+	if (bloodMap && !calebPlayer) I_FatalError("Superset: Duke in Blood maps needs the reverse character adapter. Select -superset-player caleb for now.");
 	const char* weapons = Args->CheckValue("-superset-weapons");
 	if (Args->CheckParm("-superset-weapons") && (!weapons || (stricmp(weapons, "auto") && stricmp(weapons, "blood") && stricmp(weapons, "duke"))))
 		I_FatalError("Superset: -superset-weapons must be auto, blood or duke.");
+	if (bloodMap && weapons && !stricmp(weapons, "duke"))
+		I_FatalError("Superset: Duke weapons in Blood maps need the reverse combat adapter. Select -superset-weapons blood for now.");
 }
 
 bool IsActive() { return active; }
+bool IsBloodMap() { return active && bloodMap; }
+bool IsDukeMap() { return active && !bloodMap; }
 bool CalebSelected() { return active && calebPlayer; }
 bool BloodWeaponsRequested()
 {
@@ -232,6 +273,7 @@ CCMD(superset_weapons)
 	if (!IsActive()) return;
 	if (argv.argc() == 2)
 	{
+		if (bloodMap && !stricmp(argv[1], "duke")) { Printf("Superset: Duke weapons in Blood maps need the reverse combat adapter.\n"); return; }
 		if (!stricmp(argv[1], "auto")) superset_weapon_profile = 0;
 		else if (!stricmp(argv[1], "blood")) superset_weapon_profile = 1;
 		else if (!stricmp(argv[1], "duke")) superset_weapon_profile = 2;
@@ -261,8 +303,11 @@ CCMD(superset_check)
 	};
 	bool manifest = validates(json, length);
 	FString changed(json, length);
-	changed.Substitute(Mashup::BloodResourceFingerprint(), "different-blood-data");
+	changed.Substitute(bloodMap ? Mashup::DukeResourceFingerprint() : Mashup::BloodResourceFingerprint(), "different-secondary-data");
 	manifest &= !validates(changed.GetChars(), changed.Len()) && !validates("{}", 2);
+	FString otherMap(json, length);
+	otherMap.Substitute(bloodMap ? "\"blood\"" : "\"duke\"", bloodMap ? "\"duke\"" : "\"blood\"");
+	manifest &= !validates(otherMap.GetChars(), otherMap.Len());
 	auto headerResult = [](const FString& data)
 	{
 		FileReader reader;
@@ -270,7 +315,7 @@ CCMD(superset_check)
 		return G_ValidateSavegame(reader, nullptr, true);
 	};
 	FString nativeGame(json, length);
-	nativeGame.Substitute(SaveSignature, SAVESIG_DN3D);
+	nativeGame.Substitute(SaveSignature, bloodMap ? SAVESIG_BLD : SAVESIG_DN3D);
 	bool saveIsolation = headerResult(nativeGame) == 0 && headerResult(changed) == -2;
 	// Sixteen 17/16-point hits must lose 17 HP, including every fraction.
 	auto health = Units::FromDukeHealth(100);
@@ -278,7 +323,7 @@ CCMD(superset_check)
 	bool units = Units::HealthPoints(health) == 83. &&
 		Units::FromSimulationSteps(30) == Units::ClockRate && Units::Seconds(Units::ClockRate) == 1.;
 	bool identity = currentGame.Compare("Superset") == 0 && strcmp(gi->Name(), "Superset") == 0 &&
-		strcmp(gi->GetSaveSig().savesig, SaveSignature) == 0 && Mashup::HasBloodResources();
+		strcmp(gi->GetSaveSig().savesig, SaveSignature) == 0 && (bloodMap ? Mashup::HasDukeResources() : Mashup::HasBloodResources());
 	Printf("Superset check: identity/config=%s, content manifest=%s, save isolation=%s, shared units=%s.\n",
 		identity ? "PASS" : "FAIL", manifest ? "PASS" : "FAIL", saveIsolation ? "PASS" : "FAIL", units ? "PASS" : "FAIL");
 }

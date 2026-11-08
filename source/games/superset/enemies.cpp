@@ -160,7 +160,7 @@ Blood::DBloodActor* BloodState(DCoreActor* actor)
 	if (auto duke = dyn_cast<Duke3d::DDukeActor>(actor))
 	{
 		if (duke->supersetBloodState) return dyn_cast<Blood::DBloodActor>(duke->supersetBloodState.Get());
-		if (duke->isPlayer())
+		if (IsDukeMap() && duke->isPlayer())
 			if (auto player = static_cast<Blood::DBloodPlayer*>(Mashup::GetBloodPlayer(duke->PlayerIndex()))) return player->GetActor();
 	}
 	return nullptr;
@@ -169,7 +169,7 @@ Blood::DBloodActor* BloodState(DCoreActor* actor)
 bool HasBloodEnemy(DCoreActor* actor)
 {
 	auto duke = dyn_cast<Duke3d::DDukeActor>(actor);
-	if (!IsActive() || !duke) return false;
+	if (!IsDukeMap() || !duke) return false;
 	auto type = PClass::FindActor("SupersetBloodEnemy");
 	return type && duke->IsKindOf(type);
 }
@@ -227,7 +227,7 @@ void BloodEnemyHit(Duke3d::DDukeActor* body, Duke3d::DDukeActor* hitter)
 
 void TickBloodEnemies()
 {
-	if (!IsActive()) return;
+	if (!IsDukeMap()) return;
 	ConfigureDifficulty();
 	Duke3d::DukeSpriteIterator bodies;
 	while (auto body = bodies.Next())
@@ -276,7 +276,7 @@ void TickBloodEnemies()
 
 void PublishBloodEnemies()
 {
-	if (!IsActive()) return;
+	if (!IsDukeMap()) return;
 	Blood::BloodSpriteIterator states;
 	while (auto state = states.Next())
 	{
@@ -294,7 +294,7 @@ void PublishBloodEnemies()
 
 void PrepareBloodWorldObjects()
 {
-	if (!IsActive()) return;
+	if (!IsDukeMap()) return;
 	Blood::BloodSpriteIterator it;
 	while (auto state = it.Next())
 	{
@@ -317,7 +317,7 @@ bool AnimateBloodEnemy(tspritetype* sprite, Duke3d::DDukeActor* body, const DVec
 
 CCMD(superset_spawn_enemy)
 {
-	if (!IsActive() || gamestate != GS_LEVEL) return;
+	if (!IsDukeMap() || gamestate != GS_LEVEL) return;
 	if (argv.argc() != 2 || stricmp(argv[1], "zombie")) { Printf("Blood enemies: zombie\n"); return; }
 	auto player = Duke3d::getPlayer(myconnectindex);
 	auto source = BloodState(player->GetActor());
@@ -348,7 +348,7 @@ CCMD(superset_spawn_enemy)
 
 CCMD(superset_enemy_check)
 {
-	if (!IsActive() || gamestate != GS_LEVEL) return;
+	if (!IsDukeMap() || gamestate != GS_LEVEL) return;
 	if (argv.argc() == 2 && !stricmp(argv[1], "guard")) { Duke3d::ud.god = 1; return; }
 	if (argv.argc() == 2 && !stricmp(argv[1], "watchburn")) { watchBurn = true; return; }
 	if (argv.argc() == 2 && !stricmp(argv[1], "watchdeath")) { watchDeath = true; deathIndex = deathClock = -1; return; }

@@ -82,7 +82,7 @@ CCMD(superset_spawn_pickup)
 		return;
 	}
 	auto player = PlayerArray[myconnectindex];
-	if (!Mashup::GetBloodPlayer(player->pnum))
+	if (!IsBloodMap() && !Mashup::GetBloodPlayer(player->pnum))
 	{
 		Printf("The player inventory is not initialized yet.\n");
 		return;
@@ -93,7 +93,7 @@ CCMD(superset_spawn_pickup)
 
 CCMD(superset_inventory_check)
 {
-	if (!IsActive() || gamestate != GS_LEVEL || argv.argc() < 2) return;
+	if (!IsDukeMap() || gamestate != GS_LEVEL || argv.argc() < 2) return;
 	auto duke = Duke3d::getPlayer(myconnectindex);
 	auto blood = static_cast<Blood::DBloodPlayer*>(Mashup::GetBloodPlayer(myconnectindex));
 	if (!blood || !Mashup::IsCombatPlayer(duke)) return;

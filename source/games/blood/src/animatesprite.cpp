@@ -41,6 +41,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "texturemanager.h"
 #include "texinfo.h"
 #include "models/modeldata.h"
+#include "games/superset/duke_effects.h"
 
 BEGIN_BLD_NS
 
@@ -581,7 +582,12 @@ void viewProcessSprites(tspriteArray& tsprites, const DVector3& cPos, DAngle cA,
 	for (int nTSprite = int(tsprites.Size()) - 1; nTSprite >= 0; nTSprite--)
 	{
 		tspritetype* pTSprite = tsprites.get(nTSprite);
-		auto owneractor = static_cast<DBloodActor*>(pTSprite->ownerActor);
+		auto owneractor = dyn_cast<DBloodActor>(pTSprite->ownerActor);
+		if (!owneractor)
+		{
+			if (!Superset::DrawDukeEffect(pTSprite, interpfrac)) pTSprite->scale = DVector2(0, 0);
+			continue;
+		}
 		if (owneractor->spr.detail > gDetail)
 		{
 			pTSprite->scale = DVector2(0, 0);

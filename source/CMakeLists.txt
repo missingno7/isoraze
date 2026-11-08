@@ -970,6 +970,7 @@ set (PCH_SOURCES
 	core/maploader.cpp
 	core/mashup_runtime.cpp
 	core/mashup_resources.cpp
+	core/mashup_duke_resources.cpp
 	core/mashup_player.cpp
 	games/superset/game.cpp
 	games/superset/player.cpp
@@ -978,6 +979,7 @@ set (PCH_SOURCES
 	games/superset/projectiles.cpp
 	games/superset/enemies.cpp
 	games/superset/status.cpp
+	games/superset/duke_effects.cpp
 	core/postprocessor.cpp
 	core/searchpaths.cpp
 	core/serializer_raze.cpp

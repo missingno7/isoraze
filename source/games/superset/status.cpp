@@ -15,9 +15,6 @@
 #include "c_dispatch.h"
 #include "savegamemanager.h"
 
-extern FString BackupSaveGame;
-extern bool sendsave;
-
 namespace Superset
 {
 namespace
@@ -25,16 +22,6 @@ namespace
 int flightIndex = -1, flightStart = 0, flightSequence = -1, flightFrame = -1, flightFrameTime = -1;
 bool sawFlight = false, flightPaused = true;
 }
-// Save commands travel through the normal input stream. Test continuations
-// must wait for the completed save, not assume a fixed number of ticks.
-UNSAFE_CCMD(superset_save_wait)
-{
-	if (!IsActive() || argv.argc() != 3) return;
-	if (!sendsave && gameaction != ga_savegame && BackupSaveGame == G_BuildSaveName(argv[1]))
-		C_ExecFile(argv[2]);
-	else AddCommandString(FStringf("wait 1; superset_save_wait \"%s\" \"%s\"", argv[1], argv[2]).GetChars());
-}
-
 bool IsFrozen(DCoreActor* actor)
 {
 	if (!IsActive() || !actor) return false;
@@ -123,7 +110,7 @@ void TickFreezeEffects()
 
 CCMD(superset_freeze_check)
 {
-	if (!IsActive() || gamestate != GS_LEVEL || argv.argc() != 2) return;
+	if (!IsDukeMap() || gamestate != GS_LEVEL || argv.argc() != 2) return;
 	auto player = Duke3d::getPlayer(myconnectindex);
 	if (!stricmp(argv[1], "launch")) { Duke3d::shoot(player->GetActor(), Duke3d::DukeFreezeBlastClass); return; }
 	if (!stricmp(argv[1], "quiet"))

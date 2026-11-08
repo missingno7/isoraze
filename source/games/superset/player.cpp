@@ -204,7 +204,7 @@ void ApplyCalebImpulse(DCorePlayer* player, const DVector2& impulse)
 
 void CollectBloodPickups(DCorePlayer* player)
 {
-	if (!IsActive()) return;
+	if (!IsDukeMap()) return;
 	auto blood = NativePlayer(player);
 	if (!blood || blood->GetActor()->xspr.health == 0) return;
 	DukePlayerWorld world;
@@ -226,7 +226,7 @@ bool HasBloodMovement(DCorePlayer* player)
 
 bool PrepareBloodMovement(DCorePlayer* player)
 {
-	if (!CalebSelected()) return false;
+	if (!IsDukeMap() || !CalebSelected()) return false;
 	auto duke = static_cast<Duke3d::DDukePlayer*>(player);
 	auto blood = NativePlayer(player);
 	if (!blood) return false;
@@ -335,7 +335,7 @@ void FinishBloodMovement(DCorePlayer* player)
 
 void TickSharedObjects()
 {
-	if (!IsActive()) return;
+	if (!IsDukeMap()) return;
 	Mashup::RefreshBloodPlayerStates();
 	AdvanceBloodSequences();
 	TickBloodEnemies();
@@ -587,7 +587,7 @@ CCMD(superset_incoming_check)
 // doors, switches, lifts and transports still run through input/world ticks.
 CCMD(superset_navigation)
 {
-	if (!IsActive() || sector.Size() != 12 || sector[0].hitag != 32123 || argv.argc() < 2)
+	if (!IsDukeMap() || sector.Size() != 12 || sector[0].hitag != 32123 || argv.argc() < 2)
 	{
 		Printf("Superset navigation: requires the generated navigation fixture.\n");
 		return;

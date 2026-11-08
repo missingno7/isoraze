@@ -14,7 +14,7 @@ function Write-SupersetCheckScript([string[]]$Commands, [string]$ScriptPath) {
         if ($i + 1 -lt $phases.Count) {
             $saveName = [regex]::Match($phases[$i][-1], '^save (\S+)').Groups[1].Value
             $nextPath = (Join-Path $caseRoot ('phase-' + ($i + 1) + '.cfg')).Replace('\', '/')
-            $phases[$i].Add("wait 1; superset_save_wait $saveName `"$nextPath`"")
+            $phases[$i].Add("wait 1; mashup_save_wait $saveName `"$nextPath`"")
         }
         $phases[$i] -join '; ' | Set-Content -LiteralPath $path
     }

@@ -62,7 +62,7 @@ void FlameImpact(Blood::DBloodActor* flame, DCoreActor* target)
 
 bool FireBloodMissile(Blood::DBloodActor* source, double xyoff, double zoff, const DVector3& direction, int type, Blood::DBloodActor*& result)
 {
-	if (!IsActive()) return false;
+	if (!IsDukeMap()) return false;
 	// Do not fall through into Blood's typed collision path in a mixed world.
 	result = nullptr;
 	if (type != Blood::kMissileFlameSpray || direction.isZero()) return true;
@@ -105,6 +105,7 @@ bool FireBloodMissile(Blood::DBloodActor* source, double xyoff, double zoff, con
 
 void TickBloodProjectiles()
 {
+	if (!IsDukeMap()) return;
 	DukeProjectileWorld world;
 	Blood::BloodStatIterator it(Blood::kStatProjectile);
 	while (auto actor = it.Next())
@@ -188,7 +189,7 @@ void SerializeProjectileOptions(FSerializer& arc)
 
 CCMD(superset_flame_check)
 {
-	if (!IsActive() || gamestate != GS_LEVEL || argv.argc() < 2) return;
+	if (!IsDukeMap() || gamestate != GS_LEVEL || argv.argc() < 2) return;
 	auto duke = Duke3d::getPlayer(myconnectindex);
 	auto blood = static_cast<Blood::DBloodPlayer*>(Mashup::GetBloodPlayer(myconnectindex));
 	if (!blood) return;

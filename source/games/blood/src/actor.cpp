@@ -6302,7 +6302,7 @@ DBloodActor* actSpawnThing(sectortype* pSector, const DVector3& pos, int nThingT
 	actor->spr.cstat |= pThingInfo->cstat;
 	// Unbound foreign things are visual until their world/physics adapter is
 	// installed. Their native flags/data remain available for that adapter.
-	if (Superset::IsActive()) actor->spr.cstat &= ~CSTAT_SPRITE_BLOCK_ALL;
+	if (Superset::IsDukeMap()) actor->spr.cstat &= ~CSTAT_SPRITE_BLOCK_ALL;
 	actor->spr.setspritetexture(pThingInfo->textureID());
 	actor->spr.shade = pThingInfo->shade;
 	actor->spr.pal = pThingInfo->pal;

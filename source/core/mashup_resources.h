@@ -10,6 +10,15 @@ struct TexturePick;
 // The secondary game's resources never enter the primary game's tile or lump namespace.
 namespace Mashup
 {
+void LoadDukeResources(const char* path);
+bool HasDukeResources();
+const char* DukeResourceFingerprint();
+FileReader OpenDukeResource(const char* name);
+FTextureID DukeTile(int tile);
+FTextureID DukeTexture(const char* name);
+bool IsDukeTexture(FTextureID texture);
+bool PickDukeTexture(FGameTexture* texture, int translation, TexturePick& pick);
+bool CheckDukeResources();
 void InitBloodResources();
 void LoadBloodResources(const char* path);
 const char* BloodResourceFingerprint();
