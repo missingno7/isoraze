@@ -150,11 +150,12 @@ safely interpret. Start a new game; revision 16 saves are rejected explicitly.
   Blood weapons on a Duke-world controller still expose the earlier limited
   weapon/projectile slice; native homing, placed Life Leech targeting and all
   cross-enemy status responses are not comprehensively migrated.
-  Voodoo alternate fire retains Blood's sequential ammo budget. A common
-  nearest-first target order versus compatibility ordering remains an open
-  gameplay decision; eligibility does not guarantee every target receives part
-  of that budget. The projectile regression isolates stock innocents for this
-  reason rather than changing the attack's ammo rules implicitly.
+  Voodoo alternate fire retains Blood's sequential ammo budget and original
+  target ordering where possible, as selected by the user. Native Blood
+  targets keep their relative order; foreign enemies join the common target
+  list without nearest-first sorting. Eligibility does not guarantee every
+  target receives part of that budget. The projectile regression isolates
+  stock innocents for this reason rather than changing the attack's ammo rules.
   Existing paired-enemy freeze/thaw/fire behavior is
   preserved; it is not proof that the new direct axe zombie has every status
   capability yet.

@@ -15,6 +15,10 @@ map adapters. This is shared infrastructure, not a Pig Cop-specific damage patch
 Beast Hands no longer enter ordinary weapon-bank cycling, fixing the reported
 divide-by-zero crash. Start a new game with revision 17; older saves are rejected.
 
+Voodoo alternate fire preserves original target ordering where possible and
+spends its ammo sequentially. Foreign enemies are eligible through the common
+target list; later targets can receive no damage if earlier ones exhaust it.
+
 Both shotguns can be owned in bank 3; press 3 again to cycle them. Next/previous
 also traverses the combined banks. Their ammunition and Blood alternate fire
 remain native. For example, `superset_weapon_bank 3 blood.shotgun duke.shotgun`
