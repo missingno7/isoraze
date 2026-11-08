@@ -90,6 +90,8 @@ public:
 	int supersetFreezeTime = 0;
 	TObjPtr<DCoreActor*> supersetFreezeSource;
 	bool supersetForeignFx = false;
+	bool supersetForeignProjectile = false;
+	TObjPtr<DCoreActor*> supersetAttackSource;
 	short tempval, basepicnum;
 	unsigned short timetosleep;
 	bool mapSpawned;

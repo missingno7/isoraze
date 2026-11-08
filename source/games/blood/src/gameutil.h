@@ -37,7 +37,7 @@ bool CheckProximity(DBloodActor* pSprite, const DVector3& pos, sectortype* pSect
 int HitScan(DBloodActor* pSprite, double z, const DVector3& pos, unsigned int nMask, double range = 0);
 int VectorScan(DBloodActor* pSprite, double nOffset, double nZOffset, const DVector3& vel, double nRange, int ac);
 void GetZRange(DBloodActor* pSprite, double* ceilZ, Collision* ceilHit, double* floorZ, Collision* floorHit, double nDist, unsigned int nMask, unsigned int nClipParallax = 0);
-void GetZRangeAtXYZ(const DVector3& pos, sectortype* pSector, double* ceilZ, Collision* ceilHit, double* floorZ, Collision* floorHit, double nDist, unsigned int nMask, unsigned int nClipParallax = 0);
+void GetZRangeAtXYZ(const DVector3& pos, sectortype* pSector, double* ceilZ, CollisionBase* ceilHit, double* floorZ, CollisionBase* floorHit, double nDist, unsigned int nMask, unsigned int nClipParallax = 0);
 
 void ClipMove(DVector3& pos, sectortype** pSector, const DVector2& vect, double wd, double cd, double fd, unsigned int nMask, CollisionBase& hit, int tracecount = 3);
 BitArray GetClosestSpriteSectors(sectortype* pSector, const DVector2& pos, int nDist, TArray<walltype*>* pWalls, bool newSectCheckMethod = false);

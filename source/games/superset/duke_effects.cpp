@@ -5,6 +5,7 @@
 #include "../duke/src/dukeactor.h"
 #include "../blood/src/blood.h"
 #include "duke_effects.h"
+#include "duke_projectiles.h"
 #include "superset.h"
 #include "mashup_resources.h"
 #include "savegamehelp.h"
@@ -19,7 +20,8 @@ namespace
 void MarkEffects() { GC::MarkArray(Duke3d::spriteq, 1024); }
 bool Supported(Duke3d::DDukeActor* actor)
 {
-	return actor && actor->supersetForeignFx && actor->IsKindOf(PClass::FindClass("DukeBloodSplat1"));
+	return actor && ((actor->supersetForeignFx && actor->IsKindOf(PClass::FindClass("DukeBloodSplat1"))) ||
+		IsBloodDukeProjectile(actor) || IsDukeProjectileEffect(actor));
 }
 Blood::DBloodActor* MissileTarget()
 {
@@ -77,9 +79,12 @@ void TickDukeEffects()
 		if (!actor->sector() || actor->spr.scale.X == 0 || (actor->flags2 & SFLAG2_DIENOW)) actor->Destroy();
 		else
 		{
-			// These original ZScript Tick handlers need no CON/player lookup or
-			// typed collision result. Combat actors need the reverse world adapter.
+			// Only component adapters with safe world/contact boundaries run here.
 			Duke3d::CallTick(actor);
+			// Native laser trails die after Animate marks them seen. Give an unseen
+			// foreign trail one render opportunity too, then retire it when culled.
+			// counter is unused by this native trail class and already serializes.
+			if (!(actor->ObjectFlags & OF_EuthanizeMe) && IsDukeProjectileEffect(actor) && ++actor->counter >= 2) actor->Destroy();
 			if (actor->flags2 & SFLAG2_DIENOW) actor->Destroy();
 		}
 	}

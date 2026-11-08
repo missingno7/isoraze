@@ -47,6 +47,7 @@ This file is a combination of code from the following sources:
 #include "constants.h"
 #include "dukeactor.h"
 #include "games/superset/superset.h"
+#include "games/superset/duke_projectiles.h"
 
 BEGIN_DUKE_NS
 
@@ -1274,6 +1275,7 @@ int movesprite_ex(DDukeActor* actor, const DVector3& change, unsigned int clipty
 		ChangeActorSect(actor, dasectp);
 
 	double daz = actor->spr.pos.Z + change.Z * 0.5;
+	if (result.type == kHitNone && Superset::BloodDukeProjectileLink(actor, daz)) return result.type;
 	if (daz > actor->ceilingz && daz <= actor->floorz)
 		actor->spr.pos.Z = daz;
 	else if (result.type == kHitNone)
@@ -3805,6 +3807,7 @@ void handle_se31(DDukeActor* actor, bool choosedir)
 
 void getglobalz(DDukeActor* actor)
 {
+	if (Superset::BloodDukeProjectileZ(actor)) return;
 	double zr;
 	Collision hz, lz;
 

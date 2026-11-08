@@ -474,9 +474,9 @@ void GetZRange(DBloodActor* actor, double* ceilZ, Collision* ceilColl, double* f
 //
 //---------------------------------------------------------------------------
 
-void GetZRangeAtXYZ(const DVector3& pos, sectortype* pSector, double* ceilZ, Collision* ceilColl, double* floorZ, Collision* floorColl, double nDist, unsigned int nMask, unsigned int nClipParallax)
+void GetZRangeAtXYZ(const DVector3& pos, sectortype* pSector, double* ceilZ, CollisionBase* ceilColl, double* floorZ, CollisionBase* floorColl, double nDist, unsigned int nMask, unsigned int nClipParallax)
 {
-	Collision scratch;
+	CollisionBase scratch;
 	double nTemp1;
 	getzrange(pos, pSector, ceilZ, *ceilColl, floorZ, *floorColl, nDist, nMask);
 	if (floorColl->type == kHitSector)

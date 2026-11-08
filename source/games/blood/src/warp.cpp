@@ -193,7 +193,7 @@ void warpInit(TArray<DBloodActor*>& actors)
 //
 //---------------------------------------------------------------------------
 
-int CheckLink(DBloodActor* actor)
+int CheckLink(DCoreActor* actor)
 {
 	auto pSector = actor->sector();
 	auto aUpper = barrier_cast<DBloodActor*>(pSector->upperLink);
@@ -218,7 +218,8 @@ int CheckLink(DBloodActor* actor)
 			else
 				z2 = getceilzofslopeptr(actor->sector(), actor->spr.pos);
 			actor->spr.pos.Z += z2 - z;
-			actor->interpolated = false;
+			if (auto blood = dyn_cast<DBloodActor>(actor)) blood->interpolated = false;
+			else actor->backuploc();
 			return aUpper->spr.type;
 		}
 	}
@@ -242,7 +243,8 @@ int CheckLink(DBloodActor* actor)
 			else
 				z2 = getflorzofslopeptr(actor->sector(), actor->spr.pos);
 			actor->spr.pos.Z += z2 - z;
-			actor->interpolated = false;
+			if (auto blood = dyn_cast<DBloodActor>(actor)) blood->interpolated = false;
+			else actor->backuploc();
 			return aLower->spr.type;
 		}
 	}

@@ -70,7 +70,7 @@ struct ZONE {
 extern ZONE gStartZone[8];
 
 void warpInit(TArray<DBloodActor*>& actors);
-int CheckLink(DBloodActor* pSprite);
+int CheckLink(DCoreActor* pSprite);
 int CheckLink(DVector3& cPos, sectortype** pSector);
 
 #include "m_fixed.h"

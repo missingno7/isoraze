@@ -980,6 +980,7 @@ set (PCH_SOURCES
 	games/superset/enemies.cpp
 	games/superset/status.cpp
 	games/superset/duke_effects.cpp
+	games/superset/duke_projectiles.cpp
 	core/postprocessor.cpp
 	core/searchpaths.cpp
 	core/serializer_raze.cpp

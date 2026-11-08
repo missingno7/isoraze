@@ -25,6 +25,7 @@ See the GNU General Public License for more details.
 #include "funct.h"
 #include "hw_isovisibility.h"
 #include "games/superset/enemies.h"
+#include "games/superset/duke_projectiles.h"
 BEGIN_DUKE_NS
 
 void resetswitch(int tag);
@@ -510,7 +511,7 @@ DEFINE_ACTION_FUNCTION_NATIVE(DDukeActor, movesprite, DukeActor_movesprite)
 
 int DukeActor_movesprite_ex(DDukeActor* actor, double velx, double vely, double velz, int clipmask, Collision* coll)
 {
-	return movesprite_ex(actor, DVector3(velx, vely, velz), clipmask, *coll);
+	return Superset::MoveDukeProjectile(actor, DVector3(velx, vely, velz), clipmask, *coll);
 }
 
 DEFINE_ACTION_FUNCTION_NATIVE(DDukeActor, movesprite_ex, DukeActor_movesprite_ex)

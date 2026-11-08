@@ -64,11 +64,11 @@ class DukeProjectile : DukeActor
 				coll.setSector(self.sector);
 				self.vel.Z -= 1/256.;
 			}
-			else if ((self.pos.Z > self.floorz && self.sector.lotag != ST_1_ABOVE_WATER) ||
-					(self.pos.Z > self.floorz + 16 && self.sector.lotag == ST_1_ABOVE_WATER))
+			else if ((self.pos.Z > self.floorz && self.SharedProjectileMedium() != ST_1_ABOVE_WATER) ||
+					(self.pos.Z > self.floorz + 16 && self.SharedProjectileMedium() == ST_1_ABOVE_WATER))
 			{
 				coll.setSector(self.sector);
-				if (self.sector.lotag != ST_1_ABOVE_WATER)
+				if (self.SharedProjectileMedium() != ST_1_ABOVE_WATER)
 					self.vel.Z += 1/256.;
 			}
 		}
@@ -155,7 +155,7 @@ class DukeProjectile : DukeActor
 
 		int p = -1;
 
-		if (self.bUNDERWATERSLOWDOWN && self.sector.lotag == ST_2_UNDERWATER)
+		if (self.bUNDERWATERSLOWDOWN && self.SharedProjectileMedium() == ST_2_UNDERWATER)
 		{
 			vel *= 0.5;
 			velz *= 0.5;
@@ -177,6 +177,7 @@ class DukeProjectile : DukeActor
 
 		if (coll.type != 0)
 		{
+			if (self.SharedProjectileContact(coll)) return;
 			if (coll.type == kHitSprite)
 			{
 				if (self.weaponhitsprite(DukeActor(coll.hitactor()))) return;
@@ -221,6 +222,7 @@ class DukeFirelaser : DukeProjectile // Liztrooper shot
 
 			if (spawned)
 			{
+				spawned.InheritProjectileEnvironment(self);
 				spawned.opos = self.opos - self.pos + spawned.pos;
 				spawned.cstat = CSTAT_SPRITE_YCENTER;
 				spawned.pal = self.pal;

@@ -15,6 +15,7 @@
 #include "gamestate.h"
 #include "savegamehelp.h"
 #include "duke_effects.h"
+#include "duke_projectiles.h"
 #include <memory>
 #include <utility>
 
@@ -40,7 +41,7 @@ bool calebPlayer = false;
 bool bloodMap = false;
 FString bloodDataPath, dukeDataPath;
 constexpr int SaveSchema = 2;
-constexpr int RulesRevision = 10;
+constexpr int RulesRevision = 11;
 constexpr const char* SaveSignature = GAMENAME ".Superset";
 
 FString FingerprintPrimaryArchive()
@@ -192,7 +193,11 @@ public:
 		int before = PlayClock;
 		if (bloodMap) BackupDukeEffects();
 		world->Ticker();
-		if (bloodMap && PlayClock != before) TickDukeEffects();
+		if (bloodMap && PlayClock != before)
+		{
+			TickDukeEffects();
+			FinishDukeProjectileStep();
+		}
 	}
 	int GetPlayerChecksum(int pnum) override { return world->GetPlayerChecksum(pnum); }
 	const char* CheckCheatMode() override { return world->CheckCheatMode(); }
@@ -323,6 +328,7 @@ CCMD(superset_check)
 	auto health = Units::FromDukeHealth(100);
 	for (int i = 0; i < 16; ++i) health -= Units::FromBloodHealth(17);
 	bool units = Units::HealthPoints(health) == 83. &&
+		Units::FromDukeProjectileSpeed(52.5) == 26.25 && Units::ToDukeProjectileSpeed(26.25) == 52.5 &&
 		Units::FromSimulationSteps(30) == Units::ClockRate && Units::Seconds(Units::ClockRate) == 1.;
 	bool identity = currentGame.Compare("Superset") == 0 && strcmp(gi->Name(), "Superset") == 0 &&
 		strcmp(gi->GetSaveSig().savesig, SaveSignature) == 0 && (bloodMap ? Mashup::HasDukeResources() : Mashup::HasBloodResources());

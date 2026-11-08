@@ -173,10 +173,105 @@ ignite first and deal health damage through later burn ticks.
 
 This is the first reverse-world component, not full Duke combat in Blood maps.
 Native collision/hit structures still contain game-specific typed casts. Duke
-weapons, projectiles and enemies need world identity/damage/collision services
+weapons, other projectile families and enemies need further identity/collision services
 before they can safely interact with arbitrary native Blood actors. Their CON
 and map queries also need appropriate environment handlers. Merely invoking a
 second full simulation or changing global game flags would not provide that.
+
+## Native Duke laser projectiles in Blood maps
+
+The reverse adapter now runs the original `DukeFirelaser` projectile and its
+native trail class alongside Blood actors. The existing `DukeProjectile.Tick`,
+native movement and class callbacks remain in use. Component hooks supply the
+map environment and intercept contact before the Duke-only sprite cast or Duke
+wall/sector mechanism handlers. This does not run Duke's full simulation.
+
+`CoreActor.SpawnSharedDukeProjectile(class<DukeActor>, position, velocity)`
+uses this actor as the attack source. Position is a world coordinate and velocity
+is world displacement per 30 Hz simulation step. Currently it accepts the stock
+`DukeFirelaser` class from a native Blood actor in Blood maps; unsupported
+sources, classes, invalid inputs and positions outside the map return null.
+`superset_spawn_duke_projectile laser` fires this component from Caleb's actual
+eye and view direction as a diagnostic, without adding a weapon to inventory.
+
+Duke's mover consumes half its stored velocity each step. Explicit conversion
+at the shared spawn boundary maps its native laser speed of 52.5 to 26.25 world
+units per step. Both horizontal and vertical velocity use this conversion;
+native Build coordinate rounding remains part of the mover. Blood missiles
+already consume world displacement per step. This is a representation change,
+not a balance multiplier or a map/character rescale. The native player/NPC
+projectile sizes and 7-plus-0-through-7 damage variation are retained. The shared
+core random seed and projectile payload are already saved by their owners.
+
+Duke clips horizontal movement at the previous height before advancing Z. A
+descending shot can therefore enter a short Blood object between those checks.
+For foreign vertical travel, the adapter also traces the actual 3D movement
+segment through the shared engine. If the native mover reports no collision
+but this segment hits an actor, it supplies that missed sprite contact. Native
+wall/plane contacts and unobstructed movement remain authoritative. This was
+verified with Caleb firing down at a native TNT barrel on a lower step; changing
+the target's dimensions or health handler would not fix that collision problem.
+
+Blood's existing `GetZRangeAtXYZ` now accepts generic collision results, and its
+actor `CheckLink` accepts `CoreActor`. Their native depth and paired room-link
+algorithms are reused directly. Blood actors retain their original interpolation
+behavior; a foreign actor backs up its pose after a link to avoid interpolating
+across rooms. The projectile reads Blood's extended underwater flag and water
+markers instead of interpreting Blood sector types as Duke water tags. Sky and
+solid planes absorb the current laser; Blood vector-trigger walls receive their
+native wall-impact event. Other mirror and surface responses remain pending.
+
+Projectiles carry a saved, GC-traced generic attack source rather than a fake
+Duke player pawn. Blood players, enemies and things receive Physical health
+damage through the common receiver, including armor, resistance, native pain,
+retaliation and death credit. Impact does not implicitly request burning or
+shared knockback. Foreign projectiles/trails remain nonblocking to Blood's
+typed weapon and movement queries. The native projectile mover still sees real
+Blood colliders and excludes its source through the Blood missile environment.
+
+Native trail animation normally marks a trail for removal when it is processed
+by rendering. The foreign component also retires an unseen trail after one
+render opportunity, so an unrendered room cannot retain it indefinitely. Its
+existing actor counter saves this short lifetime. Native Duke mode keeps its
+original behavior. Map teardown removes the foreign actors with the native
+world; no extra event queue or second full serializer is introduced. Foreign
+attacks run after the native Blood actor phase, so the frontend commits Blood's
+deferred actor transfers/removals again at the end of that component phase.
+Native death state must be complete before a frame can be saved or collected.
+
+Rules revision 11 includes this component and rejects earlier experimental
+revisions. Duke weapons/inventory, enemy controllers, secondary CON execution,
+Duke sounds, other projectile families, special body effects and broader
+cross-game attacker identities in Blood maps remain unfinished.
+
+```powershell
+./tools/check-superset-duke-projectiles.ps1 -DukeGrp D:/dos/duke3D/duke3d.grp -BloodRff D:/prog/isoraze/build-isoraze/run/blood-data/BLOOD.RFF -EnableSound
+```
+
+The fixture selects an existing open, dry room in E1M1 while retaining Caleb's
+native size. It tests both-way room links, water roles and optional native
+underwater slowdown, and an actual Blood wall event. Slow flight makes native
+motion measurable through save/load, a fresh E1M2 and full GC; the projectile
+then resumes at normal speed. Further shots test enemies, a short native TNT
+barrel, player armor, death credit, wall/floor contacts, looking away, and actor
+cleanup. Aiming uses Caleb's actual eye; moving a muzzle down to the height of
+a short target on a lower step could otherwise place it below the shooter's
+floor. Geometry and character dimensions are not changed to make the shots pass.
+
+Verified on 2026-11-08 with a Release build and audio enabled:
+
+- `duke-projectiles-20261108T081813383`: native flight and XYZ timing, lower-step
+  barrel contact, enemy retaliation, player armor, both-way room links, water
+  roles/slowdown, Blood wall events, saved source/GC, native death committed in
+  the same frame and per-player kill credit, and unseen-trail cleanup.
+- `blood-map-20261108T082015137`: the complete existing reverse-map adapter,
+  shared health/VM, native flare combat/events and foreign effect save/GC checks.
+- `runtime-20261108T080914690`: ordinary Duke E1L1 and Blood E1M1, including
+  native flare/spray input, ammunition, missile persistence and reload.
+- `freeze-20261108T081017826`: Caleb and Duke native freezer contacts,
+  shatter/thaw, independent Cold/fire responses and save/GC.
+- `enemies-20261108T081148763`: both characters' pursuit/melee, pitchfork,
+  pistol, spray and RPG damage, native deaths, remains and cleanup.
 
 Verified on 2026-11-08: Release build and the complete reverse-map fixture passed
 with audio (`blood-map-20261108T063216312`), including all private Duke palette
@@ -517,7 +612,8 @@ sources. Cold responses on arbitrary native Blood actors, and attribution or
 retaliation against a foreign actor without a Blood identity, require further
 adapters and return `false`. Existing Cold/freezing support for the Duke-world
 axe-zombie facade remains available. These limits keep pending crossover rules
-explicit; Duke weapons/projectiles in Blood maps are still not enabled.
+explicit; full Duke weapon controllers and other projectile families in Blood
+maps remain pending. The reverse laser component is described above.
 
 `superset_health_check` invokes both public VM entry points against live native
 Blood actors. It checks Duke physical hit conversion, fractional health, seven
@@ -1157,7 +1253,8 @@ compensation does not address collision, projectile origins or interaction reach
    other damage interactions. Coordinate animation/AI callbacks and save state.
 4. Route native movement/environment queries to each map adapter's water,
    platforms, transports, use actions and hazards. Extend the Blood map adapter
-   and expand the initial foreign Duke actor proof into reverse combat.
+   and expand the reverse laser/environment component into native Duke weapon
+   controllers, other projectile families and enemy AI.
 5. Expand selectable mixed inventories, weapons, enemies and pickup policies;
    provide jetpack/shrinking progression abilities. Keep conversions separate
    from tunable balance and verify safe regrowth and passage clearance.
