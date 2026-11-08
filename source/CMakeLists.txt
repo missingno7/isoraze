@@ -976,6 +976,7 @@ set (PCH_SOURCES
 	games/superset/damage.cpp
 	games/superset/pickups.cpp
 	games/superset/projectiles.cpp
+	games/superset/enemies.cpp
 	core/postprocessor.cpp
 	core/searchpaths.cpp
 	core/serializer_raze.cpp

@@ -13,6 +13,7 @@
 #include "raze_sound.h"
 #include "games/superset/superset.h"
 #include "games/superset/damage.h"
+#include "games/superset/enemies.h"
 #include "v_draw.h"
 #include "v_text.h"
 
@@ -225,6 +226,7 @@ bool IsCombatPlayer(DCorePlayer* player)
 
 DCoreActor* WorldSoundActor(DCoreActor* source)
 {
+	if (auto state = dyn_cast<Blood::DBloodActor>(source); state && state->supersetWorldActor) return state->supersetWorldActor;
 	auto player = Owner(source);
 	return player ? player->GetActor() : nullptr;
 }
@@ -250,7 +252,7 @@ void ResetCombatPlayers()
 
 void PrepareCombat(DCorePlayer* player)
 {
-	if (!CombatEnabled()) return;
+	if (!CombatEnabled() && !Superset::IsActive()) return;
 	auto duke = dyn_cast<Duke3d::DDukePlayer>(player);
 	if (!duke || !duke->GetActor() || !duke->GetActor()->sector()) return;
 	auto blood = Secondary(duke);
@@ -270,7 +272,10 @@ void PrepareCombat(DCorePlayer* player)
 		duke->bloodCombat = blood;
 		GC::WriteBarrier(duke, blood);
 	}
+	blood->GetActor()->supersetWorldActor = duke->GetActor();
+	GC::WriteBarrier(blood->GetActor(), duke->GetActor());
 	if (!Superset::PrepareBloodMovement(duke)) SyncPose(duke, blood);
+	if (!CombatEnabled()) return;
 	blood->cmd = duke->cmd;
 	if (duke->newOwner || Duke3d::ud.cameraactor) blood->cmd.ucmd.actions &= ~(SB_FIRE | SB_ALTFIRE);
 	if (inputProbeActive)
@@ -290,6 +295,14 @@ void PrepareCombat(DCorePlayer* player)
 	duke->quick_kick = duke->last_quick_kick = duke->knee_incs = 0;
 	duke->kickback_pic = duke->okickback_pic = 0;
 	duke->cmd.ucmd.actions &= ~(SB_QUICK_KICK | SB_HOLSTER);
+}
+
+void RefreshBloodPlayerStates()
+{
+	if (!Superset::IsActive()) return;
+	for (auto player : PlayerArray)
+		if (auto duke = dyn_cast<Duke3d::DDukePlayer>(player); duke && !Superset::HasBloodMovement(duke))
+			if (auto blood = Secondary(duke)) SyncPose(duke, blood);
 }
 
 void TickCombat(DCorePlayer* player)
@@ -333,19 +346,20 @@ bool DrawCombat(DCorePlayer* player, double interpolation)
 
 bool FireBloodVector(DCoreActor* source, double offset, double zoffset, DVector3 direction, int type, double range)
 {
-	if (!CombatEnabled()) return false;
 	auto owner = Owner(source);
-	if (!owner) return false;
-	if (inputProbeActive) ++inputProbeVectors;
-	if (inputProbeActive && type >= 0 && type < Blood::kVectorMax) ++inputProbeVectorTypes[type];
+	auto state = dyn_cast<Blood::DBloodActor>(source);
+	auto body = owner ? owner->GetActor() : state ? dyn_cast<Duke3d::DDukeActor>(state->supersetWorldActor.Get()) : nullptr;
+	bool enemy = Superset::IsActive() && body && Superset::HasBloodEnemy(body);
+	if ((!CombatEnabled() && !enemy) || !body) return false;
+	if (inputProbeActive && owner) ++inputProbeVectors;
+	if (inputProbeActive && owner && type >= 0 && type < Blood::kVectorMax) ++inputProbeVectorTypes[type];
 	// Never pass a Duke actor through Blood's typed HitInfo/trigger/damage path.
-	bool physical = type == Blood::kVectorTine || (Superset::IsActive() && (type == Blood::kVectorShell ||
+	bool physical = type == Blood::kVectorTine || (enemy && type == Blood::kVectorAxe) || (Superset::IsActive() && (type == Blood::kVectorShell ||
 		type == Blood::kVectorShellAP || type == Blood::kVectorTommyRegular || type == Blood::kVectorTommyAP));
 	if (!physical || direction.XY().LengthSquared() == 0) return true;
 	auto& vector = Blood::gVectorData[type];
 	if (range < 0) range = vector.fMaxDist();
 	direction /= direction.XY().Length();
-	auto body = owner->GetActor();
 	auto origin = source->spr.pos.plusZ(zoffset);
 	origin += DVector2(-source->spr.Angles.Yaw.Sin(), source->spr.Angles.Yaw.Cos()) * offset;
 	THitInfo<DCoreActor> hit {};
@@ -354,12 +368,13 @@ bool FireBloodVector(DCoreActor* source, double offset, double zoffset, DVector3
 	hitscan(origin, source->sector(), direction * 1024., hit, CLIPMASK1);
 	body->spr.cstat = flags;
 	if (!hit.hitSector || (range > 0 && (hit.hitpos.XY() - origin.XY()).Length() >= range)) return true;
-	auto attackClass = type == Blood::kVectorTine ? Duke3d::DukeMeleeAttackClass : Duke3d::DukeShotSparkClass;
+	auto attackClass = type == Blood::kVectorTine || type == Blood::kVectorAxe ? Duke3d::DukeMeleeAttackClass : Duke3d::DukeShotSparkClass;
 	auto hitter = Duke3d::CreateActor(hit.hitSector, hit.hitpos, attackClass,
 		-15, DVector2(0, 0), source->spr.Angles.Yaw, 0, 0, body, STAT_PROJECTILE);
 	if (!hitter) return true;
 	auto target = dyn_cast<Duke3d::DDukeActor>(hit.hitActor);
-	if (!Superset::PrepareDukeHit(hitter, Superset::BloodVectorDamage(type, target && target->isPlayer())))
+	bool bloodPhysics = target && (Superset::HasBloodEnemy(target) || (target->isPlayer() && Superset::HasBloodMovement(Duke3d::getPlayer(target->PlayerIndex()))));
+	if (!Superset::PrepareDukeHit(hitter, Superset::BloodVectorDamage(type, target && target->isPlayer()), !bloodPhysics))
 	{
 		hitter->Destroy();
 		return true;
@@ -370,7 +385,8 @@ bool FireBloodVector(DCoreActor* source, double offset, double zoffset, DVector3
 		{
 			bool flesh = Duke3d::badguy(target) || target->isPlayer();
 			Duke3d::checkhitsprite(target, hitter);
-			Duke3d::checkhitswitch(owner, nullptr, target);
+			if (bloodPhysics) Superset::ApplyBloodVectorImpulse(target, type, direction);
+			if (owner) Duke3d::checkhitswitch(owner, nullptr, target);
 			if (flesh)
 			{
 				auto& impact = vector.surfHit[Blood::kSurfFlesh];
@@ -391,7 +407,7 @@ bool FireBloodVector(DCoreActor* source, double offset, double zoffset, DVector3
 		if (!isaccessswitch(wall->walltexture))
 		{
 			Duke3d::checkhitwall(hitter, wall, hit.hitpos);
-			Duke3d::checkhitswitch(owner, wall, nullptr);
+			if (owner) Duke3d::checkhitswitch(owner, wall, nullptr);
 		}
 	}
 	else if (type != Blood::kVectorTine && hit.hitpos.Z <= getceilzofslopeptr(hit.hitSector, hit.hitpos) + .01)

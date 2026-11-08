@@ -13,6 +13,7 @@ bool IsCombatPlayer(DCorePlayer* player);
 DCoreActor* WorldSoundActor(DCoreActor* source);
 DCorePlayer* GetBloodPlayer(int player);
 void PrepareCombat(DCorePlayer* player);
+void RefreshBloodPlayerStates();
 void TickCombat(DCorePlayer* player);
 bool DrawCombat(DCorePlayer* player, double interpolation);
 void ResetCombatPlayers();

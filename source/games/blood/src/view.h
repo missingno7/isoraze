@@ -115,4 +115,6 @@ inline void viewBackupSpriteLoc(DBloodActor* actor)
 }
 
 
+void viewApplySpriteRotation(tspritetype* sprite, DCoreActor* owner, const DVector2& view);
+
 END_BLD_NS

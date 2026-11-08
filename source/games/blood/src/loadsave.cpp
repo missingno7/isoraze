@@ -470,6 +470,9 @@ void DBloodActor::Serialize(FSerializer& arc)
 	Super::Serialize(arc);
 	arc
 		("hasx", hasx)
+		("superset.world_actor", supersetWorldActor)
+		("superset.damage_source", supersetDamageSource)
+		("superset.enemy_controller", supersetEnemyController)
 		("basepoint", basePoint);
 
 	// The rest is only relevant if the actor has an xsprite.

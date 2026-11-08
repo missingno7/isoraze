@@ -24,6 +24,7 @@ See the GNU General Public License for more details.
 #include "global.h"
 #include "funct.h"
 #include "hw_isovisibility.h"
+#include "games/superset/enemies.h"
 BEGIN_DUKE_NS
 
 void resetswitch(int tag);
@@ -34,6 +35,14 @@ DEFINE_ACTION_FUNCTION(DDukeActor, IsometricShotTrail)
 	PARAM_FLOAT(sx); PARAM_FLOAT(sy); PARAM_FLOAT(sz);
 	PARAM_FLOAT(ex); PARAM_FLOAT(ey); PARAM_FLOAT(ez);
 	AddIsometricShotTrail({ sx, sy, sz }, { ex, ey, ez });
+	return 0;
+}
+
+DEFINE_ACTION_FUNCTION(DDukeActor, SupersetBloodHit)
+{
+	PARAM_SELF_PROLOGUE(DDukeActor);
+	PARAM_OBJECT(hitter, DDukeActor);
+	Superset::BloodEnemyHit(self, hitter);
 	return 0;
 }
 

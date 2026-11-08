@@ -366,6 +366,7 @@ class DukeActor : CoreActor native
 
 
 	virtual native void Tick();
+	native void SupersetBloodHit(DukeActor hitter);
 
 	
 	virtual void BeginPlay() {}

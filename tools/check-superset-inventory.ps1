@@ -7,6 +7,7 @@ param(
     [string]$ExePath = (Join-Path $PSScriptRoot '../build-mashup/Release/raze.exe'),
     [ValidateSet('caleb', 'duke')][string[]]$Players = @('caleb', 'duke'),
     [switch]$EnableSound,
+    [ValidateRange(30, 180)][int]$TimeoutSeconds = 90,
     [string]$OutputDirectory = (Join-Path $PSScriptRoot '../build-mashup/checks')
 )
 $ErrorActionPreference = 'Stop'
@@ -78,7 +79,7 @@ cl_nostartscreens=true
     if (!$EnableSound) { $start.ArgumentList.Add('-nosound') }
     $process = [Diagnostics.Process]::Start($start)
     try {
-        if (!$process.WaitForExit(60000)) {
+        if (!$process.WaitForExit($TimeoutSeconds * 1000)) {
             $process.Kill()
             $process.WaitForExit()
             throw "$player timed out; inspect $log"

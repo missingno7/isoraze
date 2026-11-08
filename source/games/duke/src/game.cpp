@@ -67,6 +67,7 @@ IMPLEMENT_POINTER(hitOwnerActor)
 IMPLEMENT_POINTER(temp_actor)
 IMPLEMENT_POINTER(seek_actor)
 IMPLEMENT_POINTER(supersetBurnSource)
+IMPLEMENT_POINTER(supersetBloodState)
 IMPLEMENT_POINTERS_END
 
 IMPLEMENT_CLASS(DDukePlayer, false, true)

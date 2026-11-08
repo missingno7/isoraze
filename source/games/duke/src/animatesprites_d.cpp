@@ -40,6 +40,7 @@ source as it is released.
 #include "gamefuncs.h"
 #include "render.h"
 #include "models/modeldata.h"
+#include "games/superset/enemies.h"
 
 EXTERN_CVAR(Bool, wt_commentary)
 
@@ -104,6 +105,11 @@ void animatesprites_d(tspriteArray& tsprites, const DVector2& viewVec, DAngle vi
 
 
 		auto sectp = h->sector();
+		if (Superset::AnimateBloodEnemy(t, h, viewVec))
+		{
+			h->dispictex = t->spritetexture();
+			continue;
+		}
 		bool res = CallAnimate(h, t);
 		// some actors have 4, some 6 rotation frames - in true Build fashion there's no pointers what to do here without flagging it.
 		if ((h->flags2 & SFLAG2_ALWAYSROTATE1) || (t->clipdist & TSPR_ROTATE8FRAMES))

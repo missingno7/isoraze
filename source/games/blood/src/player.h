@@ -94,13 +94,19 @@ class DBloodPlayer;
 
 // World interactions are supplied by the map's rules. Native Blood callers
 // omit this service and retain the original trigger, pickup and room logic.
-struct PlayerWorldServices
+struct MovementWorldServices
 {
-	virtual ~PlayerWorldServices() = default;
+	virtual ~MovementWorldServices() = default;
 	virtual bool NoClip() const = 0;
 	virtual bool IsUnderwater(sectortype* sector) const = 0;
 	virtual int SurfaceType(CollisionBase& hit) const = 0;
 	virtual int CheckRoomLink(DBloodActor* actor) = 0;
+	virtual void MapCollision(CollisionBase&) const {}
+	virtual DCoreActor* CollisionOwner(DBloodActor*) const { return nullptr; }
+};
+
+struct PlayerWorldServices : MovementWorldServices
+{
 	virtual void UseAction(DBloodPlayer* player) = 0;
 	virtual void CollectPickups(DBloodPlayer* player) = 0;
 	virtual bool CanPickUp(DBloodActor* item) const = 0;
@@ -167,7 +173,7 @@ int playerDamageArmor(DBloodPlayer* pPlayer, DAMAGE_TYPE nType, int nDamage);
 int playerDamageSprite(DBloodActor* nSource, DBloodPlayer* pPlayer, DAMAGE_TYPE nDamageType, int nDamage, PlayerWorldServices* world = nullptr);
 int UseAmmo(DBloodPlayer* pPlayer, int nAmmoType, int nDec);
 void voodooTarget(DBloodPlayer* pPlayer);
-void playerLandingSound(DBloodPlayer* pPlayer, PlayerWorldServices* world = nullptr);
+void playerLandingSound(DBloodPlayer* pPlayer, MovementWorldServices* world = nullptr);
 void PlayerSurvive(int, DBloodActor*);
 
 END_BLD_NS

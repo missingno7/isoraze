@@ -7,6 +7,7 @@
 #include "superset.h"
 #include "projectiles.h"
 #include "damage.h"
+#include "enemies.h"
 #include "mashup_player.h"
 #include "c_cvars.h"
 #include "serializer.h"
@@ -74,14 +75,29 @@ bool FireBloodMissile(Blood::DBloodActor* source, double xyoff, double zoff, con
 	THitInfo<DCoreActor> hit {};
 	auto flags = body->spr.cstat;
 	body->spr.cstat &= ~CSTAT_SPRITE_BLOCK_ALL;
-	hitscan(origin, body->sector(), DVector3(forward * 1024., 0), hit, CLIPMASK0);
+	hitscan(origin, body->sector(), DVector3(forward * distance, 0), hit, CLIPMASK0, distance * 4, true);
 	body->spr.cstat = flags;
-	bool immediate = hit.hitSector && (hit.hitpos.XY() - origin.XY()).Length() <= distance;
-	auto pos = immediate ? hit.hitpos - forward : origin + forward * distance;
+	int hitCode = -1;
+	if (hit.hitActor) hitCode = 3;
+	else if (hit.hitWall)
+	{
+		hitCode = 0;
+		if (hit.hitWall->twoSided())
+		{
+			double ceil, floor;
+			calcSlope(hit.hitWall->nextSector(), hit.hitpos, &ceil, &floor);
+			if (hit.hitpos.Z > ceil && hit.hitpos.Z < floor) hitCode = 4;
+		}
+	}
+	else if (hit.hitSector) hitCode = 1 + (origin.Z < hit.hitpos.Z);
+	bool immediate = hitCode == 3 || hitCode == 0;
+	auto pos = origin + forward * distance;
+	if (hitCode >= 0) pos.SetXY(hit.hitpos.XY() - forward * (immediate ? 1. : info.fClipDist() * 2));
 	auto sector = body->sector();
 	updatesector(pos, &sector);
 	if (!sector) return true;
 	result = Blood::actSpawnMissile(source, sector, pos, direction, type);
+	if (result) result->spr.cstat &= ~CSTAT_SPRITE_BLOCK_ALL;
 	if (result && probeActive) ++probeShots;
 	if (result && immediate) FlameImpact(result, hit.hitActor);
 	return true;
@@ -96,7 +112,11 @@ void TickBloodProjectiles()
 		if ((actor->spr.flags & 32) || actor->spr.type != Blood::kMissileFlameSpray) continue;
 		actor->backuploc();
 		THitInfo<DCoreActor> hit {};
+		// Retain the native missile mover's cstat during its own query, while
+		// keeping foreign projectiles out of Duke's typed actor touch path.
+		actor->spr.cstat |= CSTAT_SPRITE_BLOCK;
 		int code = Blood::actMoveMissile(actor, hit, &world);
+		actor->spr.cstat &= ~CSTAT_SPRITE_BLOCK_ALL;
 		if (code == 3) FlameImpact(actor, hit.hitActor);
 	}
 }
@@ -104,6 +124,16 @@ void TickBloodProjectiles()
 bool Ignite(DCoreActor* target, DCoreActor* source, int clocks)
 {
 	if (!IsActive() || !target || clocks <= 0) return false;
+	if (HasBloodEnemy(target))
+	{
+		auto state = BloodState(target);
+		if (!state || !state->IsDudeActor() || !state->xspr.health) return false;
+		if (!state->xspr.burnTime) Blood::evPostActor(state, 0, Blood::kCallbackFXFlameLick);
+		Blood::actBurnSprite(BloodState(source), state, min(clocks, 2400));
+		state->supersetDamageSource = Mashup::WorldSoundActor(source) ? Mashup::WorldSoundActor(source) : source;
+		GC::WriteBarrier(state, state->supersetDamageSource.Get());
+		return true;
+	}
 	if (auto duke = dyn_cast<Duke3d::DDukeActor>(target))
 	{
 		if (auto body = Mashup::WorldSoundActor(source)) source = body;
@@ -146,6 +176,8 @@ void TickStatusEffects()
 		if (!actor->supersetBurnTime) actor->supersetBurnSource = nullptr;
 	}
 }
+
+int BloodDifficulty() { return clamp(int(superset_blood_difficulty), 0, 4); }
 
 void SerializeProjectileOptions(FSerializer& arc)
 {

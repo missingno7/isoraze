@@ -2278,7 +2278,7 @@ void voodooTarget(DBloodPlayer* pPlayer)
 //
 //---------------------------------------------------------------------------
 
-void playerLandingSound(DBloodPlayer* pPlayer, PlayerWorldServices* world)
+void playerLandingSound(DBloodPlayer* pPlayer, MovementWorldServices* world)
 {
 	static int surfaceSound[] = {
 		-1,

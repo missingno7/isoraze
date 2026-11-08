@@ -33,6 +33,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "texids.h"
 #include "mashup_player.h"
 #include "games/superset/projectiles.h"
+#include "games/superset/superset.h"
 
 BEGIN_BLD_NS
 
@@ -3069,6 +3070,7 @@ static bool actKillDudeStage1(DBloodActor* actor, DAMAGE_TYPE damageType)
 
 static void checkAddFrag(DBloodActor* killerActor, DBloodActor* actor)
 {
+	if (!killerActor) return;
 	if (VanillaMode())
 	{
 		if (killerActor->IsPlayerActor())
@@ -3404,7 +3406,7 @@ void actKillDude(DBloodActor* killerActor, DBloodActor* actor, DAMAGE_TYPE damag
 		if (getPlayer(p)->fragger == actor && getPlayer(p)->deathTime > 0)
 			getPlayer(p)->fragger = nullptr;
 	}
-	if (actor->spr.type != kDudeCultistBeast)
+	if (!actor->supersetWorldActor && actor->spr.type != kDudeCultistBeast)
 		trTriggerSprite(actor, kCmdOff, killerActor);
 
 	actor->spr.flags |= 7;
@@ -3757,10 +3759,10 @@ int actDamageSprite(DBloodActor* source, DBloodActor* actor, DAMAGE_TYPE damageT
 	if ((actor->xspr.health == 0 && actor->spr.statnum != kStatDude) || actor->xspr.locked)
 		return 0;
 
-	if (source == nullptr) source = actor;
+	if (source == nullptr && !actor->supersetWorldActor) source = actor;
 
 	DBloodPlayer* pSourcePlayer = nullptr;
-	if (source->IsPlayerActor()) pSourcePlayer = getPlayer(source->spr.type - kDudePlayer1);
+	if (source && source->IsPlayerActor()) pSourcePlayer = getPlayer(source->spr.type - kDudePlayer1);
 	if (!gGameOptions.bFriendlyFire && IsTargetTeammate(pSourcePlayer, actor)) return 0;
 
 	switch (actor->spr.statnum)
@@ -4709,7 +4711,7 @@ static Collision MoveThing(DBloodActor* actor)
 //
 //---------------------------------------------------------------------------
 
-void MoveDude(DBloodActor* actor, PlayerWorldServices* world)
+void MoveDude(DBloodActor* actor, MovementWorldServices* world)
 {
 	DBloodPlayer* pPlayer = nullptr;
 	if (actor->IsPlayerActor()) pPlayer = getPlayer(actor->spr.type - kDudePlayer1);
@@ -4744,6 +4746,7 @@ void MoveDude(DBloodActor* actor, PlayerWorldServices* world)
 			actor->spr.cstat &= ~CSTAT_SPRITE_BLOCK_ALL;
 			// Note: vel is Q16.16, ClipMove wants Q28.4, which passes it on to clipmove which wants Q14.18. Anyone confused yet...?
 			ClipMove(actor->spr.pos, &pSector, actor->vel.XY(), wdf, tz, bz, CLIPMASK0, actor->hit.hit);
+			if (world) world->MapCollision(actor->hit.hit);
 			if (pSector == nullptr)
 			{
 				pSector = actor->sector();
@@ -4861,6 +4864,7 @@ void MoveDude(DBloodActor* actor, PlayerWorldServices* world)
 	double ceilZ, floorZ;
 	Collision ceilColl, floorColl;
 	GetZRange(actor, &ceilZ, &ceilColl, &floorZ, &floorColl, wdf, CLIPMASK0, PARALLAXCLIP_CEILING | PARALLAXCLIP_FLOOR);
+	if (world) { world->MapCollision(ceilColl); world->MapCollision(floorColl); }
 	GetActorExtents(actor, &top, &bottom);
 
 	if (actor->spr.flags & 2)
@@ -4910,6 +4914,7 @@ void MoveDude(DBloodActor* actor, PlayerWorldServices* world)
 	if (nLink)
 	{
 		GetZRange(actor, &ceilZ, &ceilColl, &floorZ, &floorColl, wdf, CLIPMASK0, PARALLAXCLIP_CEILING | PARALLAXCLIP_FLOOR);
+		if (world) { world->MapCollision(ceilColl); world->MapCollision(floorColl); }
 		if (pPlayer)
 			playerCorrectInertia(pPlayer, oldpos);
 		switch (nLink)
@@ -5948,7 +5953,7 @@ static void actCheckTraps()
 //
 //---------------------------------------------------------------------------
 
-void actProcessDudeMovement(DBloodActor* actor, PlayerWorldServices* world)
+void actProcessDudeMovement(DBloodActor* actor, MovementWorldServices* world)
 {
 	if (actor->spr.flags & 32 || !actor->hasX()) return;
 	auto pSector = actor->sector();
@@ -5982,10 +5987,16 @@ void actProcessDudeMovement(DBloodActor* actor, PlayerWorldServices* world)
 		player->RollVel -= player->RollVel * drag;
 	}
 	if ((actor->spr.flags & 4) || !actor->vel.isZero() || pSector->velFloor || pSector->velCeil)
+	{
+		auto body = world ? world->CollisionOwner(actor) : nullptr;
+		auto flags = body ? body->spr.cstat : ESpriteFlags(0);
+		if (body) body->spr.cstat &= ~CSTAT_SPRITE_BLOCK_ALL;
 		MoveDude(actor, world);
+		if (body) body->spr.cstat = flags;
+	}
 }
 
-static void actCheckDudes()
+void actProcessDudes(MovementWorldServices* world)
 {
 	BloodStatIterator it(kStatDude);
 	while (auto actor = it.Next())
@@ -6032,7 +6043,7 @@ static void actCheckDudes()
 					aiActivateDude(actor);
 				}
 			}
-			if (actor->xspr.Proximity && !actor->xspr.isTriggered)
+			if (!world && actor->xspr.Proximity && !actor->xspr.isTriggered)
 			{
 				BloodStatIterator it1(kStatDude);
 				while (auto actor2 = it1.Next())
@@ -6085,14 +6096,14 @@ static void actCheckDudes()
 					}
 				}
 			}
-			ProcessTouchObjects(actor);
+			if (!world) ProcessTouchObjects(actor);
 		}
 	}
 
 	it.Reset(kStatDude);
 	while (auto actor = it.Next())
 	{
-		actProcessDudeMovement(actor);
+		actProcessDudeMovement(actor, world);
 	}
 }
 
@@ -6151,7 +6162,7 @@ void actProcessSprites(void)
 	actCheckProjectiles();
 	actCheckExplosion();
 	actCheckTraps();
-	actCheckDudes();
+	actProcessDudes();
 	actCheckFlares();
 	aiProcessDudes();
 	gFX.fxProcess();
@@ -6286,6 +6297,9 @@ DBloodActor* actSpawnThing(sectortype* pSector, const DVector3& pos, int nThingT
 	actor->spr.flags = pThingInfo->flags;
 	if (actor->spr.flags & 2) actor->spr.flags |= 4;
 	actor->spr.cstat |= pThingInfo->cstat;
+	// Unbound foreign things are visual until their world/physics adapter is
+	// installed. Their native flags/data remain available for that adapter.
+	if (Superset::IsActive()) actor->spr.cstat &= ~CSTAT_SPRITE_BLOCK_ALL;
 	actor->spr.setspritetexture(pThingInfo->textureID());
 	actor->spr.shade = pThingInfo->shade;
 	actor->spr.pal = pThingInfo->pal;

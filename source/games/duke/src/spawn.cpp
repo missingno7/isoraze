@@ -186,6 +186,8 @@ bool initspriteforspawn(DDukeActor* act)
 	act->supersetDamageOnly = false;
 	act->supersetBurnTime = act->supersetBurnFxTime = 0;
 	act->supersetBurnSource = nullptr;
+	act->supersetBloodState = nullptr;
+	act->supersetBloodHealth = 0;
 	SetupGameVarsForActor(act);
 	act->attackertype = static_cast<PClassActor*>(act->GetClass());
 	act->hitextra = -1;

@@ -553,6 +553,24 @@ static int GetOctant(const DVector2& dPos)
 	return OctantTable[7 - (dPos.X < 0) - (dPos.Y < 0) * 2 - (vc < 0) * 4];
 }
 
+void viewApplySpriteRotation(tspritetype* sprite, DCoreActor* owner, const DVector2& view)
+{
+	int type = GetExtInfo(sprite->spritetexture()).picanm.extra & 7;
+	if (type != 1 && type != 2) return;
+	if (tilehasmodelorvoxel(sprite->spritetexture(), sprite->pal) && !(owner->sprext.renderflags & SPREXT_NOTMD))
+	{
+		sprite->cstat &= ~CSTAT_SPRITE_XFLIP;
+		return;
+	}
+	int frame = GetOctant((view - sprite->pos.XY()).Rotated(DAngle22_5 - sprite->Angles.Yaw));
+	if (type == 1)
+	{
+		if (frame <= 4) sprite->cstat &= ~CSTAT_SPRITE_XFLIP;
+		else { frame = 8 - frame; sprite->cstat |= CSTAT_SPRITE_XFLIP; }
+	}
+	while (frame-- > 0) sprite->setspritetexture(sprite->spritetexture() + GetExtInfo(sprite->spritetexture()).picanm.num + 1);
+}
+
 void viewProcessSprites(tspriteArray& tsprites, const DVector3& cPos, DAngle cA, double interpfrac)
 {
 	DBloodPlayer* pPlayer = getPlayer(gViewIndex);
@@ -605,34 +623,9 @@ void viewProcessSprites(tspriteArray& tsprites, const DVector3& cPos, DAngle cA,
 			}
 			break;
 		case 1:
-		{
-			if (tilehasmodelorvoxel(pTSprite->spritetexture(), pTSprite->pal) && !(owneractor->sprext.renderflags & SPREXT_NOTMD))
-			{
-				pTSprite->cstat &= ~CSTAT_SPRITE_XFLIP;
-				break;
-			}
-			nAnim = GetOctant(DVector2(cPos.XY() - pTSprite->pos).Rotated(DAngle22_5 - pTSprite->Angles.Yaw));
-			if (nAnim <= 4)
-			{
-				pTSprite->cstat &= ~CSTAT_SPRITE_XFLIP;
-			}
-			else
-			{
-				nAnim = 8 - nAnim;
-				pTSprite->cstat |= CSTAT_SPRITE_XFLIP;
-			}
-			break;
-		}
 		case 2:
-		{
-			if (tilehasmodelorvoxel(pTSprite->spritetexture(), pTSprite->pal) && !(owneractor->sprext.renderflags & SPREXT_NOTMD))
-			{
-				pTSprite->cstat &= ~CSTAT_SPRITE_XFLIP;
-				break;
-			}
-			nAnim = GetOctant(DVector2(cPos.XY() - pTSprite->pos).Rotated(DAngle22_5 - pTSprite->Angles.Yaw));
+			viewApplySpriteRotation(pTSprite, owneractor, cPos.XY());
 			break;
-		}
 		case 3:
 		{
 			if (owneractor->hasX())

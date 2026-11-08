@@ -85,6 +85,8 @@ public:
 	bool supersetDamageOnly = false;
 	int supersetBurnTime = 0, supersetBurnFxTime = 0;
 	TObjPtr<DCoreActor*> supersetBurnSource;
+	TObjPtr<DCoreActor*> supersetBloodState;
+	int supersetBloodHealth = 0;
 	short tempval, basepicnum;
 	unsigned short timetosleep;
 	bool mapSpawned;

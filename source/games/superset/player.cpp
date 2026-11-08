@@ -13,6 +13,7 @@
 #include "units.h"
 #include "damage.h"
 #include "projectiles.h"
+#include "enemies.h"
 #include "c_dispatch.h"
 
 namespace Blood { void SerializeSequences(FSerializer& arc); void SerializeEvents(FSerializer& arc); }
@@ -28,6 +29,7 @@ void AdvanceBloodSequences()
 	if (sequenceClock == PlayClock) return;
 	Blood::evProcess(PlayClock);
 	Blood::seqProcess(Units::ClocksPerStep);
+	PrepareBloodWorldObjects();
 	sequenceClock = PlayClock;
 }
 
@@ -146,6 +148,7 @@ public:
 		}
 	}
 	int CheckRoomLink(Blood::DBloodActor*) override { return 0; } // Duke transports run in the world phase.
+	void MapCollision(CollisionBase& hit) const override { MapBloodCollision(hit); }
 	void UseAction(Blood::DBloodPlayer*) override { useRequested = true; }
 	void CollectPickups(Blood::DBloodPlayer* player) override
 	{
@@ -283,7 +286,10 @@ bool TickBloodMovement(DCorePlayer* player)
 	auto flags = body->spr.cstat;
 	body->spr.cstat &= ~CSTAT_SPRITE_BLOCK_ALL;
 	Blood::playerProcess(blood, &world);
+	// Native enemy SEQ attacks must see the single physical player collider.
+	body->spr.cstat = flags;
 	AdvanceBloodSequences();
+	body->spr.cstat &= ~CSTAT_SPRITE_BLOCK_ALL;
 	HideStateActor(state);
 	Blood::actProcessDudeMovement(state, &world);
 	body->spr.cstat = flags;
@@ -322,11 +328,14 @@ void FinishBloodMovement(DCorePlayer* player)
 void TickSharedObjects()
 {
 	if (!IsActive()) return;
+	Mashup::RefreshBloodPlayerStates();
 	AdvanceBloodSequences();
+	TickBloodEnemies();
 	TickBloodProjectiles();
 	TickStatusEffects();
 	Blood::gFX.fxProcess();
 	Blood::actPostProcess();
+	PublishBloodEnemies();
 }
 
 void ClearBloodControllerState()

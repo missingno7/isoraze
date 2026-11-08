@@ -35,8 +35,8 @@ The initial playable combination remains:
 
 - Preserve Duke map geometry, artwork, scenery, mechanisms and world simulation.
 - Use Blood player movement, weapons, alternate fire, health, armor and pickups.
-- Test Atomic Edition maps first, with Duke enemies. Selectable Blood enemy
-  replacement is a later increment.
+- Test Atomic Edition maps first, with Duke enemies. Native Blood axe zombies
+  can now be spawned alongside them; automatic enemy replacement comes later.
 - Keep Caleb at his native size and maps at their original scale initially.
 - Add jetpack and shrinking compatibility abilities for Duke progression.
 - Develop this independently of the isometric presentation.
@@ -84,10 +84,10 @@ regression harness to check this before/after save/load, inspect saved metadata
 and verify the separate configuration section. `-MashupCombat` additionally
 exercises the existing pitchfork prototype.
 
-The next milestones are hardening Caleb's navigation in the Duke world,
-shared targeting/damage in both directions and freezing a Blood enemy, then
-the reverse map adapter and expanded mixed content. Initial spray-can burning
-of Duke enemies is implemented; full actor reactions and cross-effect rules remain work.
+The next milestones are broader navigation/physics and targeting support,
+freezing a Blood enemy, then the reverse map adapter and expanded mixed content.
+Spray-can burning of Duke enemies and native Blood axe-zombie AI/combat in the
+Duke world are implemented; full actor reactions and cross-effect rules remain work.
 The common health/time definitions are present, and the pitchfork now submits
 shared Q4 physical hits. Other attacks and receivers still need migration.
 Original-game regression checks remain required.
@@ -113,8 +113,8 @@ This is an incremental native adapter, not the final shared actor/AI model.
 
 No scale compensation is applied: initial idle eye height is 56.6875 world units
 and horizontal radius is 12. Native Blood SEQ state and the selected controller
-are serialized with the session. Save schema is 2; rules revision is now 6
-after integrating native Blood flame missiles and shared burning. Earlier
+are serialized with the session. Save schema is 2; rules revision is now 7
+after integrating native Blood axe-zombie AI and damage receivers. Earlier
 Superset bootstrap saves are intentionally incompatible with this experimental
 schema. The legacy native game save signatures remain separate.
 
@@ -348,8 +348,10 @@ This remains an adapter over Duke's integer CON health, not the finished shared
 health model: damage below an integer point is deferred until another accepted
 shared hit. Direct CON health replacement/capped healing and custom `onHit`
 handlers that bypass native damage accumulation need explicit synchronization.
-Blood enemy receivers and shared status effects remain to be integrated.
-Incoming Caleb damage and impulses are handled by the next increment below.
+Native Blood axe-zombie receivers now preserve Q4 damage directly, including
+their response factors and special burning behavior. Duke actors also accept
+Heat through the later burning increment. Incoming Caleb damage and impulses
+are handled by the next increment below.
 
 `superset_damage_check` checks category round trips, two fractional hits against
 a native trooper, rejected hits, ownership, native modifiers, lethal health,
@@ -405,16 +407,17 @@ casting the attacker to a Blood actor or reporting a fabricated suicide.
 
 Explosive death exposed unsafe Duke rendering casts on visible Blood gibs.
 Duke's animation passes now operate only on Duke actors. Foreign effects keep
-their engine sprite/SEQ representation. Full native Blood rotation, shadows,
-object-specific rendering and foreign FX sound/material routing remain separate
+their engine sprite/SEQ representation. Native Blood five/eight-view rotation
+is now shared by the axe-zombie adapter. Shadows, other object-specific
+rendering and foreign FX sound/material routing remain separate
 integration work.
 
 Shared object ticks advance Blood sequences once per simulation clock, process
 native object callbacks, run native FX gravity/drag/movement and drain deferred
 removals. This runs independently of selecting Caleb or Duke. The secondary
 event queue is serialized and cleared with its world; Blood map mechanisms are
-not started by this hook. Blood thing/gib-body physics and general enemy AI are
-not yet part of this object tick.
+not started by this hook. The tick now advances native axe-zombie AI/movement;
+Blood thing/gib-body physics and other enemy families remain unfinished.
 
 `superset_incoming_check` verifies actual native bullet/laser reception, physical
 and blast armor, immunity, god mode, the native electrical response factor,
@@ -537,7 +540,9 @@ matching Blood's ordinary burning tick. Repeated native flame contacts can
 extend the duration. `superset_blood_difficulty` supplies the source difficulty
 for this formula (0–4, initially 2), independently of Duke's native difficulty;
 it is saved with the session. This is not a resolved mapping between the games'
-difficulty curves or a promise that all Blood AI settings use that option yet.
+difficulty curves. The axe-zombie adapter also uses this source difficulty for
+its native AI and damage-response factors; other Blood enemy families are not
+enabled yet.
 
 Duke enemies default to normal Heat damage and allow ignition. Actor defaults
 can override `SupersetHeatFactor` (0 means health immunity, 0.5 halves damage)
@@ -562,7 +567,8 @@ secondary controller, and emitted projectiles retain that resolution after the
 Blood weapon mode is disabled. Blood's flame-lick FX spawning is reused, with
 extents adjusted for centered Blood sprites and feet-based Duke sprites.
 Shared object ticks advance projectiles and statuses once after the Duke world
-phase. Blood enemy AI and the reverse Blood map adapter are still pending.
+phase. Native axe-zombie AI now shares this phase; the reverse Blood map adapter
+is still pending.
 
 ```powershell
 ./tools/check-superset-flames.ps1 -DukeGrp 'D:/games/duke/duke3d.grp' -BloodDirectory 'D:/games/blood' -PythonPath python -EnableSound
@@ -591,6 +597,97 @@ native Blood flare/spray firing, saved flame missiles and reload, passed
 (`runtime-20261108T024442754`). The final Duke-profile flame/motion rerun also
 passed (`flames-20261108T024541017`). These remain component checks, not full map or
 enemy-family compatibility coverage.
+
+## Native Blood axe zombies in the Duke world
+
+`superset_spawn_enemy zombie` spawns a normal Blood axe zombie in clear space
+ahead of the player. It uses native `actSpawnDude`, AI states, movement, attack
+callbacks, SEQ animation, pain/resistance responses and death callbacks. Its
+native transformation into a burning axe zombie is preserved. No Duke enemy
+CON program substitutes for its Blood AI. Only this enemy family is enabled
+while additional native weapon and world interactions are integrated.
+
+The map-facing `SupersetBloodEnemy` pawn supplies the one physical collider and
+Duke targeting identity. A linked, invisible/nonblocking `DBloodActor` owns the
+native brain, velocity and fractional health. These are two representations of
+one enemy, not separate simulations/processes or two colliding monsters. Native
+Blood five/eight-view sprite rotation is reused. Both characters have a native
+Blood target alias even when Duke uses his own weapons with `mashup_combat 0`.
+Character selection therefore does not determine which enemy can attack him.
+
+The existing movement environment service now separates object movement from
+player-only use/pickup/restart operations. Native Blood dude drag, gravity and
+collision remain in that subsystem. Collision queries map adapted world actors
+to their native state; unadapted Duke actors still obstruct geometry without
+entering Blood's typed trigger paths. Duke map mechanisms remain on the Duke
+side. NPC water/transport/door behavior and broader hazards need further work;
+the player navigation fixture does not establish NPC navigation compatibility.
+
+Shared damage dispatch reaches `actDamageSprite` before Duke's integer-health
+facade. All seven Blood category mappings are available at this receiver,
+retaining its per-category native response factors and Q4 health. Native Duke
+physical and flagged explosive attacks use the existing category mapping.
+Blood vector impulses are applied separately using native vector impulse and
+target mass; native Duke hits use a separate impulse conversion. Flame contacts
+route Heat and ignition independently. Blood burn timers, native AI transitions
+and special death sequences remain native, rather than using Duke's generic
+burning receiver. The point-blank missile-spawn scan also now matches Blood's
+native four-times-clearance query and backs off at contact as native code does.
+
+Native source difficulty comes from `superset_blood_difficulty`, including the
+original `DudeDifficulty` response curve for the normal/burning axe zombie.
+This is source behavior preservation, not a new shared balance multiplier.
+Player/adapted-enemy attackers resolve to native aliases. An unadapted Duke NPC
+attacker is retained as a generic source, without a fabricated self-hit; native
+Blood retaliation against that foreign NPC remains unfinished. Native Duke
+freezer/shrinker/grower hits are not interpreted as ordinary zombie damage:
+they await shared effect handling. This receiver does not establish their rules.
+
+World/controller/source references, health, AI targets and native sequences are
+GC-tracked and saved. Native deferred status transfer is preserved: the pending
+bit can mean conversion to a corpse, not deletion. A native corpse may retain
+positive thing health without being a living enemy. Its world facade becomes
+nonblocking/dead, while its death SEQ can finish. Unbound foreign Blood things
+and gibs are currently visual/nonblocking; their native flags/data remain, but
+full thing/corpse movement, bouncing, damage and kicking are not integrated.
+Foreign flame missiles retain native collision flags during their own mover
+and are nonblocking during Duke's typed object-touch phase.
+
+```powershell
+./tools/check-superset-enemies.ps1 -DukeGrp 'D:/dos/duke3D/duke3d.grp' -BloodDirectory 'D:/prog/isoraze/build-isoraze/run/blood-data' -PythonPath python -EnableSound
+```
+
+This generated Duke-map fixture observes native pursuit and melee health loss
+against both characters, one collider, bidirectional ownership, saved/restored
+AI targets after a fresh map load and full GC, actual player-input kills and
+continuing native death animation. Caleb uses his native pitchfork and spray
+can; Duke uses his own pistol and RPG with native ammo consumption. The spray
+case observes native burn health/duration, transformation and eventual death.
+The test also moves past nonblocking remains, removes the world pawn and expires
+the native controller independently, checking both cleanup paths after full GC.
+It does not replace a stock-map
+combat/navigation playthrough or prove other Blood enemy families.
+
+Verification on 2026-11-08: the Release build and enemy checks passed with audio
+for both profiles, including native pawn/controller removal and full GC
+(`enemies-20261108T034209161`). Duke's pistol/zombie screenshot was inspected.
+The related regressions also passed:
+
+- `runtime-20261108T033524545`: ordinary Duke E1L1 and Blood E1M1 runtime/save/load,
+  including original Blood flare/spray input, ammo and saved missiles.
+- `runtime-20261108T033705381`: Caleb E1L1, save/load, damage/death/restart and a
+  fresh E1L2 load, with audio. The preceding run reached E1L2 but exceeded the
+  default 45-second harness timeout; this run used its supported 60-second limit.
+- `navigation-20261108T033849256`: all eleven player navigation checks for both
+  profiles after splitting the movement environment service.
+- `flames-20261108T033943852`: both profiles' shared burning, response, ownership,
+  persistence, expiry, CON-death and movement checks after the muzzle/collision fix.
+- `inventory-20261108T034505256`: both profiles' native pickups, shotgun/Tommy
+  primary/alternate fire, independent ammo and saved inventory/items, with audio.
+  The inventory harness now has a configurable 90-second default timeout: its
+  scripted waits alone consume about 53 seconds, leaving inadequate startup/save
+  margin with the previous 60-second limit. The prior run passed its assertions
+  but reached that limit just before exit.
 
 ## Build and regression checks
 
@@ -708,8 +805,8 @@ compensation does not address collision, projectile origins or interaction reach
 2. Generalize actor identity, targeting, ownership and damage in both directions.
    Use shared fractional health units and retain native AI/weapon behavior.
    Keep native same-game resistances and death/trigger callbacks meaningful.
-3. Introduce shared status effects with per-actor reactions: first burning on a
-   Duke enemy and freezing on a Blood enemy, then shrinking, electrical and
+3. Expand shared status effects with per-actor reactions: burning on Duke and
+   axe-zombie targets is present; add freezing on a Blood enemy, then shrinking, electrical and
    other damage interactions. Coordinate animation/AI callbacks and save state.
 4. Route native movement/environment queries to each map adapter's water,
    platforms, transports, use actions and hazards. Add the Blood map adapter

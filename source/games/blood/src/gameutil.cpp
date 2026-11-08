@@ -29,6 +29,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 #include "build.h"
 #include "blood.h"
+#include "games/superset/enemies.h"
 
 
 BEGIN_BLD_NS
@@ -219,10 +220,16 @@ int HitScan(DBloodActor* actor, double z, const DVector3& vect, unsigned int nMa
 	gHitInfo.clearObj();
 	auto bakCstat = actor->spr.cstat;
 	actor->spr.cstat &= ~CSTAT_SPRITE_BLOCK_HITSCAN;
+	auto body = actor->supersetWorldActor.Get();
+	auto bodyFlags = body ? body->spr.cstat : ESpriteFlags(0);
+	if (body) body->spr.cstat &= ~CSTAT_SPRITE_BLOCK_ALL;
 	hitscan(DVector3(actor->spr.pos.XY(), z), actor->sector(), vect, gHitInfo, nMask, nRange, true);
 
 	actor->spr.cstat = bakCstat;
-	if (gHitInfo.actor() != nullptr)
+	if (body) body->spr.cstat = bodyFlags;
+	bool hitActor = gHitInfo.hitActor != nullptr;
+	if (body) gHitInfo.hitActor = Superset::BloodState(gHitInfo.hitActor);
+	if (hitActor)
 		return 3;
 	if (gHitInfo.hitWall != nullptr)
 	{
