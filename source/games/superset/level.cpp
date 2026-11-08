@@ -343,12 +343,28 @@ bool IsRuntimeActor(DCoreActor* actor)
 	return actor && actor->gameplayEntity && actor->gameplayEntity->actor == actor;
 }
 
+DCoreActor* ResolveAttackInstigator(DCoreActor* source)
+{
+	for (int depth = 0; source && depth < 16; ++depth)
+	{
+		source = ResolveGameplayActor(source);
+		TargetInfo target;
+		if (GameplayTarget(source, target) && (target.enemy || target.player)) return source;
+		DCoreActor* owner = nullptr;
+		if (auto blood = dyn_cast<Blood::DBloodActor>(source)) owner = blood->GetOwner();
+		else if (auto duke = dyn_cast<Duke3d::DDukeActor>(source)) owner = duke->GetOwner();
+		if (!owner || owner == source) return source;
+		source = owner;
+	}
+	return source;
+}
+
 bool EntityDied(DCoreActor* actor, DCoreActor* killer)
 {
 	if (!IsRuntimeActor(actor) || !actor->gameplayEntity->enemy) return false;
 	auto entity = actor->gameplayEntity.Get();
 	if (!killer) killer = entity->damageSource;
-	killer = ResolveGameplayActor(killer);
+	killer = ResolveAttackInstigator(killer);
 	if (!entity->deathEmitted)
 	{
 		entity->deathEmitted = true;
@@ -416,6 +432,7 @@ bool GameplayTarget(DCoreActor* actor, TargetInfo& result)
 	if (IsRuntimeActor(actor)) { result.identity = actor->gameplayEntity->identity; result.enemy = actor->gameplayEntity->enemy; }
 	if (auto blood = dyn_cast<Blood::DBloodActor>(actor))
 	{
+		result.player = blood->IsPlayerActor();
 		if (!IsRuntimeActor(actor)) result.enemy = blood->IsDudeActor() && !blood->IsPlayerActor() && blood->spr.statnum == Blood::kStatDude;
 		result.health = blood->hasX() ? blood->xspr.health : 0;
 		double top, bottom; Blood::GetActorExtents(blood, &top, &bottom);
@@ -425,20 +442,33 @@ bool GameplayTarget(DCoreActor* actor, TargetInfo& result)
 	}
 	else if (auto duke = dyn_cast<Duke3d::DDukeActor>(actor))
 	{
+		result.player = duke->isPlayer();
 		if (!IsRuntimeActor(actor)) result.enemy = Duke3d::badguy(duke) && !duke->isPlayer();
 		result.health = max<Units::Health>(0, Units::FromDukeHealth(duke->spr.extra) - duke->supersetDamageRemainder);
 		result.height = TexMan.GetGameTexture(duke->spr.spritetexture())->GetDisplayHeight() * duke->spr.scale.Y;
 		result.aim = duke->spr.pos.plusZ(-result.height * .5);
 	}
 	else return false;
+	if (result.player)
+	{
+		// Weapon/controller compatibility views are not another combatant.
+		bool physical = false;
+		for (auto player : PlayerArray) if (player && player->GetActor() == actor) { physical = true; break; }
+		if (!physical) return false;
+	}
 	result.radius = actor->clipdist;
-	result.alive = result.enemy && result.health > 0 && (!IsRuntimeActor(actor) || !actor->gameplayEntity->deathEmitted);
+	result.alive = (result.enemy || result.player) && result.health > 0 && (!IsRuntimeActor(actor) || !actor->gameplayEntity->deathEmitted);
 	return true;
 }
 void ForEachGameplayTarget(const std::function<void(const TargetInfo&)>& visitor)
 {
 	TSpriteIterator<DCoreActor> it;
 	while (auto actor = it.Next()) { TargetInfo target; if (GameplayTarget(actor, target) && target.enemy) visitor(target); }
+}
+void ForEachGameplayCombatant(const std::function<void(const TargetInfo&)>& visitor)
+{
+	TSpriteIterator<DCoreActor> it;
+	while (auto actor = it.Next()) { TargetInfo target; if (GameplayTarget(actor, target) && (target.enemy || target.player)) visitor(target); }
 }
 void ForEachRuntimeTarget(const std::function<void(const TargetInfo&)>& visitor)
 {
@@ -541,19 +571,6 @@ bool SpawnRuntimeDukeObject(Duke3d::DDukeActor* source, PClassActor* type, Duke3
 		Duke3d::CallInitialize(result, source);
 	}
 	return true;
-}
-
-bool AnimateRuntimeEntity(tspritetype* sprite, const DVector2& view, double fraction)
-{
-	auto actor = sprite->ownerActor;
-	if (!IsRuntimeActor(actor) || !actor->gameplayEntity->componentTick) return false;
-	if (auto blood = dyn_cast<Blood::DBloodActor>(actor))
-	{
-		if (cl_interpolate) { sprite->pos = actor->interpolatedpos(fraction); sprite->Angles.Yaw = actor->interpolatedyaw(fraction); }
-		Blood::viewApplySpriteRotation(sprite, blood, view);
-		return true;
-	}
-	return false;
 }
 
 namespace

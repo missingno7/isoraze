@@ -48,7 +48,7 @@ struct GIBTHING
 	int chance;
 	int randxy;
 	int randz;
-	FTextureID textureID() const { return tileGetTextureID(picno); }
+	FTextureID textureID() const { return Mashup::BloodTile(picno); }
 };
 
 struct GIBLIST

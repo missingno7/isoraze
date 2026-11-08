@@ -34,6 +34,7 @@ void moveplayers();
 void movefallers();
 void doanimations();
 void checkdive(DDukeActor* transporter, DDukeActor* transported);
+bool transportObject(DDukeActor* transporter, DCoreActor* transported, bool projectile, bool misc = false, bool swept = false);
 void tickstat(int stat, bool deleteinvalid = false);
 void operaterespawns(int low);
 void moveclouds(double interpfrac);

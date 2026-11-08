@@ -169,6 +169,11 @@ struct BloodResourceBank : PrivateArtBank
 			if (i < shade.size()) info.tileshade = shade.bytes()[i];
 			texture->SetDisableFullbright(true); // Duke's fullbright palette does not describe Blood indices.
 		}
+		// Source-qualified aliases never replace the primary game's names.
+		// Use Blood's own definitions for callbacks and generated view effects.
+		#define x(name, tile) if (tile < int(tiles.Size())) TexMan.AddAlias("mashup/blood/" #name, firstTexture + tile);
+		#include "../games/blood/src/namelist.h"
+		#undef x
 		Printf("Blood/Duke resource bank: %u tiles, 5 palettes, 15 lookups; Duke world remains authoritative.\n", tiles.Size());
 	}
 };
@@ -285,6 +290,12 @@ FTextureID BloodTile(int tile)
 	if (!bank) return tileGetTextureID(tile);
 	if (unsigned(tile) < bank->tiles.Size()) return FSetTextureID(bank->firstTexture + tile);
 	return FNullTextureID();
+}
+
+FTextureID BloodTexture(const char* name)
+{
+	FString qualified = bank ? FStringf("mashup/blood/%s", name) : FString(name);
+	return TexMan.CheckForTexture(qualified.GetChars(), ETextureType::Any);
 }
 
 bool IsBloodTexture(FTextureID texture)

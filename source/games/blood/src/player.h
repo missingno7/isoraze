@@ -133,7 +133,7 @@ struct POWERUPINFO
 	bool pickupOnce;
 	int bonusTime;
 	int maxTime;
-	FTextureID textureID() const { return tileGetTextureID(picno); }
+	FTextureID textureID() const { return Mashup::BloodTile(picno); }
 };
 
 void playerResetPosture(DBloodPlayer* pPlayer);

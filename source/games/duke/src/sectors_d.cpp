@@ -36,6 +36,7 @@ source as it is released.
 #include "global.h"
 #include "sounds.h"
 #include "mapinfo.h"
+#include "games/superset/projectiles.h"
 #include "dukeactor.h"
 #include "secrets.h"
 
@@ -247,6 +248,7 @@ void checksectors_d(DDukePlayer* const p)
 	{
 		near.hitActor = nullptr;
 		p->toggle_key_flag = 1;
+		if (Superset::TryUseBloodThing(p)) return;
 		hitscanwall = nullptr;
 
 		double dist = hitawall(p, &hitscanwall);

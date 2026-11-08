@@ -36,6 +36,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "games/superset/superset.h"
 #include "games/superset/level.h"
 #include "games/superset/damage.h"
+#include "games/superset/enemies.h"
 
 BEGIN_BLD_NS
 
@@ -2642,10 +2643,10 @@ void actRadiusDamage(DBloodActor* source, const DVector3& pos, sectortype* pSect
 	auto sectorMap = GetClosestSpriteSectors(pSector, pos.XY(), nDist, nullptr, newSectCheckMethod);
 	if (Superset::IsActive() && (flags & 2))
 	{
-		Superset::ForEachGameplayTarget([&](const Superset::TargetInfo& target)
+		Superset::ForEachGameplayCombatant([&](const Superset::TargetInfo& target)
 		{
 			auto receiver = target.actor;
-			if (dyn_cast<DBloodActor>(receiver) || !target.alive || !sectorMap[receiver->sectno()] ||
+			if (dyn_cast<DBloodActor>(receiver) || !target.alive || (receiver == Superset::ResolveGameplayActor(source) && !(flags & 1)) || !sectorMap[receiver->sectno()] ||
 				!CheckProximity(receiver, pos, pSector, nDist << 4)) return;
 			double distance = (pos - receiver->spr.pos).Length();
 			if (distance > nDist) return;
@@ -2907,6 +2908,12 @@ DBloodActor* actDropObject(DBloodActor* actor, int nType)
 bool actHealDude(DBloodActor* actor, int add, int threshold)
 {
 	if (!actor) return false;
+	if (Superset::IsActive() && actor->IsPlayerActor() && actor->supersetWorldActor)
+	{
+		bool healed = Superset::HealHealth(actor->supersetWorldActor, add << 4, threshold << 4);
+		if (healed) sfxPlay3DSound(actor->spr.pos, 780, actor->sector());
+		return healed;
+	}
 	add <<= 4;
 	threshold <<= 4;
 	if (actor->xspr.health < (unsigned)threshold)
@@ -3776,6 +3783,14 @@ static int actDamageThing(DBloodActor* source, DBloodActor* actor, int damage, D
 
 int actDamageSprite(DBloodActor* source, DBloodActor* actor, DAMAGE_TYPE damageType, int damage, int dudeDamageFactor)
 {
+	if (Superset::IsActive() && actor->IsPlayerActor() && actor->supersetWorldActor)
+	{
+		Superset::DamageKind kind;
+		Superset::Units::Health applied = 0;
+		if (Superset::BloodDamageKind(damageType, kind))
+			Superset::ApplyHealthDamage(actor->supersetWorldActor, {damage, kind}, source, &applied);
+		return int(applied / Superset::Units::HealthPerPoint);
+	}
 	if (actor->spr.flags & 32 || !actor->hasX())
 		return 0;
 
@@ -4171,7 +4186,7 @@ static void actKickObject(DBloodActor* kicker, DBloodActor* kicked)
 //
 //---------------------------------------------------------------------------
 
-static void actTouchFloor(DBloodActor* actor, sectortype* pSector)
+void actTouchFloor(DBloodActor* actor, sectortype* pSector)
 {
 	XSECTOR* pXSector = pSector->hasX() ? &pSector->xs() : nullptr;
 
@@ -4573,7 +4588,7 @@ void actAirDrag(DBloodActor* actor, fixed_t drag)
 //
 //---------------------------------------------------------------------------
 
-static Collision MoveThing(DBloodActor* actor)
+static TCollision<DCoreActor> MoveThing(DBloodActor* actor, ProjectileWorldServices* world)
 {
 	assert(actor->hasX());
 	assert(actor->spr.type >= kThingBase && actor->spr.type < kThingMax);
@@ -4581,7 +4596,7 @@ static Collision MoveThing(DBloodActor* actor)
 	auto pSector = actor->sector();
 	assert(pSector);
 	double top, bottom;
-	Collision lhit;
+	TCollision<DCoreActor> lhit;
 
 	lhit.setNone();
 	GetActorExtents(actor, &top, &bottom);
@@ -4603,7 +4618,7 @@ static Collision MoveThing(DBloodActor* actor)
 			ChangeActorSect(actor, pSector);
 		}
 
-		auto& coll = actor->hit.hit;
+		auto& coll = lhit;
 		if (coll.type == kHitWall)
 		{
 			actWallBounceVector(actor, coll.hitWall, FixedToFloat(pThingInfo->elastic));
@@ -4631,8 +4646,24 @@ static Collision MoveThing(DBloodActor* actor)
 	actor->spr.pos.Z += actor->vel.Z;
 
 	double ceilZ, floorZ;
-	Collision ceilColl, floorColl;
-	GetZRange(actor, &ceilZ, &ceilColl, &floorZ, &floorColl, actor->clipdist, CLIPMASK0);
+	TCollision<DCoreActor> ceilColl, floorColl;
+	auto range = [&]()
+	{
+		if (world)
+		{
+			auto flags = actor->spr.cstat;
+			actor->spr.cstat &= ~CSTAT_SPRITE_BLOCK_ALL;
+			world->VerticalRange(actor->spr.pos, actor->sector(), &ceilZ, ceilColl, &floorZ, floorColl, actor->clipdist);
+			actor->spr.cstat = flags;
+		}
+		else
+		{
+			Collision nativeCeiling, nativeFloor;
+			GetZRange(actor, &ceilZ, &nativeCeiling, &floorZ, &nativeFloor, actor->clipdist, CLIPMASK0);
+			ceilColl = nativeCeiling; floorColl = nativeFloor;
+		}
+	};
+	range();
 	GetActorExtents(actor, &top, &bottom);
 
 	if ((actor->spr.flags & 2) && bottom < floorZ)
@@ -4651,16 +4682,18 @@ static Collision MoveThing(DBloodActor* actor)
 			}
 		}
 	}
-	if (CheckLink(actor)) GetZRange(actor, &ceilZ, &ceilColl, &floorZ, &floorColl, actor->clipdist, CLIPMASK0);
+	if (world ? world->CheckRoomLink(actor) : CheckLink(actor) != 0) range();
 
 	GetActorExtents(actor, &top, &bottom);
 	if (bottom >= floorZ)
 	{
-		actTouchFloor(actor, actor->sector());
+		if (world) world->TouchFloor(actor);
+		else actTouchFloor(actor, actor->sector());
 		actor->hit.florhit = floorColl;
 		actor->spr.pos.Z += floorZ - bottom;
 
-		double veldiff = actor->vel.Z - actor->sector()->velFloor;
+		double floorVelocity = world ? world->FloorVelocity(actor->sector()) : actor->sector()->velFloor;
+		double veldiff = actor->vel.Z - floorVelocity;
 		if (veldiff > 0)
 		{
 			actor->spr.flags |= 4;
@@ -4673,7 +4706,7 @@ static Collision MoveThing(DBloodActor* actor)
 			if (nDamage > 0) actDamageSprite(actor, actor, kDamageFall, nDamage);
 
 			actor->vel.Z = vec4.Z;
-			if (actor->sector()->velFloor == 0 && abs(actor->vel.Z) < 1)
+			if (floorVelocity == 0 && abs(actor->vel.Z) < 1)
 			{
 				actor->vel.Z = 0;
 				actor->spr.flags &= ~4;
@@ -4745,7 +4778,7 @@ static Collision MoveThing(DBloodActor* actor)
 	{
 		double nVel = actor->vel.XY().Length();
 		double nVelClipped = min(nVel, (16. / 15.));
-		Collision& coll = floorColl;
+		auto& coll = floorColl;
 
 		if (coll.type == kHitSprite)
 		{
@@ -4763,6 +4796,12 @@ static Collision MoveThing(DBloodActor* actor)
 	}
 	if (actor->vel.X != 0 || actor->vel.Y != 0)
 		actor->spr.Angles.Yaw = actor->vel.Angle();
+	if (world)
+	{
+		Superset::MapBloodCollision(actor->hit.hit);
+		Superset::MapBloodCollision(actor->hit.ceilhit);
+		Superset::MapBloodCollision(actor->hit.florhit);
+	}
 	return lhit;
 }
 
@@ -5281,18 +5320,22 @@ int actMoveMissile(DBloodActor* actor, THitInfo<DCoreActor>& hitInfo, Projectile
 	hitInfo.clearObj();
 	if (actor->spr.type == kMissileFlameSpray) actAirDrag(actor, 0x1000);
 
-	if (actor->GetTarget() != nullptr && !actor->vel.isZero())
+	if (actor->GetTargetActor() != nullptr && !actor->vel.isZero())
 	{
-		auto target = actor->GetTarget();
+		auto target = actor->GetTargetActor();
+		auto native = dyn_cast<DBloodActor>(target);
+		Superset::TargetInfo shared;
 
-		if (target->spr.statnum == kStatDude && target->hasX() && target->xspr.health > 0)
+		if ((native && native->spr.statnum == kStatDude && native->hasX() && native->xspr.health > 0) ||
+			(!native && Superset::GameplayTarget(target, shared) && shared.alive))
 		{
 			double vel = missileInfo[actor->spr.type - kMissileBase].fVelocity();
-			actor->vel.SetXY(DVector2(vel, 0).Rotated((target->spr.pos - actor->spr.pos).Angle()));
+			auto targetPos = native ? target->spr.pos : shared.aim;
+			actor->vel.SetXY(DVector2(vel, 0).Rotated((targetPos - actor->spr.pos).Angle()));
 
-			double deltaz = (target->spr.pos.Z - actor->spr.pos.Z) / (10 * 256);
+			double deltaz = (targetPos.Z - actor->spr.pos.Z) / (10 * 256);
 
-			if (target->spr.pos.Z < actor->spr.pos.Z) deltaz = -deltaz;
+			if (targetPos.Z < actor->spr.pos.Z) deltaz = -deltaz;
 			actor->vel.Z += deltaz;
 		}
 	}
@@ -5342,7 +5385,7 @@ int actMoveMissile(DBloodActor* actor, THitInfo<DCoreActor>& hitInfo, Projectile
 		if (cliptype == 4)
 		{
 			walltype* pWall = clipmoveresult.hitWall;
-			if (world ? world->WallImpact(actor, pWall) : actMissileWallImpact(actor, pWall))
+			if (world ? world->WallImpact(actor, pWall, ppos.plusZ(vel.Z)) : actMissileWallImpact(actor, pWall))
 			{
 				cliptype = -1;
 				if (i-- > 0) continue;
@@ -5350,6 +5393,7 @@ int actMoveMissile(DBloodActor* actor, THitInfo<DCoreActor>& hitInfo, Projectile
 				break;
 			}
 		}
+		else if (cliptype == 0 && world) world->SolidWallImpact(actor, hitInfo.hitWall, ppos.plusZ(vel.Z));
 		if (cliptype >= 0 && cliptype != 3)
 		{
 			double nVel = actor->vel.XY().Length();
@@ -5397,7 +5441,7 @@ int actMoveMissile(DBloodActor* actor, THitInfo<DCoreActor>& hitInfo, Projectile
 			assert(pSector);
 			ChangeActorSect(actor, pSector);
 		}
-		if (world) world->CheckRoomLink(actor);
+		if (world) { if (world->CheckRoomLink(actor)) cliptype = -1; }
 		else CheckLink(actor);
 		hitInfo.hitSector = actor->sector();
 		hitInfo.hitpos = actor->spr.pos;
@@ -5603,7 +5647,7 @@ void actActivateGibObject(DBloodActor* actor)
 //
 //---------------------------------------------------------------------------
 
-static void actCheckProximity()
+void actProcessProximity()
 {
 	BloodStatIterator it(kStatThing);
 	while (auto actor = it.Next())
@@ -5696,6 +5740,16 @@ static void actCheckProximity()
 						}
 					}
 				}
+				if (Superset::IsActive())
+					Superset::ForEachGameplayCombatant([&](const Superset::TargetInfo& target)
+					{
+						if (dyn_cast<DBloodActor>(target.actor) || !target.alive) return;
+						bool leech = actor->spr.type == kThingDroppedLifeLeech;
+						if (leech && (!target.enemy || actor->GetTargetActor())) return;
+						if (!CheckProximity(target.actor, actor->spr.pos, actor->sector(), leech ? 512 : 96)) return;
+						if (leech) actor->SetTarget(target.actor);
+						trTriggerSprite(actor, kCmdSpriteProximity, actor->GetOwner());
+					});
 			}
 		}
 	}
@@ -5707,7 +5761,7 @@ static void actCheckProximity()
 //
 //---------------------------------------------------------------------------
 
-static void actCheckThings()
+void actProcessThings(ProjectileWorldServices* world)
 {
 	BloodStatIterator it(kStatThing);
 	while (auto actor = it.Next())
@@ -5750,12 +5804,13 @@ static void actCheckThings()
 			actAirDrag(actor, 128);
 
 			if (((actor->GetIndex() >> 8) & 15) == (gFrameCount & 15) && (actor->spr.flags & 2))	actor->spr.flags |= 4;
-			if ((actor->spr.flags & 4) || !actor->vel.isZero() || actor->sector()->velFloor || actor->sector()->velCeil)
+			double floorVelocity = world ? world->FloorVelocity(actor->sector()) : actor->sector()->velFloor;
+			if ((actor->spr.flags & 4) || !actor->vel.isZero() || floorVelocity || actor->sector()->velCeil)
 			{
-				Collision hit = MoveThing(actor);
+				TCollision<DCoreActor> hit = MoveThing(actor, world);
 				if (hit.type)
 				{
-					if (actor->xspr.Impact) trTriggerSprite(actor, kCmdOff, hit.type == kHitSprite? hit.safeActor() : nullptr);
+					if (actor->xspr.Impact) trTriggerSprite(actor, kCmdOff, hit.type == kHitSprite ? dyn_cast<DBloodActor>(hit.safeActor()) : nullptr);
 
 					switch (actor->spr.type)
 					{
@@ -5769,7 +5824,7 @@ static void actCheckThings()
 						if (hit.type == kHitSprite)
 						{
 							actor->spr.scale = DVector2(0.5, 0.5);
-							actDamageSprite(actor->GetOwner(), hit.actor(), kDamageFall, actor->xspr.data1);
+							actDamageActor(actor->GetOwner(), hit.actor(), kDamageFall, actor->xspr.data1);
 						}
 						break;
 #endif
@@ -5777,7 +5832,7 @@ static void actCheckThings()
 						seqSpawn(24, actor, -1);
 						if (hit.type == kHitSprite)
 						{
-							actDamageSprite(actor->GetOwner(), hit.actor(), kDamageFall, 12);
+							actDamageActor(actor->GetOwner(), hit.actor(), kDamageFall, 12);
 						}
 						break;
 
@@ -5789,7 +5844,7 @@ static void actCheckThings()
 						}
 						else if (hit.type == kHitSprite)
 						{
-							actDamageSprite(actor->GetOwner(), hit.actor(), kDamageFall, 12);
+							actDamageActor(actor->GetOwner(), hit.actor(), kDamageFall, 12);
 							evPostActor(actor, 0, kCallbackFXPodBloodSplat);
 						}
 						break;
@@ -5856,7 +5911,7 @@ void actProcessExplosions(ProjectileWorldServices* world)
 		// so only allow this new checking method for dude spawned explosions
 		affectedXWalls.Clear();
 		const bool newSectCheckMethod = !cl_bloodvanillaexplosions && Owner && Owner->IsDudeActor() && !VanillaMode(); // use new sector checking logic
-		auto sectorMap = GetClosestSpriteSectors(pSector, apos.XY(), radius, &affectedXWalls, newSectCheckMethod);
+		auto sectorMap = GetClosestSpriteSectors(pSector, apos.XY(), radius, &affectedXWalls, newSectCheckMethod, world && world->AllExplosionWalls());
 
 		for (auto pWall : affectedXWalls)
 		{
@@ -5914,7 +5969,7 @@ void actProcessExplosions(ProjectileWorldServices* world)
 		}
 
 		if (Superset::IsActive() && actor->xspr.data1)
-			Superset::ForEachGameplayTarget([&](const Superset::TargetInfo& target)
+			Superset::ForEachGameplayCombatant([&](const Superset::TargetInfo& target)
 			{
 				auto receiver = target.actor;
 				if (dyn_cast<DBloodActor>(receiver) || !target.alive || !sectorMap[receiver->sectno()] ||
@@ -6262,8 +6317,7 @@ void actProcessSprites(void)
 	if (gModernMap) nnExtProcessSuperSprites();
 #endif
 
-	actCheckProximity();
-	actCheckThings();
+	if (!gi->TickThingObjects()) { actProcessProximity(); actProcessThings(); }
 	if (!gi->TickProjectileObjects()) actCheckProjectiles();
 	if (!gi->TickExplosionObjects()) actProcessExplosions();
 	actCheckTraps();
@@ -6402,8 +6456,8 @@ DBloodActor* actSpawnThing(sectortype* pSector, const DVector3& pos, int nThingT
 	actor->spr.flags = pThingInfo->flags;
 	if (actor->spr.flags & 2) actor->spr.flags |= 4;
 	actor->spr.cstat |= pThingInfo->cstat;
-	// Unbound foreign things are visual until their world/physics adapter is
-	// installed. Their native flags/data remain available for that adapter.
+	// Physics and callbacks run through the shared object phase. Keep foreign
+	// things nonblocking to the remaining Duke-only touch/VM collision paths.
 	if (Superset::IsDukeMap()) actor->spr.cstat &= ~CSTAT_SPRITE_BLOCK_ALL;
 	actor->spr.setspritetexture(pThingInfo->textureID());
 	actor->spr.shade = pThingInfo->shade;
@@ -6488,11 +6542,14 @@ DBloodActor* actFireThing(DBloodActor* actor, double xyoff, double zoff, double 
 {
 	assert(thingType >= kThingBase && thingType < kThingMax);
 
-	DVector3 vect = actor->spr.pos.plusZ(zoff) + (actor->spr.Angles.Yaw + DAngle90).ToVector() * xyoff + actor->spr.Angles.Yaw.ToVector() * actor->clipdist;
+	// A weapon view does not define the holder's physical radius. In particular,
+	// Duke's body is wider than the invisible Blood animation/controller view.
+	double launchRadius = actor->supersetWorldActor ? actor->supersetWorldActor->clipdist : actor->clipdist;
+	DVector3 vect = actor->spr.pos.plusZ(zoff) + (actor->spr.Angles.Yaw + DAngle90).ToVector() * xyoff + actor->spr.Angles.Yaw.ToVector() * launchRadius;
 
-	if (HitScan(actor, vect.Z, DVector3(vect.XY() - actor->spr.pos.XY(), 0), CLIPMASK0, actor->clipdist * 0.25) != -1)
+	if (HitScan(actor, vect.Z, DVector3(vect.XY() - actor->spr.pos.XY(), 0), CLIPMASK0, launchRadius * 0.25) != -1)
 	{
-		vect.SetXY(gHitInfo.hitpos.XY() - actor->spr.Angles.Yaw.ToVector() * actor->clipdist * 2);
+		vect.SetXY(gHitInfo.hitpos.XY() - actor->spr.Angles.Yaw.ToVector() * launchRadius * 2);
 	}
 	auto fired = actSpawnThing(actor->sector(), vect, thingType);
 	fired->SetOwner(actor);
@@ -6817,6 +6874,10 @@ void actFireVector(DBloodActor* shooter, double offset, double zoffset, DVector3
 	if (hit == 3 && Superset::IsActive() && gHitInfo.hitActor && !dyn_cast<DBloodActor>(gHitInfo.hitActor))
 	{
 		Superset::ApplyHealthDamage(gHitInfo.hitActor, Superset::BloodVectorDamage(vectorType, false), shooter);
+		Superset::TargetInfo target;
+		int surface = Superset::GameplayTarget(gHitInfo.hitActor, target) && (target.enemy || target.player) ? kSurfFlesh :
+			Superset::BloodImpactSurface(gHitInfo.hitActor->spr.spritetexture());
+		fxSpawnSurfaceImpact(pVectorData->surfHit[surface], gHitInfo.hitSector, gHitInfo.hitpos - dv);
 		return;
 	}
 	if (hit == 3)
@@ -7012,34 +7073,7 @@ void actFireVector(DBloodActor* shooter, double offset, double zoffset, DVector3
 		}
 	}
 	assert(nSurf < kSurfMax);
-#ifdef NOONE_EXTENSIONS
-
-	// let the patrol enemies hear surface hit sounds!
-
-	if (pVectorData->surfHit[nSurf].fx2 >= 0) {
-
-		auto pFX2 = gFX.fxSpawnActor(pVectorData->surfHit[nSurf].fx2, pSector, pos);
-		if (pFX2 && gModernMap)
-			pFX2->SetOwner(shooter);
-	}
-
-	if (pVectorData->surfHit[nSurf].fx3 >= 0) {
-
-		auto pFX3 = gFX.fxSpawnActor(pVectorData->surfHit[nSurf].fx3, pSector, pos);
-		if (pFX3 && gModernMap)
-			pFX3->SetOwner(shooter);
-
-	}
-
-#else
-	if (pVectorData->surfHit[nSurf].fx2 >= 0)
-		gFX.fxSpawnActor(pVectorData->surfHit[nSurf].fx2, pSector, pos);
-	if (pVectorData->surfHit[nSurf].fx3 >= 0)
-		gFX.fxSpawnActor(pVectorData->surfHit[nSurf].fx3, pSector, pos);
-#endif
-
-	if (pVectorData->surfHit[nSurf].fxSnd >= 0)
-		sfxPlay3DSound(pos, pVectorData->surfHit[nSurf].fxSnd, pSector);
+	fxSpawnSurfaceImpact(pVectorData->surfHit[nSurf], pSector, pos, nullptr, shooter);
 }
 
 //---------------------------------------------------------------------------

@@ -1,6 +1,7 @@
 #pragma once
 #include "ns.h"
 #include "textureid.h"
+#include "mashup_resources.h"
 
 
 BEGIN_BLD_NS
@@ -28,7 +29,7 @@ inline void InitTextureIDs()
 {
 	for(int i = 0; i < TEXID_COUNT; i++)
 	{
-		aTexIds[i] = TexMan.CheckForTexture(texlistnames[i], ETextureType::Any);
+		aTexIds[i] = Mashup::BloodTexture(texlistnames[i]);
 	}
 }
 

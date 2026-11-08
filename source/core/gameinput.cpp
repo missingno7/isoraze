@@ -25,6 +25,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "gameinput.h"
 #include "g_input.h"
 #include "isometricinput.h"
+#include "games/superset/superset.h"
 
 //---------------------------------------------------------------------------
 //
@@ -443,7 +444,8 @@ CCMD(slot)
 {
 	// The max differs between games so we have to handle this here.
 	const bool isDukeShareware = (g_gameType & (GAMEFLAG_DUKE | GAMEFLAG_SHAREWARE)) == (GAMEFLAG_DUKE | GAMEFLAG_SHAREWARE);
-	const int max = isExhumed() || isDukeShareware ? WeaponSel_MaxExhumed : isBlood() ? WeaponSel_MaxBlood : WeaponSel_Max;
+	const int max = Superset::IsActive() ? WeaponSel_MaxBlood :
+		isExhumed() || isDukeShareware ? WeaponSel_MaxExhumed : isBlood() ? WeaponSel_MaxBlood : WeaponSel_Max;
 
 	if (argv.argc() != 2)
 	{

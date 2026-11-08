@@ -362,7 +362,7 @@ CCMD(superset_spawn_duke_projectile)
 CCMD(superset_duke_projectile_check)
 {
 	if (!IsActive() || gamestate != GS_LEVEL || numplayers != 1 || argv.argc() != 2) return;
-	if (!IsBloodMap() && stricmp(argv[1], "arena") && stricmp(argv[1], "faceclear")) return;
+	if (!IsBloodMap() && stricmp(argv[1], "arena") && stricmp(argv[1], "flatarena") && stricmp(argv[1], "faceclear")) return;
 	auto player = Blood::getPlayer(myconnectindex);
 	auto source = player->GetActor();
 	auto body = PlayerArray[myconnectindex]->GetActor();
@@ -372,7 +372,7 @@ CCMD(superset_duke_projectile_check)
 	if (!stricmp(argv[1], "watchdeath")) { watchDeathCommit = true; deathProbeIndex = -1; return; }
 	if (!stricmp(argv[1], "trace")) { traceProjectile = true; return; }
 	if (!stricmp(argv[1], "notrace")) { traceProjectile = false; return; }
-	if (!stricmp(argv[1], "arena"))
+	if (!stricmp(argv[1], "arena") || !stricmp(argv[1], "flatarena"))
 	{
 		// Combat fixtures need clearance beyond the narrow starting coffin.
 		// Select an existing open, dry room; do not alter map geometry or scale.
@@ -382,52 +382,74 @@ CCMD(superset_duke_projectile_check)
 		auto cstat = source->spr.cstat; source->spr.cstat &= ~CSTAT_SPRITE_BLOCK_ALL;
 		auto bodyCstat = body->spr.cstat; body->spr.cstat &= ~CSTAT_SPRITE_BLOCK_ALL;
 		bool found = false;
+		bool flat = !stricmp(argv[1], "flatarena");
 		for (auto& candidate : sector)
 		{
+			if (found) break;
 			if (candidate.walls.Size() < 4 || candidate.lotag || candidate.upperLink || candidate.lowerLink ||
 				(candidate.hasX() && (candidate.xs().Underwater || candidate.xs().Depth))) continue;
 			DVector2 center(0, 0);
 			for (auto& wal : candidate.walls) center += wal.pos;
 			center /= candidate.walls.Size();
-			if (!inside(center.X, center.Y, &candidate)) continue;
-			double floor = getflorzofslopeptr(&candidate, center), ceiling = getceilzofslopeptr(&candidate, center);
-			if (floor - ceiling < bottom - top + 16) continue;
-			// An otherwise open room may contain a raised coffin/platform at its
-			// centroid. Do not put Caleb on that surface and the enemy below it.
-			CollisionBase ceilingHit, floorHit;
-			double supportCeiling, supportFloor;
-			getzrange(DVector3(center, floor - feet), &candidate, &supportCeiling, ceilingHit, &supportFloor, floorHit,
-				source->clipdist, CLIPMASK0);
-			if (fabs(supportFloor - floor) > 1) continue;
-			DVector3 origin(center, floor - feet - eye);
-			bool clear = true;
-			for (int n = 0; n < 8; ++n)
+			auto centroid = center;
+			constexpr double offsets[] = {0, 128, -128, 256, -256};
+			for (int sample = 0; sample < (flat ? 25 : 1); ++sample)
 			{
-				HitInfoBase hit {}; auto direction = DAngle::fromDeg(n * 45).ToVector();
-				auto flight = DVector3(center, floor - feet - weapon);
-				auto flightSector = &candidate;
-				CollisionBase collision;
-				Blood::ClipMove(flight, &flightSector, direction * 128, 8, 4, 4, CLIPMASK0, collision, 1);
-				if ((flight.XY() - center).Length() < 120) { clear = false; break; }
-				hitscan(origin, &candidate, DVector3(direction * 1024, 0), hit, CLIPMASK1);
-				if (!hit.hitWall || (hit.hitpos.XY() - center).Length() < 128) { clear = false; break; }
-				// Eye-height clearance alone can select a window above a low wall:
-				// native Blood missiles leave the lower weapon origin.
-				hit = {};
-				hitscan(DVector3(center, floor - feet - weapon), &candidate, DVector3(direction * 1024, 0), hit, CLIPMASK1);
-				if (!hit.hitWall || (hit.hitpos.XY() - center).Length() < 128) { clear = false; break; }
+				center = centroid + DVector2(offsets[sample % 5], offsets[sample / 5]);
+				if (!inside(center.X, center.Y, &candidate)) continue;
+				double floor = getflorzofslopeptr(&candidate, center), ceiling = getceilzofslopeptr(&candidate, center);
+				if (floor - ceiling < max(bottom - top + 16, 160.)) continue;
+				// An otherwise open room may contain a raised coffin/platform at its
+				// centroid. Do not put Caleb on that surface and the enemy below it.
+				CollisionBase ceilingHit, floorHit;
+				double supportCeiling, supportFloor;
+				getzrange(DVector3(center, floor - feet), &candidate, &supportCeiling, ceilingHit, &supportFloor, floorHit,
+					source->clipdist, CLIPMASK0);
+				if (fabs(supportFloor - floor) > 1) continue;
+				DVector3 origin(center, floor - feet - eye);
+				bool clear = true;
+				for (int n = 0; n < 8; ++n)
+				{
+					HitInfoBase hit {}; auto direction = DAngle::fromDeg(n * 45).ToVector();
+					if (flat)
+					{
+						auto ground = center + direction * 128;
+						auto groundSector = &candidate; updatesector(ground, &groundSector);
+						if (!groundSector || fabs(getflorzofslopeptr(groundSector, ground) - floor) > 1) { clear = false; break; }
+					}
+					auto flight = DVector3(center, floor - feet - weapon);
+					auto flightSector = &candidate;
+					CollisionBase collision;
+					Blood::ClipMove(flight, &flightSector, direction * 128, 8, 4, 4, CLIPMASK0, collision, 1);
+					if ((flight.XY() - center).Length() < 120) { clear = false; break; }
+					hitscan(origin, &candidate, DVector3(direction * 1024, 0), hit, CLIPMASK1);
+					if (!hit.hitWall || (hit.hitpos.XY() - center).Length() < 128) { clear = false; break; }
+					// Eye-height clearance alone can select a window above a low wall:
+					// native Blood missiles leave the lower weapon origin.
+					hit = {};
+					hitscan(DVector3(center, floor - feet - weapon), &candidate, DVector3(direction * 1024, 0), hit, CLIPMASK1);
+					if (!hit.hitWall || (hit.hitpos.XY() - center).Length() < 128) { clear = false; break; }
+				}
+				if (!clear) continue;
+				source->spr.pos = DVector3(center, floor - feet);
+				ChangeActorSect(source, &candidate); source->vel = {};
+				source->backuploc(); Blood::playerResetInertia(player);
+				if (body != source)
+				{
+					body->spr.pos = DVector3(center, floor);
+					ChangeActorSect(body, &candidate); body->vel = {};
+					body->backuploc();
+					if (auto duke = dyn_cast<Duke3d::DDukePlayer>(PlayerArray[myconnectindex]))
+					{
+						duke->setCursector(&candidate);
+						duke->truefz = duke->GetActor()->floorz = floor;
+						duke->truecz = duke->GetActor()->ceilingz = ceiling;
+						duke->psectlotag = 0;
+						duke->vel = {};
+					}
+				}
+				found = true; break;
 			}
-			if (!clear) continue;
-			source->spr.pos = DVector3(center, floor - feet);
-			ChangeActorSect(source, &candidate); source->vel = {};
-			source->backuploc(); Blood::playerResetInertia(player);
-			if (body != source)
-			{
-				body->spr.pos = DVector3(center, floor);
-				ChangeActorSect(body, &candidate); body->vel = {};
-				body->backuploc();
-			}
-			found = true; break;
 		}
 		source->spr.cstat = cstat;
 		body->spr.cstat = body == source ? cstat : bodyCstat;

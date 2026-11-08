@@ -4,6 +4,7 @@
 #include "../duke/src/duke3d.h"
 #include "../duke/src/dukeactor.h"
 #include "../blood/src/blood.h"
+#include "../blood/src/texids.h"
 #include "superset.h"
 #include "projectiles.h"
 #include "level.h"
@@ -14,6 +15,7 @@
 #include "c_cvars.h"
 #include "serializer.h"
 #include "c_dispatch.h"
+#include <utility>
 
 namespace Duke3d { void TickActor(DDukeActor*); }
 
@@ -55,9 +57,11 @@ public:
 	{
 		Blood::GetZRangeAtXYZ(pos, sector, ceiling, &ceilingHit, floor, &floorHit, radius, CLIPMASK0);
 	}
-	void CheckRoomLink(Blood::DBloodActor* actor) override { Blood::CheckLink(actor); }
-	bool WallImpact(Blood::DBloodActor* actor, walltype* wall) override { return Blood::actMissileWallImpact(actor, wall); }
+	bool CheckRoomLink(Blood::DBloodActor* actor) override { return Blood::CheckLink(actor) != 0; }
+	bool WallImpact(Blood::DBloodActor* actor, walltype* wall, const DVector3&) override { return Blood::actMissileWallImpact(actor, wall); }
 	void ExplosionWallImpact(Blood::DBloodActor* actor, walltype* wall) override { Blood::trTriggerWall(wall, Blood::kCmdWallImpact, actor->GetOwner()); }
+	void TouchFloor(Blood::DBloodActor* actor) override { Blood::actTouchFloor(actor, actor->sector()); }
+	double FloorVelocity(sectortype* sector) const override { return sector->velFloor; }
 };
 class DukeProjectileWorld final : public CommonProjectileWorld
 {
@@ -67,13 +71,54 @@ public:
 	{
 		getzrange(pos, sector, ceiling, ceilingHit, floor, floorHit, radius, CLIPMASK0);
 	}
-	void CheckRoomLink(Blood::DBloodActor*) override
+	bool CheckRoomLink(Blood::DBloodActor* actor) override
 	{
-		// Duke transporter algorithms still need a common-object environment
-		// service. Never interpret their sectors as Blood room links.
+		Duke3d::DukeStatIterator it(STAT_TRANSPORT);
+		while (auto marker = it.Next())
+			if (marker->sector() == actor->sector() && Duke3d::transportObject(marker, actor, actor->spr.statnum == Blood::kStatProjectile, false, true))
+			{
+				actor->backuppos();
+				return true; // One transfer per object movement step.
+			}
+		return false;
 	}
-	bool WallImpact(Blood::DBloodActor*, walltype*) override { return false; }
-	void ExplosionWallImpact(Blood::DBloodActor*, walltype*) override {}
+	void SolidWallImpact(Blood::DBloodActor* actor, walltype* wall, const DVector3& pos) override
+	{
+		// Native Duke break handlers consume Duke-specific attack fields. This
+		// is an immediate event context, never a second simulated projectile.
+		auto owner = dyn_cast<Duke3d::DDukeActor>(CollisionOwner(actor));
+		auto impact = Duke3d::CreateActor(actor->sector(), pos, Duke3d::DukeShotSparkClass,
+			0, DVector2(0, 0), actor->spr.Angles.Yaw, 0, 0, owner, STAT_PROJECTILE);
+		if (!impact) return;
+		if (actor->spr.type == Blood::kMissileFireballNapalm || actor->spr.statnum == Blood::kStatExplosion)
+			impact->flags2 |= SFLAG2_BREAKMIRRORS;
+		Duke3d::checkhitwall(impact, wall, pos);
+		impact->Destroy();
+	}
+	bool WallImpact(Blood::DBloodActor* actor, walltype* wall, const DVector3& pos) override
+	{
+		SolidWallImpact(actor, wall, pos);
+		return !(wall->cstat & (CSTAT_WALL_BLOCK | CSTAT_WALL_BLOCK_HITSCAN));
+	}
+	bool AllExplosionWalls() const override { return true; }
+	void ExplosionWallImpact(Blood::DBloodActor* actor, walltype* wall) override
+	{
+		auto delta = wall->delta();
+		if (delta.LengthSquared() == 0) return;
+		double fraction = clamp((actor->spr.pos.XY() - wall->pos).dot(delta) / delta.LengthSquared(), 0., 1.);
+		auto point = wall->pos + delta * fraction;
+		auto inset = actor->spr.pos.XY() - point;
+		if (inset.LengthSquared() > 0) point += inset.Unit();
+		auto sector = actor->sector(); updatesector(point, &sector);
+		DVector3 contact(point, actor->spr.pos.Z);
+		if (sector && cansee(actor->spr.pos, actor->sector(), contact, sector)) SolidWallImpact(actor, wall, contact);
+	}
+	void TouchFloor(Blood::DBloodActor* actor) override
+	{
+		if (BloodImpactSurface(actor->sector()->floortexture) == Blood::kSurfLava)
+			Blood::actDamageSprite(actor, actor, Blood::kDamageBurn, 16);
+	}
+	double FloorVelocity(sectortype* sector) const override { return LevelEnvironment(sector).floorVelocity; }
 	bool NonBlockingMissiles() const override { return true; }
 };
 BloodProjectileWorld bloodEnvironment;
@@ -83,6 +128,7 @@ Blood::ProjectileWorldServices* projectileEnvironment = nullptr;
 
 void BindProjectileEnvironment(bool bloodSource)
 {
+	Blood::InitTextureIDs();
 	// Source format is decoded once by the frontend; object updates use only
 	// the bound environment contract, with no per-map missile implementation.
 	projectileEnvironment = bloodSource ? static_cast<Blood::ProjectileWorldServices*>(&bloodEnvironment) : &dukeEnvironment;
@@ -104,6 +150,35 @@ void TickProjectileObjects()
 	auto world = ProjectileEnvironment();
 	Blood::BloodStatIterator it(Blood::kStatProjectile);
 	while (auto actor = it.Next()) Blood::actProcessMissile(actor, world);
+}
+void TickThingObjects()
+{
+	Blood::actProcessProximity();
+	Blood::actProcessThings(ProjectileEnvironment());
+}
+bool TryUseBloodThing(DCorePlayer* player)
+{
+	if (!IsActive()) return false;
+	TArray<std::pair<Blood::DBloodActor*, ESpriteFlags>> objects;
+	Blood::BloodStatIterator it(Blood::kStatThing);
+	while (auto actor = it.Next()) if (actor->hasX() && actor->xspr.Push && !actor->xspr.locked && !(actor->spr.flags & 32))
+	{
+		objects.Push({actor, actor->spr.cstat});
+		actor->spr.cstat |= CSTAT_SPRITE_BLOCK_HITSCAN;
+	}
+	if (!objects.Size()) return false;
+	auto body = player->GetActor(); auto flags = body->spr.cstat;
+	body->spr.cstat &= ~CSTAT_SPRITE_BLOCK_ALL;
+	THitInfo<DCoreActor> hit {};
+	hitscan(body->getPosWithOffsetZ(), body->sector(), DVector3(body->spr.Angles.Yaw.ToVector(), player->getPitchWithView().Tan()) * 1024., hit, CLIPMASK1);
+	body->spr.cstat = flags;
+	for (auto& entry : objects) entry.first->spr.cstat = entry.second;
+	auto actor = dyn_cast<Blood::DBloodActor>(hit.hitActor);
+	if (!actor || !actor->hasX() || !actor->xspr.Push || (hit.hitpos.XY() - body->spr.pos.XY()).Length() >= 64) return false;
+	if (actor->spr.type == Blood::kThingDroppedLifeLeech) actor->xspr.data4 = player->pnum;
+	actor->xspr.isTriggered = 0;
+	Blood::trTriggerSprite(actor, Blood::kCmdSpritePush, BloodState(body));
+	return true;
 }
 void TickProjectileExplosions()
 {
@@ -134,7 +209,7 @@ bool Ignite(DCoreActor* target, DCoreActor* source, int clocks)
 	if (auto duke = dyn_cast<Duke3d::DDukeActor>(target))
 	{
 		if (auto body = Mashup::WorldSoundActor(source)) source = body;
-		if (!Duke3d::badguy(duke) || duke->spr.extra <= 0 || !duke->IntVar(FName("supersetburnable"))) return false;
+		if ((!Duke3d::badguy(duke) && !duke->isPlayer()) || duke->spr.extra <= 0 || !duke->IntVar(FName("supersetburnable"))) return false;
 		if (duke->supersetBurnTime == 0) duke->supersetBurnFxTime = 0;
 		duke->supersetBurnTime = min(duke->supersetBurnTime + min(clocks, 2400), 2400);
 		duke->supersetBurnSource = source;
@@ -152,7 +227,8 @@ void TickStatusEffects()
 	while (auto actor = it.Next())
 	{
 		if (actor->supersetBurnTime <= 0) continue;
-		if (actor->spr.extra <= 0 || !Duke3d::badguy(actor))
+		if (actor->spr.extra <= 0 || (!Duke3d::badguy(actor) && !actor->isPlayer()) ||
+			LevelEnvironment(actor->sector()).medium == Medium::Underwater)
 		{
 			actor->supersetBurnTime = actor->supersetBurnFxTime = 0;
 			actor->supersetBurnSource = nullptr;
@@ -176,6 +252,196 @@ void TickStatusEffects()
 
 int BloodDifficulty() { return clamp(int(superset_blood_difficulty), 0, 4); }
 
+int BloodImpactSurface(FTextureID texture)
+{
+	if (!Mashup::HasBloodResources() || Mashup::IsBloodTexture(texture))
+		return GetExtInfo(texture).surftype;
+	// Duke surface IDs describe terrain behavior, not Blood's materials.
+	switch (tilesurface(texture))
+	{
+	case TSURF_METALDUCTS: case TSURF_ELECTRIC: return Blood::kSurfMetal;
+	case TSURF_SLIME: return Blood::kSurfGoo;
+	case TSURF_MUDDY: case TSURF_DEEPMUD: return Blood::kSurfDirt;
+	case TSURF_MAGMA: case TSURF_PURPLELAVA: return Blood::kSurfLava;
+	case TSURF_SPECIALWATER: return Blood::kSurfWater;
+	default: return Blood::kSurfStone;
+	}
+}
+
+CCMD(superset_effect_check)
+{
+	if (!IsActive() || gamestate != GS_LEVEL || numplayers != 1) return;
+	if (argv.argc() == 2 && !stricmp(argv[1], "equip"))
+	{
+		auto source = Blood::getPlayer(myconnectindex)->GetActor();
+		auto pos = source->spr.pos; pos.Z = getflorzofslopeptr(source->sector(), pos);
+		for (int type : {Blood::kItemWeaponSawedoff, Blood::kItemAmmoSawedoffBox,
+			Blood::kItemWeaponTommygun, Blood::kItemAmmoTommygunDrum}) Blood::actSpawnPickup(source->sector(), pos, type);
+		return;
+	}
+	if (argv.argc() == 2 && !stricmp(argv[1], "clear"))
+	{
+		Blood::BloodStatIterator it(Blood::kStatFX);
+		while (auto actor = it.Next()) Blood::gFX.destroy(actor);
+		return;
+	}
+	if (argv.argc() == 2 && !stricmp(argv[1], "flare"))
+	{
+		auto player = Blood::getPlayer(myconnectindex);
+		auto source = player->GetActor();
+		auto position = source->spr.pos.XY() + source->spr.Angles.Yaw.ToVector() * 64;
+		// Native floor glow requires the flare to be within 64 units of it.
+		auto missile = Blood::actSpawnMissile(source, source->sector(), DVector3(position, getflorzofslopeptr(source->sector(), position) - 32),
+			DVector3(source->spr.Angles.Yaw.ToVector(), 0), Blood::kMissileFlareRegular);
+		if (missile) { missile->vel = {}; missile->spr.intowner = 31043; }
+		return;
+	}
+	bool qualified = true;
+	for (auto texture : Blood::aTexIds)
+		qualified &= !Mashup::HasBloodResources() || Mashup::IsBloodTexture(texture) || !texture.isValid();
+	qualified &= Blood::aTexIds[Blood::kTexHALOEFFECT] == Mashup::BloodTile(2427) &&
+		Blood::aTexIds[Blood::kTexFLAREBURST] == Mashup::BloodTile(2424) &&
+		Blood::aTexIds[Blood::kTexBULLETCASE] == Mashup::BloodTile(2465) &&
+		Blood::aTexIds[Blood::kTexSHELLCASE] == Mashup::BloodTile(2464);
+	int effects = 0, settled = 0, marks = 0, flares = 0;
+	tspriteArray sprites {};
+	DCoreActor* dukeEffect = nullptr;
+	Duke3d::DukeSpriteIterator duke;
+	while (auto actor = duke.Next()) if (!actor->isPlayer() && actor->spr.scale.X > 0 && actor->spr.spritetexture().isValid()) { dukeEffect = actor; break; }
+	auto add = [&](DCoreActor* actor)
+	{
+		auto sprite = sprites.newTSprite();
+		*static_cast<spritetypebase*>(sprite) = actor->spr;
+		sprite->ownerActor = actor; sprite->time = 0;
+	};
+	if (dukeEffect) add(dukeEffect);
+	Blood::BloodSpriteIterator blood;
+	while (auto actor = blood.Next())
+	{
+		if (actor->spr.statnum != Blood::kStatFX && actor->spr.statnum != Blood::kStatProjectile && actor->spr.statnum != Blood::kStatFlare) continue;
+		if (actor->spr.statnum == Blood::kStatFX)
+		{
+			++effects;
+			settled += actor->spr.type == Blood::FX_51 && actor->vel.isZero() &&
+				(actor->spr.spritetexture() == Mashup::BloodTile(2464) || actor->spr.spritetexture() == Mashup::BloodTile(2465));
+			marks += actor->spr.cstat2 & CSTAT2_SPRITE_DECAL ? 1 : 0;
+		}
+		flares += actor->spr.intowner == 31043;
+		qualified &= !Mashup::HasBloodResources() || Mashup::IsBloodTexture(actor->spr.spritetexture());
+		add(actor);
+	}
+	unsigned original = sprites.Size();
+	auto owner = PlayerArray[myconnectindex];
+	gi->processSprites(sprites, owner->GetActor()->getPosWithOffsetZ(), owner->GetActor()->spr.Angles.Yaw, 1.);
+	int halos = 0, glows = 0;
+	for (unsigned i = original; i < sprites.Size(); ++i)
+	{
+		auto sprite = sprites.get(i);
+		halos += sprite->spritetexture() == Blood::aTexIds[Blood::kTexHALOEFFECT];
+		glows += sprite->spritetexture() == Blood::aTexIds[Blood::kTexGLOWEFFECT];
+		qualified &= !Mashup::HasBloodResources() || Mashup::IsBloodTexture(sprite->spritetexture());
+	}
+	bool coexist = !dukeEffect || sprites.get(0)->spritetexture().isValid();
+	Printf("Superset effects: %s (effects=%d settled=%d marks=%d flares=%d halos=%d glows=%d coexist=%d).\n",
+		qualified && coexist && (!flares || halos >= flares) ? "PASS" : "FAIL", effects, settled, marks, flares, halos, glows, coexist);
+}
+
+CCMD(superset_object_world_check)
+{
+	if (!IsDukeMap() || gamestate != GS_LEVEL || numplayers != 1) return;
+	const char* command = argv.argc() > 1 ? argv[1] : "status";
+	constexpr int tag = 31044;
+	auto source = BloodState(PlayerArray[myconnectindex]->GetActor());
+	if (!source) return;
+	if (!stricmp(command, "clear"))
+	{
+		Blood::BloodSpriteIterator it;
+		while (auto actor = it.Next()) if (actor->spr.intowner == tag)
+		{
+			Blood::evKillActor(actor); Blood::seqKill(actor); actor->Destroy();
+		}
+		return;
+	}
+	if (!stricmp(command, "transport") && argv.argc() == 4)
+	{
+		int index = atoi(argv[2]);
+		if (!validSectorIndex(index)) return;
+		auto sector = &::sector[index];
+		Duke3d::DukeStatIterator it(STAT_TRANSPORT);
+		Duke3d::DDukeActor* marker = nullptr;
+		while (auto candidate = it.Next()) if (candidate->sector() == sector) { marker = candidate; break; }
+		if (!marker) { Printf("Superset object seed: FAIL (no transporter).\n"); return; }
+		marker->counter = 0;
+		auto pos = marker->spr.pos;
+		if (sector->lotag == ST_1_ABOVE_WATER) pos.Z = sector->floorz - 8;
+		else if (sector->lotag == ST_2_UNDERWATER) pos.Z = sector->ceilingz + 8;
+		else if (marker->temp_data[4]) pos.Z = sector->floorz - 32;
+		else pos.Z -= 40;
+		auto missile = Blood::actSpawnMissile(source, sector, pos, DVector3(1, 0, 0), Blood::kMissileFlareRegular);
+		if (missile) { missile->spr.intowner = tag; missile->vel = {0, 0, atof(argv[3])}; missile->backuppos(); }
+		Printf("Superset object seed: %s (sector=%d).\n", missile ? "PASS" : "FAIL", index);
+		return;
+	}
+	if (!stricmp(command, "lift") && ::sector.Size() == 17)
+	{
+		auto sector = &::sector[3];
+		auto pos = DVector3((sector->walls[0].pos + sector->walls[2].pos) * .5, sector->floorz);
+		auto actor = Blood::actSpawnThing(sector, pos, Blood::kThingArmedRemoteBomb);
+		double top, bottom; Blood::GetActorExtents(actor, &top, &bottom);
+		actor->spr.pos.Z += sector->floorz - bottom;
+		actor->vel = {}; actor->spr.flags &= ~4; actor->spr.intowner = tag; actor->SetOwner(source);
+		bool accepted = ActivateLevelSector(sector, source, false);
+		Printf("Superset object lift: %s.\n", accepted ? "PASS" : "FAIL");
+		return;
+	}
+	if ((!stricmp(command, "glass") || !stricmp(command, "solid") || !stricmp(command, "blast")) && ::sector.Size() == 17)
+	{
+		auto sector = &::sector[13];
+		auto wall = &sector->walls[!stricmp(command, "glass") ? 1 : 0];
+		auto center = wall->pos + wall->delta() * .5;
+		DVector2 insidePoint(0, 0); for (auto& side : sector->walls) insidePoint += side.pos;
+		insidePoint /= sector->walls.Size();
+		auto inward = (insidePoint - center).Unit();
+		DVector3 pos(center + inward * 24, 64);
+		if (!stricmp(command, "glass"))
+		{
+			wall->setovertexture(TexMan.CheckForTexture("GLASS", ETextureType::Any));
+			wall->cstat |= CSTAT_WALL_BLOCK | CSTAT_WALL_MASKED | CSTAT_WALL_BLOCK_HITSCAN;
+			wall->nextWall()->setovertexture(wall->overtexture); wall->nextWall()->cstat = wall->cstat;
+		}
+		else wall->setwalltexture(TexMan.CheckForTexture("COLAMACHINE", ETextureType::Any));
+		Blood::DBloodActor* actor;
+		if (!stricmp(command, "blast"))
+		{
+			actor = Blood::actSpawnThing(sector, pos, Blood::kThingArmedTNTBundle);
+			actor->SetOwner(source); Blood::actExplodeSprite(actor);
+		}
+		else
+		{
+			actor = Blood::actSpawnMissile(source, sector, pos, DVector3(-inward, 0), Blood::kMissileFlareRegular);
+			if (actor) actor->vel = DVector3(-inward * 8, 0);
+		}
+		if (actor) actor->spr.intowner = tag;
+		Printf("Superset object seed: %s (%s).\n", actor ? "PASS" : "FAIL", command);
+		return;
+	}
+	Blood::BloodSpriteIterator it;
+	while (auto actor = it.Next()) if (actor->spr.intowner == tag)
+	{
+		Printf("Superset object state: sector=%d stat=%d owner=%d.\n", actor->sectno(), actor->spr.statnum, actor->GetOwner() == source);
+		if (actor->spr.type == Blood::kThingArmedRemoteBomb && actor->sectno() == 3)
+		{
+			double top, bottom; Blood::GetActorExtents(actor, &top, &bottom);
+			Printf("Superset object floor contact: %s (floor=%.2f gap=%.3f).\n",
+				fabs(bottom - actor->sector()->floorz) < .1 && actor->sector()->floorz == 96 ? "PASS" : "FAIL",
+				actor->sector()->floorz, bottom - actor->sector()->floorz);
+		}
+	}
+	if (::sector.Size() == 17)
+		Printf("Superset object walls: glass=%d solid=%d.\n", !(::sector[13].walls[1].cstat & CSTAT_WALL_BLOCK_HITSCAN),
+			::sector[13].walls[0].walltexture == TexMan.CheckForTexture("COLAMACHINEBROKE", ETextureType::Any));
+}
+
 // Integration fixtures use real runtime actors and native weapon callbacks.
 // They deliberately avoid holding targets in a status that suppresses damage.
 CCMD(superset_projectile_check)
@@ -184,6 +450,24 @@ CCMD(superset_projectile_check)
 	constexpr int targetTag = 31041, flightTag = 31042;
 	auto source = BloodState(PlayerArray[myconnectindex]->GetActor());
 	if (!source) return;
+	if (!stricmp(argv[1], "pitch") && argv.argc() == 3)
+	{
+		auto owner = PlayerArray[myconnectindex];
+		owner->GetActor()->spr.Angles.Pitch = source->spr.Angles.Pitch = DAngle::fromDeg(atof(argv[2]));
+		owner->InitAngles(); Blood::getPlayer(myconnectindex)->InitAngles();
+		return;
+	}
+	if (!stricmp(argv[1], "equipall"))
+	{
+		auto pos = source->spr.pos; pos.Z = getflorzofslopeptr(source->sector(), pos);
+		for (int type : {Blood::kItemWeaponFlarePistol, Blood::kItemWeaponSawedoff, Blood::kItemWeaponTommygun,
+			Blood::kItemWeaponNapalmLauncher, Blood::kItemWeaponTNT, Blood::kItemWeaponSprayCan, Blood::kItemWeaponTeslaCannon,
+			Blood::kItemWeaponLifeLeech, Blood::kItemWeaponVoodooDoll, Blood::kItemAmmoProxBombBundle, Blood::kItemAmmoRemoteBombBundle,
+			Blood::kItemAmmoGasolineCan, Blood::kItemAmmoTeslaCharge, Blood::kItemAmmoTrappedSoul, Blood::kItemAmmoTNTBox,
+			Blood::kItemAmmoFlares, Blood::kItemAmmoSawedoffBox, Blood::kItemAmmoTommygunDrum})
+			Blood::actSpawnPickup(source->sector(), pos, type);
+		return;
+	}
 	if (!stricmp(argv[1], "equip"))
 	{
 		auto pos = source->spr.pos;

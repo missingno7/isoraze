@@ -94,6 +94,7 @@ struct GameInterface
 	// A combined frontend can own this gameplay phase while a native map
 	// provider retains its update boundary. False keeps the original phase.
 	virtual bool TickProjectileObjects() { return false; }
+	virtual bool TickThingObjects() { return false; }
 	virtual bool TickExplosionObjects() { return false; }
 	virtual bool TickProjectileAttachments() { return false; }
 	virtual int GetPlayerChecksum(int pnum) { return 0x12345678 + pnum; }

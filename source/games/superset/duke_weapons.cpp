@@ -165,7 +165,7 @@ Blood::PlayerWeaponServices* BloodMapWeaponServices(Blood::DBloodPlayer* blood)
 			duke->supersetWeaponMode = wanted ? 0 : 1; current = wanted;
 			duke->interface_toggle_flag = 0;
 		}
-		else if (!current)
+		else if (!current && !Blood::WeaponNeedsInput(blood))
 		{
 			blood->cmd.ucmd.actions &= ~(SB_FIRE | SB_ALTFIRE | SB_HOLSTER);
 			blood->cmd.ucmd.setNewWeapon(0);

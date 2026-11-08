@@ -30,6 +30,7 @@ bool ReadBloodSound(int lump, TArray<uint8_t>& data);
 bool HasBloodResources();
 FileReader OpenBloodResource(int id, const char* extension);
 FTextureID BloodTile(int tile);
+FTextureID BloodTexture(const char* name);
 bool IsBloodTexture(FTextureID texture);
 bool PickBloodTexture(FGameTexture* texture, int translation, TexturePick& pick);
 bool CheckBloodResources();

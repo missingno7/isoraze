@@ -31,6 +31,7 @@ Damage BloodVectorDamage(int vectorType, bool playerTarget);
 // Cold health damage needs an explicit native Blood mapping. Optional applied
 // measures accepted Q4 health damage, including Duke's deferred native queue.
 bool ApplyHealthDamage(DCoreActor* target, Damage damage, DCoreActor* source, Units::Health* applied = nullptr);
+bool HealHealth(DCoreActor* target, Units::Health amount, Units::Health cap);
 bool ReadDukeHitDamage(Duke3d::DDukeActor* hitter, Damage& damage);
 bool ApplyDukeHealthHit(DCoreActor* target, Duke3d::DDukeActor* hitter, DCoreActor* source);
 

@@ -21,6 +21,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 //-------------------------------------------------------------------------
 #pragma once
+#include "mashup_resources.h"
 
 BEGIN_BLD_NS
 
@@ -80,7 +81,7 @@ struct THINGINFO
 	uint8_t yrepeat;
 	int dmgControl[kDamageMax]; // damage
 	
-	FTextureID textureID() const { return tileGetTextureID(picno); }
+	FTextureID textureID() const { return Mashup::BloodTile(picno); }
 	double fClipdist() const { return clipdist * 0.25; }
 };
 
@@ -95,7 +96,7 @@ struct AMMOITEMDATA
 	int16_t count;
 	uint8_t type;
 	uint8_t weaponType;
-	FTextureID textureID() const { return tileGetTextureID(picno); }
+	FTextureID textureID() const { return Mashup::BloodTile(picno); }
 };
 
 struct WEAPONITEMDATA
@@ -109,7 +110,7 @@ struct WEAPONITEMDATA
 	int16_t type;
 	int16_t ammoType;
 	int16_t count;
-	FTextureID textureID() const { return tileGetTextureID(picno); }
+	FTextureID textureID() const { return Mashup::BloodTile(picno); }
 };
 
 struct ITEMDATA
@@ -121,7 +122,7 @@ struct ITEMDATA
 	uint8_t xrepeat;
 	uint8_t yrepeat;
 	int16_t packSlot;
-	FTextureID textureID() const { return tileGetTextureID(picno); }
+	FTextureID textureID() const { return Mashup::BloodTile(picno); }
 };
 
 struct MissileType
@@ -142,7 +143,7 @@ struct MissileType
 	{
 		return FixedToFloat(velocity);
 	}
-	FTextureID textureID() const { return tileGetTextureID(picno); }
+	FTextureID textureID() const { return Mashup::BloodTile(picno); }
 };
 
 struct EXPLOSION
@@ -212,15 +213,23 @@ struct ProjectileWorldServices
 	virtual DCoreActor* CollisionBody(DBloodActor* source) = 0;
 	virtual void VerticalRange(const DVector3& pos, sectortype* sector, double* ceiling, CollisionBase& ceilingHit,
 		double* floor, CollisionBase& floorHit, double radius) = 0;
-	virtual void CheckRoomLink(DBloodActor* missile) = 0;
-	virtual bool WallImpact(DBloodActor* missile, walltype* wall) = 0;
+	virtual bool CheckRoomLink(DBloodActor* missile) = 0;
+	virtual bool WallImpact(DBloodActor* missile, walltype* wall, const DVector3& pos) = 0;
+	virtual void SolidWallImpact(DBloodActor*, walltype*, const DVector3&) {}
 	virtual void ExplosionWallImpact(DBloodActor* explosion, walltype* wall) = 0;
+	virtual bool AllExplosionWalls() const { return false; }
+	virtual void TouchFloor(DBloodActor* object) = 0;
+	virtual double FloorVelocity(sectortype* sector) const = 0;
 	// Compatibility with map providers whose remaining touch paths are typed.
 	virtual bool NonBlockingMissiles() const { return false; }
 };
 int actMoveMissile(DBloodActor* actor, THitInfo<DCoreActor>& hit, ProjectileWorldServices* world = nullptr);
 void actProcessMissile(DBloodActor* actor, ProjectileWorldServices* world = nullptr);
+void actProcessThings(ProjectileWorldServices* world = nullptr);
+void actProcessProximity();
+void actTouchFloor(DBloodActor* actor, sectortype* sector);
 bool actMissileWallImpact(DBloodActor* actor, walltype* wall);
+bool actCanSplatWall(walltype* wall);
 DBloodActor* actSpawnMissile(DBloodActor* source, sectortype* sector, const DVector3& pos, const DVector3& direction, int type);
 void fxSpawnFlameLick(DCoreActor* actor, const DVector3& velocity);
 void actProcessDudeMovement(DBloodActor* actor, MovementWorldServices* world = nullptr);

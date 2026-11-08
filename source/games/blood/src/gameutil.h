@@ -40,6 +40,6 @@ void GetZRange(DBloodActor* pSprite, double* ceilZ, Collision* ceilHit, double* 
 void GetZRangeAtXYZ(const DVector3& pos, sectortype* pSector, double* ceilZ, CollisionBase* ceilHit, double* floorZ, CollisionBase* floorHit, double nDist, unsigned int nMask, unsigned int nClipParallax = 0);
 
 void ClipMove(DVector3& pos, sectortype** pSector, const DVector2& vect, double wd, double cd, double fd, unsigned int nMask, CollisionBase& hit, int tracecount = 3);
-BitArray GetClosestSpriteSectors(sectortype* pSector, const DVector2& pos, int nDist, TArray<walltype*>* pWalls, bool newSectCheckMethod = false);
+BitArray GetClosestSpriteSectors(sectortype* pSector, const DVector2& pos, int nDist, TArray<walltype*>* pWalls, bool newSectCheckMethod = false, bool allWalls = false);
 
 END_BLD_NS

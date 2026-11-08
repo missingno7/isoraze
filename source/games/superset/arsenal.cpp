@@ -49,9 +49,7 @@ bool Available(const WeaponDefinition& weapon, DCorePlayer* owner, Blood::DBlood
 	if (weapon.blood)
 		// Beast hands belong to the native transformation, not normal weapon
 		// cycling (their native weaponModes entry has no selectable modes).
-		return weapon.native != Blood::kWeapBeast && blood->WeaponOwnership()[weapon.native] && (owner == blood || weapon.native == Blood::kWeapPitchFork ||
-			weapon.native == Blood::kWeapShotgun || weapon.native == Blood::kWeapTommyGun || weapon.native == Blood::kWeapSpraycan ||
-			weapon.native == Blood::kWeapFlareGun);
+		return weapon.native != Blood::kWeapBeast && blood->WeaponOwnership()[weapon.native];
 	if (!duke->WeaponOwnership()[weapon.native] || (owner != duke && !DukeWeaponSupported(weapon.native))) return false;
 	// The detonator is an action on deployed bombs, not a free starting gun.
 	if (weapon.native == Duke3d::HANDREMOTE_WEAPON && !duke->hbomb_on) return false;
@@ -129,6 +127,9 @@ void ApplyArsenalSelection(DCorePlayer* owner, Blood::DBloodPlayer* blood, Duke3
 	auto weapon = Definition(inventory->pendingWeapon);
 	if (!weapon) return;
 	if (!Available(*weapon, owner, blood, duke)) { inventory->pendingWeapon = 0; return; }
+	// Keep the pending selection without stealing the buttons that finish a
+	// lit fuse or charged throw. Native callbacks retain control of the attack.
+	if (duke->supersetWeaponMode == 1 && Blood::WeaponNeedsInput(blood)) return;
 	if (duke->supersetWeaponMode != int(weapon->blood)) return;
 	int current = weapon->blood ? blood->curWeapon : duke->curr_weapon;
 	if (current == weapon->native)

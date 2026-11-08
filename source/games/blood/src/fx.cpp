@@ -31,6 +31,22 @@ BEGIN_BLD_NS
 
 CFX gFX;
 
+void fxSpawnSurfaceImpact(const SURFHIT& impact, sectortype* sector, const DVector3& pos,
+	walltype* markWall, DBloodActor* source)
+{
+	if (markWall && impact.fx1 >= 0)
+		if (auto mark = gFX.fxSpawnActor(impact.fx1, sector, pos))
+		{
+			mark->spr.Angles.Yaw = markWall->normalAngle();
+			mark->spr.cstat |= CSTAT_SPRITE_ALIGNMENT_WALL;
+			mark->spr.cstat2 |= CSTAT2_SPRITE_DECAL;
+		}
+	for (auto effect : {impact.fx2, impact.fx3})
+		if (effect >= 0)
+			if (auto actor = gFX.fxSpawnActor(effect, sector, pos); actor && gModernMap) actor->SetOwner(source);
+	if (impact.fxSnd >= 0) sfxPlay3DSound(pos, impact.fxSnd, sector);
+}
+
 struct FXDATA {
 	CALLBACK_ID funcID;
 	uint8_t detail;
@@ -45,7 +61,7 @@ struct FXDATA {
 	ESpriteFlags cstat;
 	int8_t shade;
 	uint8_t pal;
-	FTextureID textureID() const { return tileGetTextureID(picno); }
+	FTextureID textureID() const { return Mashup::BloodTile(picno); }
 };
 
 FXDATA gFXData[] = {

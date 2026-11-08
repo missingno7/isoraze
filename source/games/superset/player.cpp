@@ -180,6 +180,7 @@ public:
 bool ApplyCalebDamage(DCorePlayer* player, Damage damage, DCoreActor* source)
 {
 	if (!HasBloodMovement(player) || damage.amount < 0 || damage.amount > INT_MAX) return false;
+	if (Duke3d::ud.god) return true;
 	int nativeKind;
 	if (!NativeBloodDamageKind(damage.kind, nativeKind)) return false;
 	auto duke = static_cast<Duke3d::DDukePlayer*>(player);
@@ -363,6 +364,8 @@ void TickSharedObjects()
 	if (!IsDukeMap()) return;
 	Mashup::RefreshBloodPlayerStates();
 	AdvanceBloodSequences();
+	Blood::gFrameCount = int(PlayClock / Units::ClocksPerStep);
+	gi->TickThingObjects();
 	TickBloodEnemies();
 	gi->TickProjectileObjects();
 	gi->TickExplosionObjects();

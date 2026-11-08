@@ -37,7 +37,11 @@ void InitSecondaryDukeProgram(const char*);
 void SerializeSecondaryDukeProgram(FSerializer&);
 const char* SecondaryDukeProgramFingerprint();
 }
-namespace Blood { ::GameInterface* CreateInterface(); }
+namespace Blood
+{
+::GameInterface* CreateInterface();
+void viewProcessSprites(tspriteArray&, const DVector3&, DAngle, double, bool);
+}
 EXTERN_CVAR(Bool, mashup_combat)
 CUSTOM_CVAR(Int, superset_weapon_profile, 0, CVAR_ARCHIVE) // 0: character default, 1: Blood, 2: Duke.
 {
@@ -228,6 +232,11 @@ public:
 		Superset::TickProjectileObjects();
 		return true;
 	}
+	bool TickThingObjects() override
+	{
+		Superset::TickThingObjects();
+		return true;
+	}
 	bool TickExplosionObjects() override
 	{
 		TickProjectileExplosions();
@@ -274,7 +283,9 @@ public:
 	void processSprites(tspriteArray& sprites, const DVector3& view, DAngle angle, double frac) override
 	{
 		world->processSprites(sprites, view, angle, frac);
-		for (unsigned i = 0; i < sprites.Size(); ++i) AnimateRuntimeEntity(sprites.get(i), view.XY(), frac);
+		// Presentation follows the object's source, independently of the map's
+		// renderer. This also creates native flare halos/glows and smoke trails.
+		if (!bloodMap) Blood::viewProcessSprites(sprites, view, angle, frac, true);
 	}
 	void UpdateCameras(double ratio) override { world->UpdateCameras(ratio); }
 	void EnterPortal(DCoreActor* viewer, int type) override { world->EnterPortal(viewer, type); }

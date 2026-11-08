@@ -751,11 +751,13 @@ void movefallers(void)
 //
 //---------------------------------------------------------------------------
 
-void checkdive(DDukeActor* transporter, DDukeActor* transported)
+bool transportObject(DDukeActor* transporter, DCoreActor* transported, bool projectile, bool misc, bool swept)
 {
+	auto native = dyn_cast<DDukeActor>(transported);
 	auto sectp = transporter->sector();
 	int sectlotag = sectp->lotag;
 	auto Owner = transporter->GetOwner();
+	if (!Owner || Owner == transporter) return false;
 	int warpdir;
 	int onfloorz = transporter->temp_data[4];
 	Collision coll;
@@ -797,38 +799,43 @@ void checkdive(DDukeActor* transporter, DDukeActor* transported)
 		}
 	}
 
-	if (sectlotag == ST_0_NO_EFFECT && (onfloorz || abs(transported->spr.pos.Z - transporter->spr.pos.Z) < 16))
+	bool touchesBand = abs(transported->spr.pos.Z - transporter->spr.pos.Z) < 16;
+	if (swept && !touchesBand && !onfloorz && inside(transported->opos.X, transported->opos.Y, sectp))
+		touchesBand = min(transported->opos.Z, transported->spr.pos.Z) < transporter->spr.pos.Z + 16 &&
+			max(transported->opos.Z, transported->spr.pos.Z) > transporter->spr.pos.Z - 16;
+	if (sectlotag == ST_0_NO_EFFECT && (onfloorz || touchesBand))
 	{
-		if ((!Owner || Owner->GetOwner() != Owner) && onfloorz && transporter->counter > 0 && transported->spr.statnum != STAT_MISC)
+		if ((!Owner || Owner->GetOwner() != Owner) && onfloorz && transporter->counter > 0 && !misc)
 		{
 			transporter->counter++;
-			return;
+			return false;
 		}
 		warpspriteto = 1;
 	}
 
 	if (warpspriteto)
 	{
-		if ((transported->flags1 & SFLAG_NOTELEPORT)) return;
+		if (native && (native->flags1 & SFLAG_NOTELEPORT)) return false;
 		if (transported->GetClass() == DukePlayerOnWaterClass)
 		{
 			if (sectlotag == ST_2_UNDERWATER)
 			{
 				transported->spr.cstat &= ~CSTAT_SPRITE_INVISIBLE;
-				return;
+				return false;
 			}
 		}
 		if (transported->GetClass() != DukeWaterBubbleClass)
 		{
-			if (transported->spr.statnum == STAT_MISC && !(sectlotag == ST_1_ABOVE_WATER || sectlotag == ST_2_UNDERWATER || ((ud.mapflags & MFLAG_ALLSECTORTYPES) && (sectlotag == ST_160_FLOOR_TELEPORT || sectlotag == ST_161_CEILING_TELEPORT))))
-				return;
+			if (misc && !(sectlotag == ST_1_ABOVE_WATER || sectlotag == ST_2_UNDERWATER || ((ud.mapflags & MFLAG_ALLSECTORTYPES) && (sectlotag == ST_160_FLOOR_TELEPORT || sectlotag == ST_161_CEILING_TELEPORT))))
+				return false;
 		}
 		if (sectlotag > 0)
 		{
-			auto spawned = spawn(transported, DukeWaterSplashClass);
-			if (spawned && sectlotag == 1 && transported->spr.statnum == 4)
+			auto spawned = spawn(native ? native : transporter, DukeWaterSplashClass);
+			if (spawned) spawned->spr.pos = transported->spr.pos;
+			if (spawned && sectlotag == 1 && projectile)
 			{
-				spawned->vel.X = transported->vel.X * 0.5;
+				spawned->vel.X = (native ? native->vel.X : transported->vel.XY().Length()) * 0.5;
 				spawned->spr.Angles.Yaw = transported->spr.Angles.Yaw;
 				ssp(spawned, CLIPMASK0);
 			}
@@ -839,7 +846,7 @@ void checkdive(DDukeActor* transporter, DDukeActor* transported)
 		case ST_0_NO_EFFECT:
 			if (onfloorz)
 			{
-				if (transported->spr.statnum == STAT_PROJECTILE || (checkcursectnums(transporter->sector()) == -1 && checkcursectnums(Owner->sector()) == -1))
+				if (projectile || (checkcursectnums(transporter->sector()) == -1 && checkcursectnums(Owner->sector()) == -1))
 				{
 					transported->spr.pos += (Owner->spr.pos - transporter->spr.pos.XY()).plusZ(-Owner->sector()->floorz);
 					transported->spr.Angles.Yaw = Owner->spr.Angles.Yaw;
@@ -880,35 +887,44 @@ void checkdive(DDukeActor* transporter, DDukeActor* transported)
 			break;
 		case ST_2_UNDERWATER:
 			transported->spr.pos += Owner->spr.pos.XY() - transporter->spr.pos.XY();
-			transported->spr.pos.Z = Owner->sector()->ceilingz - ll;
+			// Native Duke retains its legacy placement. Objects using ordinary
+			// full-height collision emerge below the destination water surface.
+			transported->spr.pos.Z = (native ? Owner->sector()->ceilingz : Owner->sector()->floorz) - ll;
 			transported->backupz();
 			ChangeActorSect(transported, Owner->sector());
 			break;
 
 		case ST_160_FLOOR_TELEPORT:
-			if (!(ud.mapflags & MFLAG_ALLSECTORTYPES)) break;
+			if (!(ud.mapflags & MFLAG_ALLSECTORTYPES) || !native) return false;
 			transported->spr.pos += Owner->spr.pos.XY() - transporter->spr.pos.XY();
 			transported->spr.pos.Z = Owner->sector()->ceilingz + ll2;
 			transported->backupz();
 
 			ChangeActorSect(transported, Owner->sector());
 
-			movesprite_ex(transported, DVector3(transported->spr.Angles.Yaw.ToVector() * transported->vel.X, 0), CLIPMASK1, coll);
+			movesprite_ex(native, DVector3(transported->spr.Angles.Yaw.ToVector() * transported->vel.X, 0), CLIPMASK1, coll);
 
 			break;
 		case ST_161_CEILING_TELEPORT:
-			if (!(ud.mapflags & MFLAG_ALLSECTORTYPES)) break;
+			if (!(ud.mapflags & MFLAG_ALLSECTORTYPES) || !native) return false;
 			transported->spr.pos += Owner->spr.pos.XY() - transporter->spr.pos.XY();
 			transported->spr.pos.Z = Owner->sector()->floorz - ll;
 			transported->backupz();
 
 			ChangeActorSect(transported, Owner->sector());
 
-			movesprite_ex(transported, DVector3(transported->spr.Angles.Yaw.ToVector() * transported->vel.X, 0), CLIPMASK1, coll);
+			movesprite_ex(native, DVector3(transported->spr.Angles.Yaw.ToVector() * transported->vel.X, 0), CLIPMASK1, coll);
 
 			break;
 		}
+		return transported->sector() == Owner->sector();
 	}
+	return false;
+}
+
+void checkdive(DDukeActor* transporter, DDukeActor* transported)
+{
+	transportObject(transporter, transported, transported->spr.statnum == STAT_PROJECTILE, transported->spr.statnum == STAT_MISC);
 }
 
 //---------------------------------------------------------------------------

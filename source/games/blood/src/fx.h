@@ -98,6 +98,9 @@ public:
 };
 
 void fxSpawnBlood(DCoreActor* pSprite, int a2);
+struct SURFHIT;
+void fxSpawnSurfaceImpact(const SURFHIT& impact, sectortype* sector, const DVector3& pos,
+	walltype* markWall = nullptr, DBloodActor* source = nullptr);
 void fxSpawnPodStuff(DBloodActor* pSprite, int a2);
 
 extern CFX gFX;

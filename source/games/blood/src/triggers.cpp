@@ -29,6 +29,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "blood.h"
 #include "misc.h"
 #include "d_net.h"
+#include "games/superset/level.h"
+#include "games/superset/superset.h"
+#include "games/superset/arsenal.h"
 
 BEGIN_BLD_NS
 
@@ -235,15 +238,17 @@ void LifeLeechOperate(DBloodActor* actor, EVENT event)
 	case kCmdSpritePush:
 	{
 		int nPlayer = actor->xspr.data4;
-		if (nPlayer >= 0 && nPlayer < kMaxPlayers && playeringame[nPlayer])
+		if (nPlayer >= 0 && nPlayer < kMaxPlayers && (playeringame[nPlayer] || (Superset::IsActive() && PlayerArray[nPlayer])))
 		{
 			DBloodPlayer* pPlayer = getPlayer(nPlayer);
 			if (pPlayer->GetActor()->xspr.health > 0)
 			{
 				evKillActor(actor);
 				pPlayer->AmmoAmounts()[8] = ClipHigh(pPlayer->AmmoAmounts()[8] + actor->xspr.data3, gAmmoInfo[8].max);
+				bool newlyOwned = !pPlayer->WeaponOwnership()[kWeapLifeLeech];
 				pPlayer->WeaponOwnership()[kWeapLifeLeech] = 1;
-				if (pPlayer->curWeapon != kWeapLifeLeech)
+				if (Superset::IsActive()) Superset::WeaponPickup(pPlayer, true, kWeapLifeLeech, newlyOwned);
+				else if (pPlayer->curWeapon != kWeapLifeLeech)
 				{
 					if (!VanillaMode() && checkLitSprayOrTNT(pPlayer)) // if tnt/spray is actively used, do not switch weapon
 						break;
@@ -256,24 +261,29 @@ void LifeLeechOperate(DBloodActor* actor, EVENT event)
 	}
 	case kCmdSpriteProximity:
 	{
-		auto target = actor->GetTarget();
+		auto target = actor->GetTargetActor();
 		if (target)
 		{
 			if (!actor->xspr.stateTimer)
 			{
-				if (target->spr.statnum == kStatDude && !(target->spr.flags & 32) && target->hasX())
+				auto native = dyn_cast<DBloodActor>(target);
+				Superset::TargetInfo shared;
+				if ((native && native->spr.statnum == kStatDude && !(native->spr.flags & 32) && native->hasX()) ||
+					(!native && Superset::GameplayTarget(target, shared) && shared.alive && shared.enemy))
 				{
 					double top, bottom;
 					GetActorExtents(actor, &top, &bottom);
-					DUDEINFO* pDudeInfo = getDudeInfo(target->spr.type);
-					auto pos = target->spr.pos;
+					DUDEINFO* pDudeInfo = native ? getDudeInfo(native->spr.type) : nullptr;
+					auto pos = native ? target->spr.pos : shared.aim;
 					auto nDist = (pos.XY() - actor->spr.pos.XY()).Length();
 					if (nDist != 0 && cansee(DVector3(actor->spr.pos.XY(), top), actor->sector(), pos, target->sector()))
 					{
-						pos += target->vel.XY() * nDist * (65536. / 0x1aaaaa);
+						// Native predictive leading requires a world velocity vector.
+						// Duke's scalar forward speed is a different representation.
+						if (native) pos += target->vel.XY() * nDist * (65536. / 0x1aaaaa);
 						auto angBak = actor->spr.Angles.Yaw;
 						actor->spr.Angles.Yaw = (pos.XY() - actor->spr.pos.XY()).Angle();
-						double tz = target->spr.pos.Z - (target->spr.scale.Y * pDudeInfo->aimHeight);
+						double tz = native ? target->spr.pos.Z - (target->spr.scale.Y * pDudeInfo->aimHeight) : shared.aim.Z;
 						auto dvec = DVector3(actor->spr.Angles.Yaw.ToVector(), ((tz - top - 1) / nDist) * (1. / 16.));
 						int nMissileType = kMissileLifeLeechAltNormal + (actor->xspr.data3 ? 1 : 0);
 						if (auto missile = actFireMissile(actor, 0, (top - actor->spr.pos.Z) - 1, dvec, nMissileType))

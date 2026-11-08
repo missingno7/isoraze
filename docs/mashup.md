@@ -7,26 +7,52 @@ The current architecture and migration limits are recorded in
 imported environment/interaction bindings, stable entity identities and lifecycle,
 and one combined weapon/ammo inventory. Both original map formats remain usable.
 The original whole-map world phase and player pose adapters remain temporary.
-The frontend now owns Blood missile, explosion and attachment phases on either
-map format. One native Blood missile/impact implementation replaces the old
-spray-only Duke-map path. The flare gun's primary and alternate fire are now
-selectable on Duke maps as well as Blood maps.
-`superset_spawn_pickup flaregun|flares` creates native pickups through the
-shared inventory policy.
+The frontend owns Blood proximity, thrown/placed-object, missile, explosion and
+attachment phases on either map import. All twelve ordinary Blood weapons are
+selectable on Duke maps for Caleb or Duke, including their native alternate
+attacks. Their QAV/SEQ, ammo, fuses, bouncing and callbacks use the same native
+implementations on both imports. Beast Hands remain a transformation capability,
+not an ordinary selectable weapon. `superset_spawn_pickup` lists the supported
+Blood weapons/ammunition and creates actual pickups under the shared policy.
+For Duke movement with Blood weapons, use `-superset-player duke` and
+`-superset-weapons blood` with a Duke map. Character choice does not restrict
+weapon ownership. All twelve input banks are available under either map provider.
 
 Combat target queries and damage receivers are shared by actor capability,
 including native enemies outside the import registry. Blood missile contacts,
 Tesla and Voodoo attacks can reach foreign receivers; burning advances on both
 map adapters. This is shared infrastructure, not a Pig Cop-specific damage patch.
 Beast Hands no longer enter ordinary weapon-bank cycling, fixing the reported
-divide-by-zero crash. Start a new game with revision 18; older saves are rejected.
+divide-by-zero crash. Saves from earlier rules revisions are rejected; these
+arsenal/resource fixes retain revision-18 save compatibility.
 
 Flare attachments hold one saved common actor reference and follow after both
 enemy component phases. Contacts with a Duke actor's vertical collision surface
 retain that actor as the damage/effect receiver. Native Blood flesh attachment
 still uses its material metadata; the local test data lacks `SURFACE.DAT`, so
-Blood targets retain the original unknown-material response. Duke transporters
-and breakable-wall reactions for foreign projectiles remain pending.
+Blood targets retain the original unknown-material response. Foreign missiles
+now use Duke's original transporter pairing/conditions and wall break handlers.
+Airborne contacts include swept height crossings; ordinary floor and water
+transfers keep the object's velocity and owner. Extension-only sector types
+160/161 still require their specialized foreign-object mover.
+
+
+Blood visual definitions resolve their own source-qualified textures rather than
+using the map provider's numeric tile namespace. This includes missile, thing,
+pickup, FX and gib tables, named callback textures, settled bullet/shell cases and
+flare-burst children. Blood's native sprite presentation creates flare halos,
+floor/ceiling glows, Tesla effects, smoke and rotations alongside Duke's existing
+sprite pass. Neither source installs its aliases over the other source's names.
+Blood vector impacts share native surface FX/decal generation; Duke wall events
+still use Duke's glass, machinery and lighting handlers. Native Blood material
+metadata remains authoritative for Blood textures; Duke terrain categories are
+translated explicitly, with ordinary solid surfaces defaulting to stone.
+
+Pending selections preserve the buttons needed to finish a lit fuse or charged
+throw. They do not force an automatic throw or freeze a fuse. The native action
+finishes before either shotgun/controller takes over, including after save/load.
+Placed Life Leech targeting and ordinary homing accept common enemy references;
+health costs, healing and blast self-damage reach the actual character body.
 
 Caleb's Duke-map controller publishes the consumed centering latch back to the
 main input state. Mouse look cancels recentering normally; explicit centering

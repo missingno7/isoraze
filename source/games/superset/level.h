@@ -22,7 +22,7 @@ struct TargetInfo
 	Units::Health health = 0;
 	DVector3 aim;
 	double radius = 0, height = 0;
-	bool enemy = false, alive = false;
+	bool enemy = false, player = false, alive = false;
 };
 void InitRuntimeLevel();
 void ImportRuntimeLevel(bool bloodSource); // Format selection belongs only to this import boundary.
@@ -37,14 +37,15 @@ void FinishDukeLifecycle(Duke3d::DDukeActor* actor);
 bool EntityPickedUp(DCoreActor* actor, DCoreActor* collector);
 bool IsRuntimeActor(DCoreActor* actor);
 DCoreActor* ResolveGameplayActor(DCoreActor* actor);
+DCoreActor* ResolveAttackInstigator(DCoreActor* actor);
 bool RuntimeTarget(DCoreActor* actor, TargetInfo& result);
 // Receiver capabilities also cover native enemies outside the import slice.
 bool GameplayTarget(DCoreActor* actor, TargetInfo& result);
 void ForEachGameplayTarget(const std::function<void(const TargetInfo&)>& visitor);
+void ForEachGameplayCombatant(const std::function<void(const TargetInfo&)>& visitor);
 void ForEachRuntimeTarget(const std::function<void(const TargetInfo&)>& visitor);
 DCoreActor* SpawnRuntimeEntity(Archetype type, sectortype* sector, const DVector3& feet, DAngle angle);
 void TickRuntimeLevel();
-bool AnimateRuntimeEntity(tspritetype* sprite, const DVector2& view, double fraction);
 Duke3d::ConExecutionServices* RuntimeConServices(Duke3d::DDukeActor* actor);
 bool RuntimeDukeEnvironment(Duke3d::DDukeActor* actor, int& medium);
 int ActorMedium(Duke3d::DDukeActor* actor, sectortype* sector);

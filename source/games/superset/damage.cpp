@@ -120,6 +120,28 @@ bool ApplyHealthDamage(DCoreActor* target, Damage damage, DCoreActor* source, Un
 	return accepted;
 }
 
+bool HealHealth(DCoreActor* target, Units::Health amount, Units::Health cap)
+{
+	if (!IsActive() || !target || amount <= 0 || amount > Units::FromDukeHealth(INT16_MAX) || cap <= 0 || cap > Units::FromDukeHealth(INT16_MAX)) return false;
+	auto duke = dyn_cast<Duke3d::DDukeActor>(target);
+	auto blood = BloodState(target);
+	if (duke && duke->isPlayer() && !HasBloodMovement(Duke3d::getPlayer(duke->PlayerIndex()))) blood = nullptr;
+	if (blood && blood->hasX())
+	{
+		int before = blood->xspr.health;
+		if (before <= 0 || before >= cap) return false;
+		blood->xspr.health = int(min<Units::Health>(before + amount, cap));
+		return true;
+	}
+	if (!duke || duke->spr.extra <= 0) return false;
+	auto health = Units::FromDukeHealth(duke->spr.extra) - duke->supersetDamageRemainder;
+	if (health >= cap) return false;
+	health = min(health + amount, cap);
+	duke->spr.extra = int((health + Units::HealthPerPoint - 1) / Units::HealthPerPoint);
+	duke->supersetDamageRemainder = int(Units::FromDukeHealth(duke->spr.extra) - health);
+	return true;
+}
+
 bool ReadDukeHitDamage(Duke3d::DDukeActor* hitter, Damage& damage)
 {
 	if (!IsActive() || !hitter || (hitter->ObjectFlags & OF_EuthanizeMe)) return false;
@@ -179,7 +201,7 @@ bool ApplyDukeHealthDamage(Duke3d::DDukeActor* target, Damage damage, DCoreActor
 		damage.amount = Units::Health(damage.amount * factor);
 		if (damage.amount == 0) return true;
 	}
-	auto owner = dyn_cast<Duke3d::DDukeActor>(source);
+	auto owner = dyn_cast<Duke3d::DDukeActor>(ResolveAttackInstigator(source));
 	if (!owner) owner = dyn_cast<Duke3d::DDukeActor>(Mashup::WorldSoundActor(source));
 	auto hitter = Duke3d::CreateActor(target->sector(), target->spr.pos, static_cast<PClassActor*>(RUNTIME_CLASS(Duke3d::DDukeActor)),
 		0, DVector2(0, 0), nullAngle, 0, 0, owner, STAT_MISC);

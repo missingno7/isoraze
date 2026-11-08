@@ -16,6 +16,7 @@
 #include "games/superset/enemies.h"
 #include "games/superset/status.h"
 #include "games/superset/arsenal.h"
+#include "games/superset/projectiles.h"
 #include "v_draw.h"
 #include "v_text.h"
 
@@ -107,9 +108,10 @@ void PrepareWeaponFamily(Duke3d::DDukePlayer* duke, Blood::DBloodPlayer* blood)
 		duke->interface_toggle_flag = 0;
 		return;
 	}
-	// Finish the native shot/reload/throw after releasing its buttons. Neither
-	// inventory is reset, and no new attack starts while the request is pending.
-	duke->cmd.ucmd.actions &= ~(SB_FIRE | SB_ALTFIRE | SB_HOLSTER | SB_QUICK_KICK);
+	// Keep release/charge input available until a lit or held throw finishes.
+	// Other actions finish without starting another shot while selection waits.
+	if (!current || !Blood::WeaponNeedsInput(blood))
+		duke->cmd.ucmd.actions &= ~(SB_FIRE | SB_ALTFIRE | SB_HOLSTER | SB_QUICK_KICK);
 	duke->cmd.ucmd.setNewWeapon(0);
 }
 
@@ -340,15 +342,12 @@ void PrepareCombat(DCorePlayer* player)
 		++inputProbeTicks;
 		if (blood->cmd.ucmd.actions & (SB_FIRE | SB_ALTFIRE)) ++inputProbeFireTicks;
 	}
-	// Keep unsupported missile/throwable weapons outside the active set until
-	// their world adapters exist. Selection and QAV transitions remain native.
+	// The legacy experiment only supplied pitchfork combat. Superset owns
+	// missile and thing phases for the combined arsenal.
 	int weapon = blood->cmd.ucmd.getNewWeapon();
-	bool supported = weapon == Blood::kWeapPitchFork || (Superset::IsActive() &&
-		(weapon == Blood::kWeapShotgun || weapon == Blood::kWeapTommyGun || weapon == Blood::kWeapSpraycan || weapon == Blood::kWeapFlareGun));
+	bool supported = weapon == Blood::kWeapPitchFork || (Superset::IsActive() && weapon > Blood::kWeapNone && weapon < Blood::kWeapBeast);
 	if (weapon && !supported && weapon != WeaponSel_Next && weapon != WeaponSel_Prev)
 		blood->cmd.ucmd.setNewWeapon(Blood::kWeapNone);
-	// Thrown cans need thing physics and blast/environment adapters first.
-	if (Superset::IsActive() && blood->curWeapon == Blood::kWeapSpraycan) blood->cmd.ucmd.actions &= ~SB_ALTFIRE;
 	duke->quick_kick = duke->last_quick_kick = duke->knee_incs = 0;
 	duke->kickback_pic = duke->okickback_pic = 0;
 	duke->cmd.ucmd.actions &= ~(SB_QUICK_KICK | SB_HOLSTER);
@@ -395,8 +394,9 @@ bool DrawCombat(DCorePlayer* player, double interpolation)
 	Blood::WeaponDraw(blood, duke->GetActor()->spr.shade, 160, 200, 0, nullAngle);
 	if (Superset::IsActive())
 	{
-		const char* name = blood->curWeapon == Blood::kWeapShotgun ? "Shotgun" : blood->curWeapon == Blood::kWeapTommyGun ? "Tommy gun" :
-			blood->curWeapon == Blood::kWeapSpraycan ? "Spray can (primary)" : blood->curWeapon == Blood::kWeapFlareGun ? "Flare gun" : "Pitchfork";
+		static const char* names[] = {"", "Pitchfork", "Flare gun", "Shotgun", "Tommy gun", "Napalm launcher", "Dynamite",
+			"Spray can", "Tesla cannon", "Life Leech", "Voodoo doll", "Proximity bombs", "Remote bombs", "Beast hands"};
+		const char* name = unsigned(blood->curWeapon) < countof(names) ? names[blood->curWeapon] : "";
 		FString line = FStringf("Blood %s", name);
 		if (blood->weaponAmmo >= 0) line.AppendFormat("   Ammo %d", blood->AmmoAmounts()[blood->weaponAmmo]);
 		DrawText(twod, SmallFont, CR_WHITE, 6, 150, line.GetChars(), DTA_VirtualWidth, 320, DTA_VirtualHeight, 200, DTA_KeepRatio, true, TAG_DONE);
@@ -459,13 +459,7 @@ bool FireBloodVector(DCoreActor* source, double offset, double zoffset, DVector3
 			if (owner) Duke3d::checkhitswitch(owner, nullptr, target);
 			if (flesh)
 			{
-				auto& impact = vector.surfHit[Blood::kSurfFlesh];
-				if (impact.fxSnd >= 0) Blood::sfxPlay3DSound(hit.hitpos, impact.fxSnd, hit.hitSector);
-				if (Superset::IsActive())
-				{
-					if (impact.fx2 >= 0) Blood::gFX.fxSpawnActor(impact.fx2, hit.hitSector, hit.hitpos - direction);
-					if (impact.fx3 >= 0) Blood::gFX.fxSpawnActor(impact.fx3, hit.hitSector, hit.hitpos - direction);
-				}
+				Blood::fxSpawnSurfaceImpact(vector.surfHit[Blood::kSurfFlesh], hit.hitSector, hit.hitpos - direction);
 			}
 		}
 	}
@@ -478,10 +472,21 @@ bool FireBloodVector(DCoreActor* source, double offset, double zoffset, DVector3
 		{
 			Duke3d::checkhitwall(hitter, wall, hit.hitpos);
 			if (owner) Duke3d::checkhitswitch(owner, wall, nullptr);
+			int surface = Superset::BloodImpactSurface(wall->walltexture);
+			// A wall that has opened is no longer a decal surface.
+			bool solid = !wall->twoSided() || hit.hitpos.Z <= wall->nextSector()->ceilingz || hit.hitpos.Z >= wall->nextSector()->floorz;
+			Blood::fxSpawnSurfaceImpact(vector.surfHit[surface], hit.hitSector, hit.hitpos - direction,
+				solid && Blood::actCanSplatWall(wall) ? wall : nullptr);
 		}
 	}
-	else if (type != Blood::kVectorTine && hit.hitpos.Z <= getceilzofslopeptr(hit.hitSector, hit.hitpos) + .01)
-		Duke3d::checkhitceiling(hit.hitSector);
+	else
+	{
+		bool ceiling = hit.hitpos.Z <= getceilzofslopeptr(hit.hitSector, hit.hitpos) + .01;
+		if (ceiling && type != Blood::kVectorTine) Duke3d::checkhitceiling(hit.hitSector);
+		int surface = ((ceiling ? hit.hitSector->ceilingstat : hit.hitSector->floorstat) & CSTAT_SECTOR_SKY) ? Blood::kSurfNone :
+			Superset::BloodImpactSurface(ceiling ? hit.hitSector->ceilingtexture : hit.hitSector->floortexture);
+		Blood::fxSpawnSurfaceImpact(vector.surfHit[surface], hit.hitSector, hit.hitpos - direction);
+	}
 	hitter->Destroy();
 	return true;
 }

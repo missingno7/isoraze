@@ -616,9 +616,16 @@ t_WeaponModes weaponModes[] = {
 	{ 0, -1 },
 };
 
+bool WeaponNeedsInput(DBloodPlayer* player)
+{
+	return checkLitSprayOrTNT(player) ||
+		(player->curWeapon == kWeapProximity && player->weaponState == 9) ||
+		(player->curWeapon == kWeapRemote && player->weaponState == 13);
+}
+
 bool WeaponCanStow(DBloodPlayer* player)
 {
-	if (player->weaponTimer > 0 || player->qavLoop || checkLitSprayOrTNT(player)) return false;
+	if (player->weaponTimer > 0 || player->qavLoop || WeaponNeedsInput(player)) return false;
 	if (!player->curWeapon) return true;
 	// These native idle assets distinguish a completed action from an
 	// intermediate reload/raise stage whose timer happens to have reached zero.
@@ -2019,9 +2026,7 @@ void FireLifeLeech(int nTrigger, DBloodPlayer* pPlayer)
 	auto missileActor = playerFireMissile(pPlayer, 0, pPlayer->aim + DVector3(r1, r2, r3), 315);
 	if (missileActor)
 	{
-		// Native homing still consumes Blood state. Foreign receivers use the
-		// common launch vector until their homing controller is generalized.
-		missileActor->SetTarget(dyn_cast<DBloodActor>(pPlayer->aimTarget.Get()));
+		missileActor->SetTarget(pPlayer->aimTarget);
 		missileActor->spr.Angles.Yaw = ((nTrigger == 2) ? DAngle180 : nullAngle);
 	}
 	if (checkAmmo2(pPlayer, 8, 1))
@@ -3075,15 +3080,17 @@ void teslaHit(DBloodActor* missileactor, DCoreActor* directTarget)
 	if (Superset::IsActive())
 	{
 		Superset::TargetInfo direct;
-		if (Superset::GameplayTarget(directTarget, direct) && direct.enemy) v4 = false;
-		Superset::ForEachGameplayTarget([&](const Superset::TargetInfo& target)
+		if (Superset::GameplayTarget(directTarget, direct) && (direct.enemy || direct.player)) v4 = false;
+		Superset::ForEachGameplayCombatant([&](const Superset::TargetInfo& target)
 		{
 			auto hitactor = target.actor;
+			bool self = hitactor == Superset::ResolveGameplayActor(owneractor);
 			// Native Blood receivers below already use their original reactions.
-			if (dyn_cast<DBloodActor>(hitactor) || !target.alive ||
+			if (dyn_cast<DBloodActor>(hitactor) || !target.alive || (self && !v4) ||
 				!sectorMap[hitactor->sectno()] || !CheckProximity(hitactor, mpos, pSector, nDist)) return;
 			int length = int((mpos.XY() - hitactor->spr.pos.XY()).Length());
 			int nDamage = ClipLow((nDist - length + 20) >> 1, 10);
+			if (self) nDamage /= 2;
 			Superset::ApplyHealthDamage(hitactor, {nDamage << 4, Superset::DamageKind::Electric}, owneractor);
 		});
 	}

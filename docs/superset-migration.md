@@ -78,7 +78,7 @@ directly; they must not be described as completed migration.
 | Transform / collision / health | The one real native actor. Blood uses native Q4 health; Duke uses its native points plus the existing fractional remainder, exposed through the shared health/target API. No second controller body or reconciliation for migrated enemies. |
 | Enemy implementation | Real axe zombie or Pig Cop. Native AI/SEQ or CON/animation runs as a component; a foreign Pig Cop uses native wakeup and an explicit safe CON service. |
 | Map events | Source Blood sprite anchors retain TX/command/trigger state. Common death/pickup emits through these original event nodes. Native sector interaction bindings invoke Blood or Duke door algorithms. |
-| Blood projectiles / explosions | Frontend-owned phases invoke one native mover, impact, explosion and callback implementation on either map import. Environment bindings provide vertical geometry, Blood room links and Blood wall events. Duke transports/breakable-wall effects remain pending. |
+| Blood projectiles / explosions | Frontend-owned phases invoke one native mover, impact, explosion and callback implementation on either map import. Environment bindings provide vertical geometry, Blood room links and Blood wall events. Duke floor/air/water transports and original wall break handlers are bound. |
 | Attached projectiles | One saved common target reference. Attachment updates run after all enemy components, and removal commits before saves/GC. Typed Blood AI accesses narrow that reference safely. |
 
 Import decodes supported source actors before applying `superset_replacement`
@@ -170,9 +170,10 @@ safely interpret. Start a new game; revision 16 saves are rejected explicitly.
   explosion knockback still needs a mass/impulse adapter; Blood's world-vector
   impulse cannot be written into Duke's forward-speed field. Voodoo's native
   player blindness/holster effects remain specialized to Blood players.
-  Blood weapons on a Duke-world controller still expose the earlier limited
-  weapon/projectile slice; native homing, placed Life Leech targeting and all
-  cross-enemy status responses are not comprehensively migrated.
+  All ordinary Blood weapons now use the native controllers on either import.
+  Homing and placed Life Leech accept common target references. Foreign
+  predictive leading and all cross-enemy status responses are not comprehensively
+  migrated.
   Voodoo alternate fire retains Blood's sequential ammo budget and original
   target ordering where possible, as selected by the user. Native Blood
   targets keep their relative order; foreign enemies join the common target
@@ -195,8 +196,8 @@ safely interpret. Start a new game; revision 16 saves are rejected explicitly.
   unpitched shot. This is a compatibility decision for a future aim profile;
   neither map scale nor the native cutoff is silently changed here. Airborne
   SE 7 player transfers now use swept contact and character-aware arrival;
-  foreign-object transports and comprehensive cross-controller room links
-  still require further work.
+  extension-only foreign-object transport types and comprehensive cross-controller
+  room links still require further work.
 
 ## Shared projectile phase (revision 18)
 
@@ -209,9 +210,12 @@ attacker after the parent projectile is removed.
 
 `ProjectileWorldServices` binds at frontend setup. Blood bindings keep native
 depth/sky/room-link vertical queries, room transfers, vector-triggered masked
-walls and explosion wall events. Duke bindings query the common geometry without
-interpreting its tags or pointers as Blood metadata. Their transporter and
-breakable-wall operations are explicitly unimplemented. The compatibility rule
+walls and explosion wall events. Duke bindings query common geometry, use the
+extracted native object transporter algorithm and invoke original wall handlers
+through an immediate Duke attack context. That context never becomes a second
+simulated projectile. Blast wall candidates include ordinary walls, with native
+Blood trigger filtering retained on the Blood binding. Duke blast wall impacts
+also require visibility. The compatibility rule
 that foreign Blood missiles stay nonblocking outside their own movement phase
 also remains until Duke's typed touch paths migrate.
 
@@ -229,7 +233,7 @@ regression records that limitation and requires trace evidence of unknown
 material when attachment cannot be asserted for a Blood target.
 
 This is the first scheduling extraction, not a completed common actor runtime.
-Native Duke projectile updates, things/proximity/traps, the remaining enemy
+Native Duke projectile updates, traps, the remaining enemy
 phases and player pose adapters still require migration.
 
 ## Next implementation milestone
@@ -243,12 +247,12 @@ actor thinking and the secondary Blood-object phase. Separate mechanism work
 from object work at these actual boundaries, preserving native phase ordering
 and the one shared clock during the migration.
 
-The first acceptance case, the ordinary Blood flare gun on both imports, now
-passes. Complete foreign-projectile environment operations next, then validate
-the remaining missile families and extract reusable thing physics for thrown
-and placed objects. Remove each temporary selection restriction when that
-component passes the same combat and save/load checks on both imports. A new
-per-map weapon implementation is not the destination.
+The ordinary Blood arsenal now runs on both imports through the same QAV,
+missile, proximity and thing-physics implementations. The explicit weapon
+allowlist for Duke imports is removed. Continue the runtime extraction with
+native Duke projectile phases and remaining enemy/trap phases; do not reintroduce
+per-map weapon implementations. Player pose consolidation remains the next
+state-ownership boundary.
 
 Move Caleb's controller onto authoritative common actor state as part of the
 runtime extraction, replacing player pose reconciliation. Migrate direct-actor
@@ -376,3 +380,94 @@ Verified local Release runs on 2026-11-08 (under `build-mashup/checks/`):
 
 These checks establish the slice above, not complete playthrough compatibility
 or support for arbitrary CON mods, every item, enemy or mechanism combination.
+
+
+## Complete ordinary Blood arsenal and source-qualified effects
+
+The thing/proximity boundary is now a frontend-owned phase, like missiles and
+explosions. The native Blood mover retains per-type gravity, drag, elasticity,
+fall resistance, floor/ceiling responses and specialized napalm handling.
+Environment services supply vertical bounds, moving-floor velocity, room
+transfers and floor contact. Native Blood's original fallback scheduling remains
+available outside Superset. No second clock or whole-game ticker is introduced.
+
+Combatant enumeration includes actual player bodies and excludes hidden
+controller/weapon views. Health costs, healing, blast self-damage and player
+ignition use those bodies. Enemy queries remain separate. Native player
+armor/resistance and god-mode behavior remain in their receiver paths. Kill
+attribution follows the attack owner's chain until a real combatant, without
+following an enemy's AI owner/target as if it were that enemy's attacker.
+
+The shared selection boundary queues requests during lit fuses and charged
+throws while retaining the user's attack/release controls. Native callbacks
+complete once before switching. Source-independent pickup switching also applies
+to recovering a placed Life Leech. Banks 11/12 are accepted by common input even
+under the Duke provider; next/previous and configurable bank order remain shared.
+
+Duke object transport uses the existing pairing, conditions and effects. The
+foreign full-height mover emerges from underwater at the destination water
+surface; the legacy native Duke placement is retained for native actors. Swept
+contacts prevent fast Blood objects skipping an airborne SE 7 band. Sector types
+160/161 still need the native extension mover. Foreign things remain nonblocking
+to unmigrated Duke-only touch/VM paths; impulse conversion for foreign enemy
+mass/velocity representations and broader moving/rotating geometry remain debt.
+
+Visual resource fixes apply to Blood's definition tables and named callback
+textures, retaining source identity through frame selection, palettes and saved
+texture names. Blood's native presentation pass processes its actors and derived
+view effects after Duke's pass without modifying Duke actors. The old extra
+imported-enemy rotation pass is removed. Native vector impacts now share one FX
+helper for particles/sounds and use native wall-aligned marks where appropriate.
+Existing Blood material metadata and explicit Duke-to-Blood terrain translation
+remain distinct.
+
+New checks:
+
+- `tools/check-superset-blood-arsenal.ps1`: actual pickup/input/QAV attacks for
+  napalm, TNT, spray, Tesla, Life Leech, Voodoo and proximity/remote bombs; both
+  enemy sources; actual selected IDs, ammo and live save/load/GC; eight queued
+  switch cases covering lit/charged actions and both shotgun implementations.
+- `tools/check-superset-effects.ps1`: real shotgun/Tommy input, settled casings,
+  Blood wall marks, qualified FX textures, native flare halo/glow generation,
+  coexistence with Duke presentation and save/load/GC, on both map imports.
+- `tools/check-superset-object-world.ps1`: actual missile movement through Duke
+  floor/water/air transports, native masked/solid/blast wall reactions and saves;
+  a resting placed object on the original moving lift.
+
+The arsenal matrix passed on the 2026-11-08 development build for Caleb on
+E1L1 (`blood-arsenal-20261108T221120173`), Duke on E1L1
+(`blood-arsenal-20261108T221120157`) and Caleb on E3M1
+(`blood-arsenal-20261108T221121314`). Each run contains 32 attack cases and eight
+pending-switch cases, including their restored outcomes. These are focused
+integration fixtures inside stock maps, not complete campaign playthroughs or
+arbitrary-mod compatibility claims.
+
+Final focused Release checks under `build-mashup-dev/checks/`:
+
+- `effects-20261108T222908979`: all three character/map profiles above, native
+  firing and source-qualified effects, settled casings, marks, halo/glow and
+  saved presentation. The glow fixture is within the native 64-unit floor range.
+- `object-world-20261108T222448183`: generated Duke floor/water links, actual
+  E1L1 airborne link, glass/solid/blast wall handlers, resting bomb following a
+  moving lift, and save/load/GC.
+- `projectile-runtime-20261108T222448722`: both map imports, actual primary/alt
+  flare input, one movement step, ignition, attachment/death, saved ownership
+  and offscreen expiry.
+- `level-20261108T222539952` and `arsenal-20261108T222539629`: both map imports,
+  shared lifecycle/native events and one inventory with source-independent
+  switching, native shotgun attacks and saved selections.
+- `runtime-20261108T223238757`: original Duke E1L1/E2L1/E3L1/E4L1 and Blood
+  E1M1 startup/save/load, native Blood flare/spray consumption and saved flame
+  missiles, with sound enabled.
+
+The broader navigation script is timing-sensitive when explicitly started with
+the Blood weapon profile: its instantaneous airborne-touchplate assertion also
+fails on the preceding playable executable (`navigation-20261108T223058677`).
+This comparison used the same input script; it is not evidence of a regression
+from this change. Grounded/once-only/restored touchplate checks passed. The test
+needs a simulation-step observation of the airborne crossing instead of relying
+on a fixed console-frame sample. No player/map algorithm is changed to mask it.
+The default-profile run (`navigation-20261108T223225952`) passed that airborne
+assertion but reported the correct lift height with the pawn in its adjacent
+sector. This broader suite is not counted as a passing acceptance run here;
+pending input surviving fixture repositioning needs separate investigation.

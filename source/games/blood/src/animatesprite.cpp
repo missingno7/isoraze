@@ -572,7 +572,7 @@ void viewApplySpriteRotation(tspritetype* sprite, DCoreActor* owner, const DVect
 	while (frame-- > 0) sprite->setspritetexture(sprite->spritetexture() + GetExtInfo(sprite->spritetexture()).picanm.num + 1);
 }
 
-void viewProcessSprites(tspriteArray& tsprites, const DVector3& cPos, DAngle cA, double interpfrac)
+void viewProcessSprites(tspriteArray& tsprites, const DVector3& cPos, DAngle cA, double interpfrac, bool bloodOnly = false)
 {
 	DBloodPlayer* pPlayer = getPlayer(gViewIndex);
 	int nViewSprites = tsprites.Size();
@@ -585,7 +585,7 @@ void viewProcessSprites(tspriteArray& tsprites, const DVector3& cPos, DAngle cA,
 		auto owneractor = dyn_cast<DBloodActor>(pTSprite->ownerActor);
 		if (!owneractor)
 		{
-			if (!Superset::DrawDukeEffect(pTSprite, interpfrac, cPos.XY(), cA)) pTSprite->scale = DVector2(0, 0);
+			if (!bloodOnly && !Superset::DrawDukeEffect(pTSprite, interpfrac, cPos.XY(), cA)) pTSprite->scale = DVector2(0, 0);
 			continue;
 		}
 		if (owneractor->spr.detail > gDetail)
