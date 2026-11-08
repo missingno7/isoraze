@@ -3,6 +3,27 @@
 This audit starts at `692888be4`, including the native Duke pickup work added
 after the review of `9fe0a8a`.
 
+## Required destination: map-independent gameplay runtime
+
+Superset owns one world and one gameplay update pipeline. Players, weapons,
+enemies, projectiles, placed objects, pickups and status effects execute in that
+runtime regardless of the input map format. A migrated weapon implementation
+must work on both Blood and Duke imports; per-format weapon allowlists are
+temporary migration debt, not supported configurations of the final design.
+
+Map loaders decode geometry, environment properties and original mechanism
+bindings into that world. Blood and Duke doors, switches, sector effects and
+event algorithms retain their native semantics behind environment services.
+Any gameplay object uses those services for collision, surfaces, medium,
+transport, interaction and events. Source format selects import/bindings, not
+the available arsenal, enemy family or gameplay update loop.
+
+Native QAV/SEQ/CON, movement and specialized collision routines remain concrete
+implementations inside shared gameplay components. Richer physics and effects
+become reusable capabilities with object-specific parameters or handlers. The
+runtime owns phase scheduling, authoritative object state and save references;
+it must neither double-tick objects nor advance two independent game worlds.
+
 ## Keep
 
 - Raze's `DCoreActor`, sector/wall geometry, collision, resource banks, GC and
@@ -174,13 +195,32 @@ safely interpret. Start a new game; revision 16 saves are rejected explicitly.
   cross-controller room-link/transport support also remains beyond the door
   interaction slice.
 
-The next concrete migration is to move Caleb's controller onto common actor
-state access, replacing its player pose reconciliation. In parallel scope after
-that, migrate direct-actor status capability/state from the paired enemy, then
-expand inventory components without equating armor or ammo implicitly. Death
-inventory retention across character profiles, shield/body-armor interaction,
-and shrink responses of individual enemy types still need explicit gameplay
-rules.
+## Next implementation milestone
+
+Extract gameplay update phases from the native whole-game tickers and give
+Superset ownership of their scheduling. Blood's `actProcessSprites` currently
+combines proximity sensors, things, missiles, explosions, traps, enemy movement,
+AI, flares and FX. Duke's ticker combines transports, player input, native
+actor thinking and the secondary Blood-object phase. Separate mechanism work
+from object work at these actual boundaries, preserving native phase ordering
+and the one shared clock during the migration.
+
+The first end-to-end acceptance case is the same ordinary Blood flare-gun
+component running on Blood and Duke imports through a common projectile update
+and impact path. Preserve its native timing, effects and saved lifetime. This
+replaces the spray-only Duke-map missile path and creates the foundation for
+the remaining missile families, explosions and placed objects. Environment
+bindings handle map interactions; no new per-map weapon implementation is the
+destination. Remove each temporary selection restriction when that component
+passes the same combat and save/load checks on both imports.
+
+Move Caleb's controller onto authoritative common actor state as part of the
+runtime extraction, replacing player pose reconciliation. Migrate direct-actor
+status state from the paired prototype and expand inventory components using
+the same world and receiver contracts. Death inventory retention across
+character profiles, shield/body-armor interaction and individual shrink
+responses still need explicit gameplay rules; no ammo or armor equivalence is
+implied by the runtime change.
 
 ## Focused verification
 

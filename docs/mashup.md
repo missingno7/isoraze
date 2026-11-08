@@ -57,6 +57,14 @@ services will provide common units, damage, status effects, targeting and
 inventory interactions. Freezing/shrinking must work on Blood enemies and
 burning/electrical attacks on Duke enemies, subject to explicit resistances.
 
+Superset will own the gameplay update pipeline for either map format. Loaders
+and environment/mechanism bindings preserve each map's native behavior; all
+gameplay objects use the common runtime. Current per-map weapon restrictions
+are migration debt. The next milestone extracts actor/projectile update phases
+from native whole-game tickers, with the same flare-gun component on both map
+formats as its first acceptance case. A completed weapon component is enabled
+across imports rather than maintained as separate per-map implementations.
+
 Build shared capabilities as a superset: simpler behavior is a subset or
 configuration where practical. Choose each subsystem's foundation from code
 evidence, independently of which game supplies the map or player. Blood's
