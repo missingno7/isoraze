@@ -16,6 +16,8 @@ void TickThingObjects();
 bool TryUseBloodThing(DCorePlayer* player);
 void TickProjectileExplosions();
 void TickProjectileAttachments();
+void BeginBloodObjectStep();
+void FinishBloodObjectStep();
 void ObserveProjectileImpact(Blood::DBloodActor* actor, DCoreActor* target);
 void ObserveProjectileSpawn(Blood::DBloodActor* actor);
 bool Ignite(DCoreActor* target, DCoreActor* source, int clocks);

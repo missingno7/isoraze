@@ -180,6 +180,44 @@ bool TryUseBloodThing(DCorePlayer* player)
 	Blood::trTriggerSprite(actor, Blood::kCmdSpritePush, BloodState(body));
 	return true;
 }
+namespace
+{
+struct InterpolationProbe
+{
+	bool active = false;
+	int steps = 0, moved = 0, uninterpolated = 0, stale = 0;
+	TMap<Blood::DBloodActor*, DVector3> start;
+} interpolationProbe;
+}
+// Duke maps: the provider's ticker backs up only Duke actors. Like Blood's own
+// ticker, reopen each Blood object's once-per-step backup (viewBackupSpriteLoc)
+// so rendering blends from this step's start rather than a stale position.
+void BeginBloodObjectStep()
+{
+	if (interpolationProbe.active) interpolationProbe.start.Clear();
+	Blood::BloodSpriteIterator it;
+	while (auto actor = it.Next())
+	{
+		actor->interpolated = false;
+		if (interpolationProbe.active) interpolationProbe.start.Insert(actor, actor->spr.pos);
+	}
+}
+void FinishBloodObjectStep()
+{
+	if (!interpolationProbe.active) return;
+	++interpolationProbe.steps;
+	Blood::BloodSpriteIterator it;
+	while (auto actor = it.Next())
+	{
+		auto before = interpolationProbe.start.CheckKey(actor);
+		if (!before || actor->IsPlayerActor() || (*before - actor->spr.pos).Length() < 1 / 16.) continue;
+		++interpolationProbe.moved;
+		// The renderer blends opos->pos for interpolated Blood actors, so opos
+		// must be this step's starting position.
+		if (!actor->interpolated) ++interpolationProbe.uninterpolated;
+		else if ((actor->opos - *before).Length() >= 1 / 16.) ++interpolationProbe.stale;
+	}
+}
 void TickProjectileExplosions()
 {
 	Blood::actProcessExplosions(ProjectileEnvironment());
@@ -450,6 +488,16 @@ CCMD(superset_projectile_check)
 	constexpr int targetTag = 31041, flightTag = 31042;
 	auto source = BloodState(PlayerArray[myconnectindex]->GetActor());
 	if (!source) return;
+	if (!stricmp(argv[1], "interp") && argv.argc() == 3)
+	{
+		auto& probe = interpolationProbe;
+		if (!stricmp(argv[2], "start")) { probe = {}; probe.active = true; return; }
+		probe.active = false;
+		Printf("Superset object interpolation: %s (steps=%d moved=%d uninterpolated=%d stale=%d).\n",
+			probe.moved && !probe.stale && !probe.uninterpolated ? "PASS" : "FAIL",
+			probe.steps, probe.moved, probe.uninterpolated, probe.stale);
+		return;
+	}
 	if (!stricmp(argv[1], "pitch") && argv.argc() == 3)
 	{
 		auto owner = PlayerArray[myconnectindex];

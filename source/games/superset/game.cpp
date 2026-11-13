@@ -252,7 +252,9 @@ public:
 	{
 		int before = PlayClock;
 		if (bloodMap) BackupDukeEffects();
+		else BeginBloodObjectStep();
 		world->Ticker();
+		if (!bloodMap && PlayClock != before) FinishBloodObjectStep();
 		if (bloodMap && PlayClock != before)
 		{
 			TickDukeEffects();
