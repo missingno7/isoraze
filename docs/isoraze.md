@@ -18,7 +18,7 @@
 ## First increment: diagnostic camera and scene builder
 
 `iso_debug 1` selects an experimental orthographic scene for the ordinary Duke
-player view. It is enabled by default for Duke and is not saved in configuration files.
+player view. It is disabled by default and is not saved in configuration files.
 Security cameras, camera textures and the other games retain their normal path.
 `iso_debug 0` returns to the original first-person scene.
 The original HUD crosshair is suppressed while the diagnostic is enabled, without

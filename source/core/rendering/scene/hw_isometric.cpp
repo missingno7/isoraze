@@ -27,7 +27,7 @@
 #include <map>
 #include <vector>
 
-CUSTOM_CVARD(Bool, iso_debug, true, 0, "experimental isometric scene with an optional player-eye mask")
+CUSTOM_CVARD(Bool, iso_debug, false, 0, "experimental isometric scene with an optional player-eye mask")
 {
 	if (self) Printf("IsoRaze experimental view: iso_debug_visibility toggles the player-eye mask.\n");
 }
